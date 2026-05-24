@@ -119,8 +119,11 @@ More GTD prompts (`weekly-review`, `triage-inbox`, `whats-next`, `standup`) are 
 
 ## Dashboard
 
-A local, read-only Kanban board of your Things lists. Columns are your lists
-(Inbox / Today / Upcoming / Anytime / Someday); cards deep-link back into Things.
+A local, read-only board styled like Things itself: a left sidebar (Inbox, Today,
+Upcoming, Anytime, Someday, Logbook, Trash, then your areas with nested projects and
+progress rings) and a main panel showing the selected list grouped by project (or by
+heading inside a project). Tag pills, deadlines, and notes indicators included, with a
+light/dark toggle. Click any item to jump into Things.
 
 ```bash
 # standalone (opens your browser)

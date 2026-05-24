@@ -14,10 +14,11 @@ writes stay on the URL Scheme.
 - **`overview` tool** — one cheap call returns a whole-system digest: counts per
   list, today's items, overdue, projects with no open next action, recent
   completions. Replaces ~10 read calls.
-- **Read-only Kanban dashboard** — local web board (columns = Things lists, cards
-  deep-link into Things). Run via the `open_dashboard` tool or
-  `suur-things-mcp dashboard`. Reuses the read layer; no new heavy deps
-  (starlette + uvicorn already in the tree).
+- **Read-only Things-style dashboard** — two-pane web UI: sidebar (lists + areas
+  with nested projects and progress rings) and a main panel grouped by
+  project/heading. Light/dark toggle. Cards deep-link into Things. Run via the
+  `open_dashboard` tool or `suur-things-mcp dashboard`. Reuses the read layer; no
+  new heavy deps (starlette + uvicorn already in the tree).
 - **`plan_to_project` prompt** — hand it an implementation plan; the agent uses the
   `batch` tool to materialize a Things project (headings per phase, to-dos per step,
   checklist items per sub-task).

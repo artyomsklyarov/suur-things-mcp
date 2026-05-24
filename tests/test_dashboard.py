@@ -24,7 +24,7 @@ def _things_available() -> bool:
 def test_index_route_is_static():
     r = client.get("/")
     assert r.status_code == 200
-    assert "Things Board" in r.text
+    assert 'id="sidebar"' in r.text and "/api/sidebar" in r.text
 
 
 def test_pick_port_returns_free_port():
@@ -46,6 +46,20 @@ def test_state_shape_with_things():
     assert body["ok"] is True
     for col in ("inbox", "today", "upcoming", "anytime", "someday"):
         assert col in body["board"]
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_sidebar_endpoint_shape():
+    sb = client.get("/api/sidebar").json()
+    assert sb["ok"] is True
+    assert {"builtins", "areas", "arealess"} <= set(sb["sidebar"])
+    assert any(b["id"] == "today" for b in sb["sidebar"]["builtins"])
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_items_endpoint_shape():
+    it = client.get("/api/items?id=today").json()
+    assert it["ok"] is True and it["kind"] == "builtin" and isinstance(it["items"], list)
 
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")

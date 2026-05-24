@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import datetime
 import os
+import sqlite3
 from typing import Any
 
 import things
+import things.database as _thingsdb
 
 _DB = os.environ.get("THINGS_DB") or None
 
@@ -120,11 +122,16 @@ def _card(item: dict) -> dict:
     return {
         "uuid": item.get("uuid"),
         "title": item.get("title"),
+        "status": item.get("status"),
+        "type": item.get("type"),
         "project_title": item.get("project_title"),
+        "heading_title": item.get("heading_title"),
         "area_title": item.get("area_title"),
         "deadline": item.get("deadline"),
         "start_date": item.get("start_date"),
+        "start": item.get("start"),
         "tags": item.get("tags"),
+        "has_notes": bool(item.get("notes")),
     }
 
 
@@ -184,3 +191,105 @@ def board() -> dict:
         "anytime": [_card(t) for t in anytime()],
         "someday": [_card(t) for t in someday()],
     }
+
+
+# --- Sidebar / navigation (powers the Things-style dashboard) -------------
+
+def _db_path() -> str:
+    return os.environ.get("THINGS_DB") or _thingsdb.DEFAULT_FILEPATH
+
+
+def _project_progress() -> dict[str, float]:
+    """uuid -> completion ratio (0..1) for projects, read straight from the DB.
+
+    things.py doesn't expose the cached leaf-action counts, so we read the two
+    columns Things itself maintains. Opened read-only + immutable so we never
+    contend with the app's writes.
+    """
+    uri = f"file:{_db_path()}?mode=ro&immutable=1"
+    con = sqlite3.connect(uri, uri=True)
+    try:
+        rows = con.execute(
+            "SELECT uuid, openUntrashedLeafActionsCount, untrashedLeafActionsCount "
+            "FROM TMTask WHERE type=1 AND trashed=0"
+        ).fetchall()
+    finally:
+        con.close()
+    out: dict[str, float] = {}
+    for uuid, open_count, total in rows:
+        total = total or 0
+        out[uuid] = round((total - (open_count or 0)) / total, 3) if total else 0.0
+    return out
+
+
+# Built-in lists, in Things' sidebar order. icon is an emoji approximation.
+_BUILTINS = [
+    ("inbox", "Inbox", "\U0001F4E5", inbox),
+    ("today", "Today", "⭐", today),
+    ("upcoming", "Upcoming", "\U0001F4C5", upcoming),
+    ("anytime", "Anytime", "\U0001F5C2️", anytime),
+    ("someday", "Someday", "\U0001F5C4️", someday),
+    ("logbook", "Logbook", "✅", None),
+    ("trash", "Trash", "\U0001F5D1️", None),
+]
+
+
+def sidebar() -> dict:
+    """The full navigation tree: built-in lists + areas with nested projects."""
+    builtins = []
+    for list_id, title, icon, fn in _BUILTINS:
+        entry = {"id": list_id, "title": title, "icon": icon}
+        # Only Inbox and Today show a count badge in Things.
+        if list_id in ("inbox", "today") and fn is not None:
+            entry["count"] = len(fn())
+        builtins.append(entry)
+
+    progress = _project_progress()
+    by_area: dict[str | None, list[dict]] = {}
+    for p in projects():
+        if p.get("status") != "incomplete":
+            continue
+        by_area.setdefault(p.get("area"), []).append(
+            {
+                "uuid": p["uuid"],
+                "title": p["title"],
+                "progress": progress.get(p["uuid"], 0.0),
+            }
+        )
+
+    area_tree = [
+        {"uuid": a["uuid"], "title": a["title"], "projects": by_area.get(a["uuid"], [])}
+        for a in areas()
+    ]
+    return {
+        "builtins": builtins,
+        "areas": area_tree,
+        "arealess": by_area.get(None, []),
+    }
+
+
+_BUILTIN_FNS = {
+    "inbox": inbox,
+    "today": today,
+    "upcoming": upcoming,
+    "anytime": anytime,
+    "someday": someday,
+    "trash": trash,
+}
+
+
+def list_items(list_id: str, completed_limit: int = 50) -> dict:
+    """To-dos for a sidebar selection: a built-in list, an area, or a project.
+
+    `kind` tells the UI how to group: built-in lists group by project, a project
+    groups by heading, an area is flat.
+    """
+    if list_id == "logbook":
+        return {"id": list_id, "kind": "builtin", "items": [_card(i) for i in logbook(limit=completed_limit)]}
+    if list_id in _BUILTIN_FNS:
+        return {"id": list_id, "kind": "builtin", "items": [_card(i) for i in _BUILTIN_FNS[list_id]()]}
+
+    obj = get(list_id)
+    if obj and obj.get("type") == "area":
+        return {"id": list_id, "kind": "area", "items": [_card(i) for i in todos(area_uuid=list_id)]}
+    return {"id": list_id, "kind": "project", "items": [_card(i) for i in todos(project_uuid=list_id)]}

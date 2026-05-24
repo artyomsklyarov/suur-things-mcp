@@ -22,3 +22,4 @@ uv.lock
 # Secrets — never commit your Things auth token
 .env
 *.local
+.gstack/
