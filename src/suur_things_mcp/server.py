@@ -149,6 +149,19 @@ def get_item(uuid: str) -> dict | None:
     return item
 
 
+@mcp.tool()
+def overview(
+    recent_completed: Annotated[int, Field(ge=0, le=100)] = 10,
+) -> dict:
+    """One-call situational digest of the whole Things system.
+
+    Use this FIRST to understand state cheaply instead of calling many read
+    tools. Returns counts per list, today's items, overdue items, projects with
+    no open next action, and recent completions.
+    """
+    return reads.overview(recent_completed=recent_completed)
+
+
 # =========================================================================
 # WRITE TOOLS — via the Things URL Scheme
 # =========================================================================
@@ -356,6 +369,23 @@ def show(
 
 
 @mcp.tool()
+def open_dashboard() -> dict[str, Any]:
+    """Open the local read-only Kanban board of your Things lists in the browser.
+
+    Starts a tiny local web server (background, 127.0.0.1 only) and opens it.
+    Idempotent: repeated calls return the same already-running URL. No data is
+    written; cards deep-link back into Things.
+    """
+    from .dashboard import ensure_running
+
+    try:
+        url = ensure_running(open_browser=True)
+        return {"ok": True, "url": url}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": str(exc)}
+
+
+@mcp.tool()
 def batch(
     operations: Annotated[
         list[dict],
@@ -423,8 +453,44 @@ def _do(command: str, params: dict) -> dict[str, Any]:
         return {"ok": False, "command": command, "error": str(exc)}
 
 
+# =========================================================================
+# PROMPTS — packaged workflows clients surface as slash commands
+# =========================================================================
+
+@mcp.prompt()
+def plan_to_project(plan: str) -> str:
+    """Turn an implementation plan into a tracked Things project."""
+    return (
+        "You are turning an implementation plan into a Things project using the "
+        "`batch` tool (which calls the Things JSON command).\n\n"
+        "Steps:\n"
+        "1. Read the plan below. Infer a concise project title.\n"
+        "2. Map the plan's phases/sections to project items: use `heading` items "
+        "for phases and `to-do` items for concrete steps. Put sub-tasks of a step "
+        "into that to-do's `checklist-items` (max 100).\n"
+        "3. Call `batch` ONCE with a single project operation whose `attributes.items` "
+        "array holds the headings and to-dos in order. Set a `when` of `anytime` "
+        "unless the plan implies dates. Do not invent deadlines.\n"
+        "4. This is a pure-create batch, so no auth token is needed. After it "
+        "succeeds, tell the user the project title and how many to-dos were created. "
+        "Use `search_todos` if you need the new project's id.\n\n"
+        "Do not pad the project with steps that aren't in the plan. Keep titles "
+        "short and action-first.\n\n"
+        "--- PLAN ---\n"
+        f"{plan}"
+    )
+
+
 def main() -> None:
-    mcp.run()
+    import sys
+
+    args = sys.argv[1:]
+    if args and args[0] == "dashboard":
+        from .dashboard import serve_foreground
+
+        serve_foreground()
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":

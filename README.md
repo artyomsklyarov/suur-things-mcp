@@ -72,6 +72,7 @@ Keep it secret — it grants write access to your database via the URL Scheme.
 
 | Tool | What it returns |
 |------|-----------------|
+| `overview` | One-call system digest: counts, today, overdue, projects with no next action, recent completions |
 | `get_today` | Today list (incl. overdue + evening) |
 | `get_inbox` | Inbox |
 | `get_upcoming` | Scheduled, future-dated to-dos |
@@ -94,6 +95,7 @@ Keep it secret — it grants write access to your database via the URL Scheme.
 | `add_todo` | no |
 | `add_project` | no |
 | `show` (navigate Things to a list/item) | no |
+| `open_dashboard` (open the local Kanban board) | no |
 | `batch` (bulk create/update via the `json` command) | only if it contains updates |
 | `update_todo` | **yes** |
 | `update_project` | **yes** |
@@ -103,6 +105,30 @@ Keep it secret — it grants write access to your database via the URL Scheme.
 | `add_checklist_items` | **yes** |
 
 > The URL Scheme does not return the new item's UUID on create. After `add_todo`/`add_project`, use `search_todos` if you need the ID to operate on it.
+
+## Prompts
+
+The server ships MCP **prompts** — packaged workflows your client surfaces as slash
+commands (exact name/prefix is client-controlled):
+
+| Prompt | What it does |
+|--------|--------------|
+| `plan_to_project` | Hand it an implementation plan; the agent uses `batch` to materialize a Things project (headings per phase, to-dos per step, checklist items per sub-task) |
+
+More GTD prompts (`weekly-review`, `triage-inbox`, `whats-next`, `standup`) are on the [roadmap](ROADMAP.md).
+
+## Dashboard
+
+A local, read-only Kanban board of your Things lists. Columns are your lists
+(Inbox / Today / Upcoming / Anytime / Someday); cards deep-link back into Things.
+
+```bash
+# standalone (opens your browser)
+uvx suur-things-mcp dashboard
+```
+
+Or have the agent open it via the `open_dashboard` tool. The server binds
+`127.0.0.1` only, reads the database read-only, and writes nothing.
 
 ## Configuration
 

@@ -1,6 +1,6 @@
 [project]
 name = "suur-things-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A safe, fast MCP server for the Things 3 task manager (Cultured Code) on macOS — reads from the local SQLite database, writes only through the official Things URL Scheme."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,10 @@ classifiers = [
 dependencies = [
     "mcp>=1.2.0",
     "things.py>=0.0.15",
+    # starlette + uvicorn ship transitively with mcp; declared explicitly
+    # because the dashboard imports them directly.
+    "starlette>=0.37",
+    "uvicorn>=0.30",
 ]
 
 [project.urls]
@@ -31,7 +35,10 @@ Issues = "https://github.com/artyomsklyarov/suur-things-mcp/issues"
 suur-things-mcp = "suur_things_mcp.server:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.0",
+]
 
 [build-system]
 requires = ["hatchling"]
