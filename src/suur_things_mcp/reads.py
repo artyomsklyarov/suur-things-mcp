@@ -293,3 +293,81 @@ def list_items(list_id: str, completed_limit: int = 50) -> dict:
     if obj and obj.get("type") == "area":
         return {"id": list_id, "kind": "area", "items": [_card(i) for i in todos(area_uuid=list_id)]}
     return {"id": list_id, "kind": "project", "items": [_card(i) for i in todos(project_uuid=list_id)]}
+
+
+# --- Kanban board (tag-based status, browser-config inclusion) ------------
+
+def _project_area_map() -> dict[str, str | None]:
+    return {p["uuid"]: p.get("area") for p in projects()}
+
+
+def kanban(config: dict) -> dict:
+    """Build the Kanban board for the configured columns + included scope.
+
+    Columns are Things tag names. A card lands in the first column whose tag it
+    carries; included cards with no column tag go to a leading "Unsorted" column.
+    """
+    columns: list[str] = config.get("columns") or []
+    include_projects = set(config.get("include_projects") or [])
+    include_areas = set(config.get("include_areas") or [])
+    project_area = _project_area_map()
+
+    buckets: dict[str, list[dict]] = {c: [] for c in columns}
+    unsorted: list[dict] = []
+
+    for t in todos(status="incomplete"):
+        proj = t.get("project")
+        area = t.get("area")
+        included = (
+            proj in include_projects
+            or area in include_areas
+            or (proj is not None and project_area.get(proj) in include_areas)
+        )
+        if not included:
+            continue
+        tags = t.get("tags") or []
+        column = next((c for c in columns if c in tags), None)
+        (buckets[column] if column else unsorted).append(_card(t))
+
+    out: list[dict] = []
+    if unsorted:
+        out.append({"name": None, "title": "Unsorted", "cards": unsorted})
+    for c in columns:
+        out.append({"name": c, "title": c, "cards": buckets[c]})
+    return {"columns": out}
+
+
+def item_detail(uuid: str) -> dict | None:
+    """Full detail for the edit dialog: notes, tags, checklist, dates."""
+    it = get(uuid)
+    if not it:
+        return None
+    return {
+        "uuid": it.get("uuid"),
+        "title": it.get("title"),
+        "notes": it.get("notes"),
+        "status": it.get("status"),
+        "start": it.get("start"),
+        "start_date": it.get("start_date"),
+        "deadline": it.get("deadline"),
+        "tags": it.get("tags") or [],
+        "project_title": it.get("project_title"),
+        "checklist": [
+            {"title": c.get("title"), "status": c.get("status")}
+            for c in (it.get("checklist") or [])
+        ],
+    }
+
+
+def tags_after_move(uuid: str, target_column: str | None, column_tags: set[str]) -> list[str]:
+    """New tag set when moving a card to ``target_column``.
+
+    Drops every column tag the card currently has and adds the target, leaving
+    all non-status tags (e.g. SUUR, Errand) untouched. Empty list clears tags.
+    """
+    it = get(uuid)
+    current = (it.get("tags") if it else None) or []
+    kept = [t for t in current if t not in column_tags]
+    if target_column:
+        kept.append(target_column)
+    return kept

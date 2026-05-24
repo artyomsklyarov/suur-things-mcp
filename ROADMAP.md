@@ -14,11 +14,15 @@ writes stay on the URL Scheme.
 - **`overview` tool** — one cheap call returns a whole-system digest: counts per
   list, today's items, overdue, projects with no open next action, recent
   completions. Replaces ~10 read calls.
-- **Read-only Things-style dashboard** — two-pane web UI: sidebar (lists + areas
-  with nested projects and progress rings) and a main panel grouped by
-  project/heading. Light/dark toggle. Cards deep-link into Things. Run via the
-  `open_dashboard` tool or `suur-things-mcp dashboard`. Reuses the read layer; no
-  new heavy deps (starlette + uvicorn already in the tree).
+- **Dashboard** — local web UI with two views and a light/dark toggle. Run via the
+  `open_dashboard` tool or `suur-things-mcp dashboard`. Reuses the read layer; no new
+  heavy deps (starlette + uvicorn already in the tree).
+  - **Classic**: faithful Things two-pane replica (sidebar with areas + nested
+    projects + progress rings; main panel grouped by project/heading).
+  - **Board**: custom Kanban whose columns are Things tags, scoped to areas/projects
+    chosen in an in-browser settings panel. Card status lives in Things, so it syncs.
+  - **Editing**: click any task → edit dialog; drag cards between columns. Writes go
+    through the URL Scheme and require `THINGS_AUTH_TOKEN` (read-only without it).
 - **`plan_to_project` prompt** — hand it an implementation plan; the agent uses the
   `batch` tool to materialize a Things project (headings per phase, to-dos per step,
   checklist items per sub-task).
@@ -39,12 +43,14 @@ writes stay on the URL Scheme.
   (complete tasks referenced by a merged commit). Delivered as agent guidance, not
   tools — the agent already has Grep/Bash/git.
 
-## Phase 3 — Live board + light writes (stretch)
+## Phase 3 — Live board + writes (partially shipped)
 
-- Dashboard auto-refresh (poll or SSE).
-- Drag a card between columns to reschedule → fires `things:///update?...&when=`
-  via the existing write path (requires `THINGS_AUTH_TOKEN`). First write-capable
-  surface in the dashboard, explicitly opt-in.
+- ✅ Dashboard writes: edit dialog + drag cards between Kanban columns (retag via
+  the URL Scheme, `THINGS_AUTH_TOKEN`).
+- Dashboard auto-refresh (poll or SSE) — still TODO.
+- Drag in the Classic view to reschedule (`when=`) — still TODO.
+- Stable dashboard port across rapid restarts (currently hops if the port is in
+  TIME_WAIT) — minor.
 
 ---
 

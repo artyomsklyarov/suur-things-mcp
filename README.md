@@ -119,11 +119,7 @@ More GTD prompts (`weekly-review`, `triage-inbox`, `whats-next`, `standup`) are 
 
 ## Dashboard
 
-A local, read-only board styled like Things itself: a left sidebar (Inbox, Today,
-Upcoming, Anytime, Someday, Logbook, Trash, then your areas with nested projects and
-progress rings) and a main panel showing the selected list grouped by project (or by
-heading inside a project). Tag pills, deadlines, and notes indicators included, with a
-light/dark toggle. Click any item to jump into Things.
+A local web dashboard with two views and a light/dark toggle:
 
 ```bash
 # standalone (opens your browser)
@@ -131,14 +127,37 @@ uvx suur-things-mcp dashboard
 ```
 
 Or have the agent open it via the `open_dashboard` tool. The server binds
-`127.0.0.1` only, reads the database read-only, and writes nothing.
+`127.0.0.1` only and reads the database read-only.
+
+**Classic** — a faithful Things two-pane replica: sidebar (Inbox, Today, Upcoming,
+Anytime, Someday, Logbook, Trash, then your areas with nested projects and progress
+rings) and a main panel showing the selected list grouped by project (or by heading
+inside a project), with tag pills, deadlines, and notes indicators.
+
+**Board** — a custom Kanban that operates *on top of* Things. Columns are Things
+**tags** (so your board state syncs to iOS and shows up in Things itself). Configure it
+from the in-browser ⚙ settings panel:
+
+- **Columns** — name each column; each is a Things tag (e.g. `Backlog`, `In Progress`,
+  `On Hold`, `Done`). Optionally create them as nested tags under a `Kanban` tag in Things.
+- **Include on board** — check the areas/projects whose to-dos populate the board.
+- A card sits in the column whose tag it carries; included cards with no column tag land
+  in a leading **Unsorted** column.
+
+**Editing** — click any task (either view) to open an edit dialog (title, notes, when,
+deadline, tags, complete/cancel), or drag a card between columns. Both write through the
+URL Scheme and require `THINGS_AUTH_TOKEN`; without it the dashboard is read-only.
+
+Board config is stored at `$XDG_CONFIG_HOME/suur-things-mcp/board.json`
+(`~/.config/...` by default).
 
 ## Configuration
 
 | Env var | Purpose |
 |---------|---------|
-| `THINGS_AUTH_TOKEN` | Required for tools that modify existing items |
+| `THINGS_AUTH_TOKEN` | Required to modify existing items (tools) and to edit/move cards in the dashboard |
 | `THINGS_DB` | Override the SQLite path (e.g. point at a backup for testing) |
+| `SUUR_THINGS_CONFIG` | Override the dashboard board-config path |
 
 ## Development
 

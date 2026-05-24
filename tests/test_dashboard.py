@@ -62,6 +62,47 @@ def test_items_endpoint_shape():
     assert it["ok"] is True and it["kind"] == "builtin" and isinstance(it["items"], list)
 
 
+def test_config_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    saved = cfg.save({"columns": ["A", " B ", ""], "include_areas": ["x"], "include_projects": []})
+    assert saved["columns"] == ["A", "B"]  # trimmed, empties dropped
+    assert cfg.load()["include_areas"] == ["x"]
+
+
+def test_config_defaults_when_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "nope.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    assert cfg.load()["columns"] == cfg.DEFAULTS["columns"]
+
+
+def test_move_and_update_need_token_when_unset(monkeypatch):
+    monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
+    assert client.post("/api/update", json={"id": "x", "title": "y"}).json()["ok"] is False
+    assert client.post("/api/move", json={"id": "x", "column": "Done"}).json()["ok"] is False
+
+
+def test_tags_after_move_preserves_non_status_tags(monkeypatch):
+    # Pure function: dropping status tags, keeping the rest, adding the target.
+    from suur_things_mcp import reads as r
+    monkeypatch.setattr(r, "get", lambda uuid, **k: {"tags": ["SUUR", "Backlog"]})
+    cols = {"Backlog", "In Progress", "Done"}
+    assert r.tags_after_move("x", "Done", cols) == ["SUUR", "Done"]
+    assert r.tags_after_move("x", None, cols) == ["SUUR"]
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_board_endpoint_shape():
+    b = client.get("/api/board").json()
+    assert b["ok"] is True and "columns" in b and "auth" in b
+
+
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")
 def test_overview_shape_with_things():
     ov = reads.overview(recent_completed=5)
