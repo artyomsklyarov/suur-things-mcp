@@ -10,6 +10,7 @@ Env:  THINGS_AUTH_TOKEN      required only for update/complete/cancel/schedule
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Annotated, Any, Literal
 
@@ -272,6 +273,47 @@ def update_todo(
 
 
 @mcp.tool()
+def update_project(
+    id: Annotated[str, Field(description="UUID of the project to modify.")],
+    title: str | None = None,
+    notes: Annotated[str | None, Field(description="Replaces existing notes.")] = None,
+    prepend_notes: str | None = None,
+    append_notes: str | None = None,
+    when: str | None = None,
+    deadline: Annotated[str | None, Field(description="yyyy-mm-dd, or empty string to clear.")] = None,
+    tags: Annotated[list[str] | None, Field(description="Replaces all existing tags.")] = None,
+    add_tags: Annotated[list[str] | None, Field(description="Adds to existing tags.")] = None,
+    area: Annotated[str | None, Field(description="Move to area by title.")] = None,
+    area_id: Annotated[str | None, Field(description="Move to area by UUID (wins over area).")] = None,
+    completed: Annotated[bool | None, Field(description="Requires all child to-dos completed/canceled.")] = None,
+    canceled: bool | None = None,
+    reveal: bool = False,
+) -> dict[str, Any]:
+    """Modify an existing project. Requires THINGS_AUTH_TOKEN.
+
+    Completing or canceling a project requires its child to-dos to already be
+    completed/canceled. `deadline=""` clears the deadline.
+    """
+    params = {
+        "id": id,
+        "title": title,
+        "notes": notes,
+        "prepend-notes": prepend_notes,
+        "append-notes": append_notes,
+        "when": when,
+        "deadline": deadline,
+        "tags": _tags(tags),
+        "add-tags": _tags(add_tags),
+        "area": area,
+        "area-id": area_id,
+        "completed": completed,
+        "canceled": canceled,
+        "reveal": reveal or None,
+    }
+    return _do("update-project", params)
+
+
+@mcp.tool()
 def complete_todo(id: str) -> dict[str, Any]:
     """Mark a to-do as completed. Requires THINGS_AUTH_TOKEN."""
     return _do("update", {"id": id, "completed": True})
@@ -311,6 +353,63 @@ def show(
 ) -> dict[str, Any]:
     """Open Things and navigate to an item or built-in list. No auth token required."""
     return _do("show", {"id": id, "filter": _tags(filter_tags)})
+
+
+@mcp.tool()
+def batch(
+    operations: Annotated[
+        list[dict],
+        Field(
+            description=(
+                "List of Things JSON operations. Each item is an object:\n"
+                '  {"type": "to-do"|"project"|"heading"|"checklist-item",\n'
+                '   "operation": "create"|"update",   # default "create"\n'
+                '   "id": "<uuid>",                    # required when updating\n'
+                '   "attributes": { ... }}             # title, notes, when, deadline,\n'
+                "                                       # tags (array), checklist-items\n"
+                "                                       # (array), list/list-id, area/area-id,\n"
+                "                                       # heading, completed, canceled, and\n"
+                "                                       # for projects: items (array). Update-only:\n"
+                "                                       # prepend-notes, append-notes, add-tags,\n"
+                "                                       # append-checklist-items."
+            )
+        ),
+    ],
+    reveal: Annotated[bool, Field(description="Navigate to the first created/updated item.")] = False,
+) -> dict[str, Any]:
+    """Create and/or update many items in one call via the Things `json` command.
+
+    Fastest way to import a whole project with to-dos, or to change many items
+    at once. An auth token is required ONLY if any operation is an "update";
+    pure-create batches need no token.
+
+    Example — a project with two to-dos:
+        [{"type": "project", "attributes": {
+            "title": "Launch", "area": "Work",
+            "items": [
+                {"type": "to-do", "attributes": {"title": "Draft post", "when": "today"}},
+                {"type": "to-do", "attributes": {"title": "Publish", "when": "tomorrow"}}
+            ]}}]
+    """
+    requires_auth = any(
+        isinstance(op, dict) and op.get("operation") == "update" for op in operations
+    )
+    data = json.dumps(operations, ensure_ascii=False)
+    try:
+        execute(
+            "json",
+            {"data": data, "reveal": reveal or None},
+            auth_token=_auth(),
+            requires_auth=requires_auth,
+        )
+        return {
+            "ok": True,
+            "command": "json",
+            "count": len(operations),
+            "requires_auth": requires_auth,
+        }
+    except ThingsURLError as exc:
+        return {"ok": False, "command": "json", "error": str(exc)}
 
 
 # =========================================================================

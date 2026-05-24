@@ -77,13 +77,23 @@ def run_url(url: str) -> None:
         )
 
 
-def execute(command: str, params: dict, auth_token: str | None = None) -> str:
+def execute(
+    command: str,
+    params: dict,
+    auth_token: str | None = None,
+    requires_auth: bool | None = None,
+) -> str:
     """Build + run a command, injecting the auth token when required.
+
+    ``requires_auth`` overrides the default per-command rule — needed for the
+    ``json`` command, whose token requirement depends on whether the batch
+    contains any update operations.
 
     Returns the executed URL (with the token redacted) for confirmation.
     """
     params = dict(params)
-    if command in AUTH_REQUIRED:
+    needs_auth = (command in AUTH_REQUIRED) if requires_auth is None else requires_auth
+    if needs_auth:
         if not auth_token:
             raise ThingsURLError(
                 f"The '{command}' command modifies existing items and requires an "

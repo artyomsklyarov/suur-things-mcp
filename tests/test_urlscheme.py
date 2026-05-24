@@ -66,3 +66,22 @@ def test_execute_add_needs_no_token(monkeypatch):
     monkeypatch.setattr(urlscheme, "run_url", lambda url: None)
     url = execute("add", {"title": "no token needed"}, auth_token=None)
     assert url.startswith("things:///add?")
+
+
+def test_update_project_requires_token(monkeypatch):
+    monkeypatch.setattr(urlscheme, "run_url", lambda url: None)
+    with pytest.raises(ThingsURLError, match="auth token"):
+        execute("update-project", {"id": "p", "title": "x"}, auth_token=None)
+
+
+def test_json_create_only_needs_no_token(monkeypatch):
+    # requires_auth=False overrides the default — a pure-create batch.
+    monkeypatch.setattr(urlscheme, "run_url", lambda url: None)
+    url = execute("json", {"data": "[]"}, auth_token=None, requires_auth=False)
+    assert url.startswith("things:///json?")
+
+
+def test_json_update_requires_token(monkeypatch):
+    monkeypatch.setattr(urlscheme, "run_url", lambda url: None)
+    with pytest.raises(ThingsURLError, match="auth token"):
+        execute("json", {"data": "[...]"}, auth_token=None, requires_auth=True)

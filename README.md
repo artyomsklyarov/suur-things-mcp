@@ -94,7 +94,9 @@ Keep it secret — it grants write access to your database via the URL Scheme.
 | `add_todo` | no |
 | `add_project` | no |
 | `show` (navigate Things to a list/item) | no |
+| `batch` (bulk create/update via the `json` command) | only if it contains updates |
 | `update_todo` | **yes** |
+| `update_project` | **yes** |
 | `complete_todo` | **yes** |
 | `cancel_todo` | **yes** |
 | `schedule_todo` | **yes** |
