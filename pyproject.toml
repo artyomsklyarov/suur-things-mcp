@@ -1,0 +1,44 @@
+[project]
+name = "suur-things-mcp"
+version = "0.1.0"
+description = "A safe, fast MCP server for the Things 3 task manager (Cultured Code) on macOS — reads from the local SQLite database, writes only through the official Things URL Scheme."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Artyom Sklyarov" }]
+keywords = ["mcp", "things", "things3", "cultured-code", "todo", "task-manager", "macos", "claude", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Scheduling",
+]
+dependencies = [
+    "mcp>=1.2.0",
+    "things.py>=0.0.15",
+]
+
+[project.urls]
+Homepage = "https://suur.io"
+Source = "https://github.com/artyomsklyarov/suur-things-mcp"
+Repository = "https://github.com/artyomsklyarov/suur-things-mcp"
+Issues = "https://github.com/artyomsklyarov/suur-things-mcp/issues"
+
+[project.scripts]
+suur-things-mcp = "suur_things_mcp.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/suur_things_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
