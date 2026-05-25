@@ -232,6 +232,8 @@ async def _update(request: Request) -> JSONResponse:
         params["completed"] = True
     if body.get("canceled"):
         params["canceled"] = True
+    if body.get("list_id"):
+        params["list-id"] = body["list_id"]   # move a to-do to a project/area (⌘K "Move to project")
     try:
         execute("update", params, auth_token=token)
         return JSONResponse({"ok": True})
@@ -1053,7 +1055,7 @@ function route(){
 window.addEventListener("hashchange", route);
 
 // --- ⌘K command palette (replaces the search box: navigate + search + create + view) ---
-let CK_ITEMS=[], CK_SEL=0, CK_T=null;
+let CK_ITEMS=[], CK_SEL=0, CK_T=null, CK_MODE="main", CK_BASE=[];
 function fuzzy(q,s){ if(!q) return true; q=q.toLowerCase(); s=(s||"").toLowerCase(); let i=0; for(let j=0;j<s.length&&i<q.length;j++){ if(s[j]===q[i]) i++; } return i===q.length; }
 function ckCommands(){
   const out=[];
@@ -1071,24 +1073,55 @@ function ckCommands(){
   out.push({label:"About · Credits", hint:"App", icon:SVG.info, run:()=>{closeCmdk(); go("#about");}});
   return out;
 }
-function openCmdk(){ openOverlay("cmdk"); const i=$("#cmdk-input"); i.value=""; ckRender(""); setTimeout(()=>i.focus(),0); }
+function openCmdk(){ CK_MODE="main"; openOverlay("cmdk"); const i=$("#cmdk-input"); i.value=""; ckRender(""); setTimeout(()=>i.focus(),0); }
 function closeCmdk(){ closeOverlay("cmdk"); }
 function ckRender(q){
+  if(CK_MODE==="sub"){ CK_ITEMS = q ? CK_BASE.filter(c=>c._back||fuzzy(q,c.label)) : CK_BASE.slice(); CK_SEL=0; ckDraw(); return; }
   const all=ckCommands();
   const base = q ? all.filter(c=>fuzzy(q,c.label)) : all.slice(0,9);
   CK_ITEMS=base; CK_SEL=0; ckDraw();
   if(q.length>=2){
     clearTimeout(CK_T);
     CK_T=setTimeout(async()=>{
-      if($("#cmdk-input").value.trim()!==q) return;
+      if(CK_MODE!=="main" || $("#cmdk-input").value.trim()!==q) return;
       try{
         const d=await (await fetch("/api/search?q="+encodeURIComponent(q))).json();
-        if(!d.ok || $("#cmdk-input").value.trim()!==q) return;
-        const tasks=(d.items||[]).slice(0,8).map(it=>({label:it.title||"(untitled)", hint:it.project_title?("Task · "+it.project_title):"Task", icon:"", run:()=>{closeCmdk(); openEdit(it.uuid);}}));
+        if(!d.ok || CK_MODE!=="main" || $("#cmdk-input").value.trim()!==q) return;
+        const tasks=(d.items||[]).slice(0,8).map(it=>({label:it.title||"(untitled)", hint:it.project_title?("Task · "+it.project_title):"Task", icon:"", run:()=>enterTaskScreen({uuid:it.uuid,title:it.title,project_title:it.project_title})}));
         CK_ITEMS=base.concat(tasks); ckDraw();
       }catch(e){}
     },200);
   }
+}
+// --- ⌘K v2: act on a task found in the palette (keyboard-only, two-level) ---
+function ckSub(items){ CK_MODE="sub"; CK_BASE=items; const i=$("#cmdk-input"); i.value=""; ckRender(""); i.focus(); }
+function backToMain(){ CK_MODE="main"; const i=$("#cmdk-input"); i.value=""; ckRender(""); i.focus(); }
+function enterTaskScreen(t){
+  ckSub([
+    {label:"← Back", _back:true, run:backToMain},
+    {label:"Open in card", hint:t.title, run:()=>{closeCmdk(); openEdit(t.uuid);}},
+    {label:"✓ Complete", run:()=>{ applyStatus(t.uuid,"completed").then(ok=>{ if(ok){ closeCmdk(); setTimeout(route,300);} }); }},
+    {label:"Schedule → Today", run:()=>{closeCmdk(); reschedule(t.uuid,"today");}},
+    {label:"Schedule → Tomorrow", run:()=>{closeCmdk(); reschedule(t.uuid,"tomorrow");}},
+    {label:"Schedule → Anytime", run:()=>{closeCmdk(); reschedule(t.uuid,"anytime");}},
+    {label:"Schedule → Someday", run:()=>{closeCmdk(); reschedule(t.uuid,"someday");}},
+    {label:"Move to project…", run:()=>enterMoveScreen(t)},
+  ]);
+}
+function enterMoveScreen(t){
+  const targets=[{label:"← Back", _back:true, run:()=>enterTaskScreen(t)}];
+  ((SIDEBAR&&SIDEBAR.areas)||[]).forEach(a=>{
+    targets.push({label:a.title, hint:"Area", run:()=>{closeCmdk(); moveTask(t.uuid,a.uuid);}});
+    a.projects.forEach(p=>targets.push({label:"   "+p.title, hint:"Project · "+a.title, run:()=>{closeCmdk(); moveTask(t.uuid,p.uuid);}}));
+  });
+  ((SIDEBAR&&SIDEBAR.arealess)||[]).forEach(p=>targets.push({label:p.title, hint:"Project", run:()=>{closeCmdk(); moveTask(t.uuid,p.uuid);}}));
+  ckSub(targets);
+}
+async function moveTask(id, listId){
+  if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to move tasks."); return; }
+  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id, list_id:listId})})).json();
+  if(!r.ok){ alert("Move failed: "+(r.error||"")); return; }
+  loadSidebar(); setTimeout(route,300);
 }
 function ckDraw(){
   const box=$("#cmdk-list"); box.innerHTML="";
@@ -1108,6 +1141,7 @@ function ckScroll(){ const box=$("#cmdk-list"), sel=box.children[CK_SEL]; if(sel
     if(e.key==="ArrowDown"){ e.preventDefault(); CK_SEL=Math.min(CK_SEL+1,CK_ITEMS.length-1); ckDraw(); ckScroll(); }
     else if(e.key==="ArrowUp"){ e.preventDefault(); CK_SEL=Math.max(CK_SEL-1,0); ckDraw(); ckScroll(); }
     else if(e.key==="Enter"){ e.preventDefault(); const c=CK_ITEMS[CK_SEL]; if(c) c.run(); }
+    else if(e.key==="Escape" && CK_MODE==="sub"){ e.preventDefault(); e.stopPropagation(); backToMain(); }
   });
   document.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){ e.preventDefault(); openCmdk(); } });
 })();
