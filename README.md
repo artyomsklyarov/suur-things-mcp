@@ -35,7 +35,33 @@ So an agent can't corrupt your database through this server even if it tries. Th
 
 ---
 
-## Cool use cases
+## ✨ Beyond Things — what the dashboard adds
+
+`uvx suur-things-mcp dashboard` runs a local board (`127.0.0.1:8765`) that *looks* like Things but adds the views and superpowers it doesn't have. Everything here is layered **on top** — your Things data stays untouched (boards, priorities, time-blocks, and repo links live in a local overlay, never written to Things).
+
+**Plan & focus**
+- 🟦 **Priority Matrix** — an Eisenhower matrix (Do First / Schedule / Delegate / Don't Do) as a one-click view on *any* list, project, or area. Drag tasks (and an area's projects) into quadrants.
+- 📅 **Daily planning / time-blocking** — a day **Timeline** view: drag today's tasks onto a 6am–11pm grid in 15/30/60-min blocks to plan the day. (Times are a private dashboard overlay.)
+- 🧘 **Calm Today** — one keystroke turns an overloaded Today into a single next action plus a short list and defers the rest. AI that *subtracts* noise instead of piling on features.
+- 🎯 **Calm by design** — faithful Things look, light/dark, focus-friendly; completed tasks linger checked-off until they log, like the app.
+
+**Build & ship (for devs)**
+- 🔗 **Git repo links on projects** — connect a Things project/area to one or more local repos. Cards get one-click **Open in editor (⌨) / terminal (❯) / GitHub (↗)**.
+- 📊 **Repo pulse** — board cards show recent commits + open-PR count for linked repos (via `git` + `gh`).
+- 🧭 **Project boards** — saved portfolio Kanbans where each card is a whole project/area (progress ring + open count), dragged across your own stage columns.
+
+**Capture, find & tidy**
+- ⌘ **Command palette (⌘K)** — jump to any list/project/board, search tasks, create, switch view, and act on a task (complete / reschedule / move) — all keyboard-only.
+- ➕ **Natural-language quick-add** — type `buy milk tomorrow #errand` and it's parsed into a real to-do.
+- 🧹 **Agent triage** — *Triage Inbox* (propose a home + tags + date per item) and *Organize* (tidy titles/notes/tags). Your agent proposes; you review every change before anything is written.
+- 🎬 **Cards view** — a project full of links becomes a wall of **YouTube thumbnails** (a perfect "watch later").
+- 🏷 **Tag filter chips** + full-text **search** across everything; inline rename, column reorder, board-card progress rings.
+
+All of it free, local, open source — built on the safe read-SQLite / write-URL-Scheme split. No cloud, no account, no telemetry.
+
+---
+
+## Cool use cases — your agent + Things
 
 These are the workflows this unlocks once an agent can see and shape your task system:
 
@@ -44,11 +70,10 @@ These are the workflows this unlocks once an agent can see and shape your task s
 - **Sweep code TODOs into Things.** Point your agent at the codebase: it greps `TODO`/`FIXME`, and `batch`-creates to-dos with `file:line` references — no new tool needed, the agent already has Grep + this server.
 - **Auto-organize a messy Inbox.** Hit the ✨ button on any folder (or use the `organize_folder` prompt). It spawns *your* agent **headlessly with zero tools and zero MCP**, so it can only *propose* cleaner titles/notes/tags — never write or be prompt-injected. You review every change before it's applied. (And yes, an agent can re-file Inbox items into the right projects — `update` supports moving via `list-id`.)
 - **Natural-language capture, for free.** Things has no NLP input — and you don't need it: tell your agent *"add buy milk tomorrow 9am #errand"* and it parses and creates it. The dashboard's ＋ also takes light shorthand (`buy milk tomorrow #errand`). Your agent is the natural-language (and recurring) layer Things lacks.
-- **AI that subtracts noise.** Most todo apps win by adding features; this one makes a calm app *smarter*, not busier. `calm_today` turns an overloaded Today into one next action plus a short list; triage files your Inbox; the Priority Matrix and Focus modes cut the pile. The intelligence is for *removing* work from your face, not piling it on.
-- **Eisenhower any project.** The **Priority Matrix** isn't a separate place — it's a view toggle on *every* list, project, and area. Open a project → **Matrix** → drag tasks (and the area's projects) into Do First / Schedule / Delegate / Don't Do.
-- **A "watch later" wall.** A project full of YouTube links? Switch to the **Cards** view and they render as thumbnails with play buttons.
-- **A glanceable portfolio board.** Saved Kanban boards where each card is a whole project or area (progress ring + open count), with one-click **Open in editor / terminal / GitHub** for linked repos.
+- **AI that subtracts noise.** Most todo apps win by adding features; this one makes a calm app *smarter*, not busier. `calm_today` turns an overloaded Today into one next action plus a short list; triage files your Inbox. The intelligence is for *removing* work from your face, not piling it on.
 - **One-call situational awareness.** `overview` returns a whole-system digest (counts, today, overdue, projects with no next action, recent completions) in a single call instead of ten.
+
+(The dashboard's visual features — Matrix, Timeline, Cards, boards, repo links — are in [✨ Beyond Things](#-beyond-things--what-the-dashboard-adds) above.)
 
 ---
 
