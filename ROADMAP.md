@@ -45,7 +45,7 @@ website). The link lives in the browser config (`links: {itemUuid: {kind, repos:
 - **Dashboard**: per-card repo chips with Open-in-editor / Open-on-GitHub, plus a
   🔗 to link more. `/api/open` takes only an item_id + index (server-side lookup +
   validation); an `Origin`/`Sec-Fetch-Site` guard now protects all write endpoints.
-- **Phase 2 (next)**: `/things:repo-to-issue` + `/things:issues-to-todos` prompts
+- **Phase 2 ✅ (shipped)**: `repo_to_issue` + `issues_to_todos` prompts
   (agent runs `gh`; server never bundles it).
 
 ## Auto-organize folder ✅ (shipped)
@@ -64,30 +64,31 @@ help of your own agent, reviewed before anything is written.
 - Configure the agent/model via `prefs.agent` / `prefs.agent_model` (or
   `SUUR_THINGS_AGENT`). Needs `THINGS_AUTH_TOKEN` to apply.
 
-## Phase 2 — GTD copilot (prompts only, no new tools)
+## Phase 2 — GTD copilot ✅ (shipped — prompts only, no new tools)
 
-- **`weekly-review`** — agent flags projects with no next action, Someday items
-  rotting for N+ days, overdue deadlines, quiet areas; proposes fixes; applies on
+- ✅ **`weekly_review`** — flags projects with no next action, Someday items rotting
+  for N+ days, overdue deadlines, quiet/overloaded areas; proposes fixes; applies on
   approval.
-- **`triage-inbox`** — agent proposes project/area + tags + `when` per Inbox item
-  with reasoning; batch-applies on approval.
-- **`whats-next`** — ranks Today/Anytime by deadline, age, tags; recommends the next
-  task to work on.
-- **`standup`** — yesterday's logbook + today + blocked, formatted to paste into
+- ✅ **`triage_inbox`** — proposes project/area + tags + `when` per Inbox item; files
+  on approval (moves via `update_todo(list_id=…)`).
+- ✅ **`whats_next`** — ranks Today/Anytime by deadline, age, tags; recommends the
+  single next task plus runners-up.
+- ✅ **`standup`** — yesterday's logbook + today + blocked, formatted to paste into
   Slack or a PR description.
-- **Code recipes** (README + optional prompts) — `capture-todos` (sweep
-  TODO/FIXME into Things with `file:line` + SHA) and `close-from-commit`
-  (complete tasks referenced by a merged commit). Delivered as agent guidance, not
-  tools — the agent already has Grep/Bash/git.
+- ✅ **Code recipes** — shipped as the `capture_todos` (sweep TODO/FIXME into Things
+  with `file:line`) and `close_from_commit` (complete tasks referenced by a commit)
+  prompts. The agent already has Grep/Bash/git; the server adds no tools.
 
-## Phase 3 — Live board + writes (partially shipped)
+## Phase 3 — Live board + writes ✅ (shipped)
 
-- ✅ Dashboard task edit dialog (writes via URL Scheme, `THINGS_AUTH_TOKEN`).
-  Board/priority dragging uses browser overlays — no token needed.
-- Dashboard auto-refresh (poll or SSE) — still TODO.
-- Drag in the Classic view to reschedule (`when=`) — still TODO.
-- Stable dashboard port across rapid restarts (currently hops if the port is in
-  TIME_WAIT) — minor.
+- ✅ Dashboard task edit dialog (Things-style card; writes via URL Scheme,
+  `THINGS_AUTH_TOKEN`; saves on close only if changed). Board/priority dragging uses
+  browser overlays — no token needed.
+- ✅ Dashboard auto-refresh (25s poll; pauses during edit/drag/filter/search and in
+  background tabs; preserves scroll position).
+- ✅ Drag a task onto **Today / Anytime / Someday** in the sidebar to reschedule (`when=`).
+- ✅ Stable dashboard port — reuses a live instance and rebinds 8765 through TIME_WAIT
+  (`SO_REUSEADDR`); only falls back to a random port if a *foreign* process holds it.
 
 ---
 

@@ -117,6 +117,17 @@ def get(uuid: str) -> dict | None:
 
 # --- Digest ---------------------------------------------------------------
 
+import re as _re
+
+_URL_RE = _re.compile(r'https?://[^\s<>"\)]+')
+
+
+def _first_url(item: dict) -> str | None:
+    """First http(s) URL found in the title or notes (for the dashboard card view)."""
+    m = _URL_RE.search((item.get("title") or "") + "\n" + (item.get("notes") or ""))
+    return m.group(0) if m else None
+
+
 def _card(item: dict) -> dict:
     """Compact projection of a to-do for token-cheap digests/boards."""
     return {
@@ -132,6 +143,7 @@ def _card(item: dict) -> dict:
         "start": item.get("start"),
         "tags": item.get("tags"),
         "has_notes": bool(item.get("notes")),
+        "link": _first_url(item),
     }
 
 
