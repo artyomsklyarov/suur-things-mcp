@@ -1,14 +1,14 @@
-"""Things-style read-only dashboard + custom Kanban board.
+"""Things-style dashboard + saved Kanban project boards.
 
-Two views over one Things database:
-  - Classic: a faithful Things two-pane replica (sidebar + grouped list).
-  - Board: a custom Kanban whose columns are Things tags, scoped to the
-    areas/projects you choose in the in-browser settings panel. Card status
-    lives in Things as tags, so the board syncs everywhere.
+One two-pane UI. The sidebar holds Things' built-in lists, your saved Kanban
+boards (right after Today), and your areas with nested projects. Selecting a
+list/area/project shows it as a Things-style grouped list; selecting a board
+shows a Kanban in the same panel.
 
-Reads use the read-only, lock-tolerant layer. Writes (edit a task, move a card
-between columns) go through the Things URL Scheme and require THINGS_AUTH_TOKEN;
-without it the board stays read-only.
+Each board is named and scoped to chosen areas/projects (project- or area-level,
+never single tasks). Columns are Things tags, so board status syncs everywhere.
+Click any task to edit it; drag a card between columns to restage it. Writes go
+through the URL Scheme and need THINGS_AUTH_TOKEN (read-only without it).
 
 Run:
   - `suur-things-mcp dashboard`  → foreground (CLI), opens your browser
@@ -34,8 +34,6 @@ from . import reads
 from .urlscheme import ThingsURLError, execute
 
 DEFAULT_PORT = 8765
-
-# Singleton state for the background (MCP tool) server.
 _running: dict[str, Any] = {}
 
 
@@ -50,7 +48,6 @@ async def _index(_request: Request) -> HTMLResponse:
 
 
 async def _state(_request: Request) -> JSONResponse:
-    """Legacy board data. Tolerates a busy DB: serve an error payload, never 500."""
     try:
         return JSONResponse({"ok": True, "board": reads.board()})
     except Exception as exc:  # noqa: BLE001
@@ -58,7 +55,6 @@ async def _state(_request: Request) -> JSONResponse:
 
 
 async def _sidebar(_request: Request) -> JSONResponse:
-    """Nav tree: built-in lists + areas with nested projects. Includes auth flag."""
     try:
         return JSONResponse(
             {"ok": True, "auth": bool(_auth_token()), "sidebar": reads.sidebar()}
@@ -68,7 +64,6 @@ async def _sidebar(_request: Request) -> JSONResponse:
 
 
 async def _items(request: Request) -> JSONResponse:
-    """To-dos for a selected list/area/project (?id=...)."""
     list_id = request.query_params.get("id", "today")
     try:
         return JSONResponse({"ok": True, **reads.list_items(list_id)})
@@ -77,17 +72,21 @@ async def _items(request: Request) -> JSONResponse:
 
 
 async def _item(request: Request) -> JSONResponse:
-    """Full detail for the edit dialog."""
     detail = reads.item_detail(request.query_params.get("id", ""))
     return JSONResponse({"ok": detail is not None, "item": detail})
 
 
-# --- Board (Kanban) + config ----------------------------------------------
+# --- Boards + config ------------------------------------------------------
 
-async def _board(_request: Request) -> JSONResponse:
+async def _board(request: Request) -> JSONResponse:
+    board = boardcfg.get_board(request.query_params.get("id", ""))
+    if board is None:
+        return JSONResponse({"ok": False, "error": "board not found", "columns": []})
     try:
-        result = reads.kanban(boardcfg.load())
-        return JSONResponse({"ok": True, "auth": bool(_auth_token()), **result})
+        result = reads.kanban(board)
+        return JSONResponse(
+            {"ok": True, "auth": bool(_auth_token()), "board": board, **result}
+        )
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc), "columns": []})
 
@@ -136,7 +135,8 @@ async def _move(request: Request) -> JSONResponse:
     body = await request.json()
     if not body.get("id"):
         return JSONResponse({"ok": False, "error": "missing id"})
-    column_tags = set(boardcfg.load().get("columns") or [])
+    board = boardcfg.get_board(body.get("board_id", ""))
+    column_tags = set(board["columns"]) if board else set()
     new_tags = reads.tags_after_move(body["id"], body.get("column"), column_tags)
     try:
         execute("update", {"id": body["id"], "tags": ",".join(new_tags)}, auth_token=token)
@@ -165,7 +165,6 @@ def create_app() -> Starlette:
 # --- Server lifecycle -----------------------------------------------------
 
 def _pick_port(preferred: int = DEFAULT_PORT) -> int:
-    """Return the preferred port if free, otherwise an OS-assigned free port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.bind(("127.0.0.1", preferred))
@@ -178,16 +177,13 @@ def _pick_port(preferred: int = DEFAULT_PORT) -> int:
 
 
 def ensure_running(open_browser: bool = True) -> str:
-    """Start the dashboard in a daemon thread (idempotent). Returns its URL."""
     if _running.get("url"):
         return _running["url"]
-
     port = _pick_port()
     config = uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True, name="things-dashboard")
     thread.start()
-
     url = f"http://127.0.0.1:{port}"
     _running.update(url=url, port=port, thread=thread, server=server)
     if open_browser:
@@ -199,7 +195,6 @@ def ensure_running(open_browser: bool = True) -> str:
 
 
 def serve_foreground(port: int = DEFAULT_PORT, open_browser: bool = True) -> None:
-    """Blocking server for the `dashboard` CLI subcommand."""
     chosen = _pick_port(port)
     url = f"http://127.0.0.1:{chosen}"
     print(f"Things dashboard → {url}  (Ctrl-C to stop)")
@@ -239,19 +234,14 @@ INDEX_HTML = """<!DOCTYPE html>
   body { font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
     background:var(--main-bg); color:var(--text); -webkit-font-smoothing:antialiased; }
 
-  /* Top bar */
   .topbar { height:44px; display:flex; align-items:center; justify-content:flex-end; gap:10px;
     padding:0 16px; border-bottom:1px solid var(--divider); background:var(--main-bg); }
-  .seg { display:flex; border:1px solid var(--divider); border-radius:8px; overflow:hidden; }
-  .seg button { border:0; background:transparent; color:var(--muted); padding:5px 14px; cursor:pointer; font:inherit; }
-  .seg button.on { background:var(--row-sel); color:var(--text); font-weight:600; }
   .iconbtn { border:1px solid var(--divider); background:var(--main-bg); color:var(--text); width:30px;
     height:30px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; }
   .iconbtn:hover { background:var(--row-hover); }
-  .views { position:absolute; top:44px; left:0; right:0; bottom:0; }
+  .views { position:absolute; top:44px; left:0; right:0; bottom:0; display:flex; }
 
-  /* Classic view */
-  #classic { display:flex; height:100%; }
+  /* Sidebar */
   .sidebar { width:272px; flex:0 0 272px; background:var(--side-bg); overflow-y:auto;
     padding:14px 10px 20px; border-right:1px solid var(--divider); }
   .nav-item, .project { display:flex; align-items:center; gap:9px; padding:6px 10px; margin:1px 0;
@@ -262,6 +252,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .nav-item .ico { width:18px; text-align:center; flex:0 0 18px; font-size:14px; }
   .nav-item .label, .project .label { flex:1; overflow:hidden; text-overflow:ellipsis; }
   .nav-item .count { color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .nav-item.add { color:var(--muted); }
   .nav-sep { height:14px; }
   .area-head { padding:7px 10px 3px; margin-top:8px; font-weight:600; font-size:13.5px;
     display:flex; align-items:center; gap:8px; white-space:nowrap; cursor:pointer; border-radius:7px; }
@@ -270,16 +261,22 @@ INDEX_HTML = """<!DOCTYPE html>
   svg.ring { flex:0 0 16px; }
   .ring-bg { fill:none; stroke:var(--ring-bg); stroke-width:2; }
   .ring-fg { fill:none; stroke:var(--ring-fg); stroke-width:2; stroke-linecap:round; }
-  .main { flex:1; overflow-y:auto; padding:28px 40px 80px; min-width:0; }
-  .main-head { display:flex; align-items:center; gap:11px; margin-bottom:20px; }
+
+  /* Main */
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .main-head { display:flex; align-items:center; gap:11px; padding:26px 40px 0; margin-bottom:18px; flex:none; }
   .main-head .ico { font-size:24px; } .main-head h1 { font-size:23px; font-weight:700; margin:0; }
+  .main-head .grow { flex:1; }
+  #content { flex:1; min-height:0; overflow-y:auto; padding:0 40px 80px; }
+  .main.board-mode #content { overflow:hidden; padding:0 18px 18px; }
+  .board-wrap { display:flex; gap:14px; align-items:flex-start; height:100%; overflow-x:auto; }
+
   .group-head { display:flex; align-items:center; gap:8px; font-weight:600; font-size:14.5px;
     padding:18px 0 7px; border-bottom:1px solid var(--header-rule); margin-bottom:4px; }
   .row { display:flex; align-items:center; gap:11px; padding:6px 8px; border-radius:7px; cursor:pointer; max-width:760px; }
   .row:hover { background:var(--row-hover); }
   .row.is-done .title { color:var(--muted); }
 
-  /* shared item bits */
   .box { width:17px; height:17px; flex:0 0 17px; border:1.5px solid var(--check-border);
     border-radius:5px; display:flex; align-items:center; justify-content:center; }
   .box.done { background:var(--accent); border-color:var(--accent); }
@@ -294,9 +291,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .due .dot { width:9px; height:9px; border-radius:50%; background:var(--red); display:inline-block; }
   .empty, .err { color:var(--muted); padding:40px 4px; } .err { color:var(--red); }
 
-  /* Board view */
-  #board { display:none; height:100%; overflow-x:auto; overflow-y:hidden; padding:18px 18px 24px; }
-  #board.show { display:flex; gap:14px; align-items:flex-start; }
+  /* Kanban columns */
   .col { background:var(--col-bg); border-radius:12px; width:300px; flex:0 0 300px; max-height:100%;
     display:flex; flex-direction:column; }
   .col-head { padding:13px 15px 9px; font-weight:600; font-size:13px; text-transform:uppercase;
@@ -322,44 +317,36 @@ INDEX_HTML = """<!DOCTYPE html>
     background:var(--side-bg); border:1px solid var(--divider); border-radius:8px; padding:8px 10px; }
   .field input[type=checkbox] { width:16px; height:16px; flex:0 0 16px; margin:0; }
   .field textarea { min-height:80px; resize:vertical; }
-  .checks { margin:8px 0 0; line-height:1.8; }
-  .checks .ci { color:var(--muted); font-size:13px; }
+  .checks { margin:8px 0 0; line-height:1.8; } .checks .ci { color:var(--muted); font-size:13px; }
   .checks .ci.done { text-decoration:line-through; }
   .btnrow { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; align-items:center; }
   .btn { font:inherit; padding:7px 15px; border-radius:8px; border:1px solid var(--divider);
     background:var(--main-bg); color:var(--text); cursor:pointer; }
   .btn:hover { background:var(--row-hover); }
   .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.danger { color:var(--red); }
   .btn.ghost { border:0; color:var(--muted); }
   .spacer { flex:1; }
-  .hint { font-size:12px; color:var(--muted); margin-top:6px; }
-  .hint.warn { color:var(--red); }
-  /* settings */
-  .col-edit { display:flex; gap:6px; margin:5px 0; align-items:center; }
-  .col-edit input { flex:1; }
-  .area-pick { font-weight:600; margin:12px 0 4px; }
-  .proj-pick { padding-left:18px; }
-  .pick { display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; }
+  .hint { font-size:12px; color:var(--muted); margin-top:6px; } .hint.warn { color:var(--red); }
+  .col-edit { display:flex; gap:6px; margin:5px 0; align-items:center; } .col-edit input { flex:1; }
+  .area-pick { font-weight:600; margin:12px 0 4px; } .proj-pick { padding-left:18px; }
+  .pick { display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; font-weight:400; }
 </style>
 </head>
 <body>
 <div class="topbar">
-  <div class="seg">
-    <button id="t-classic" class="on" onclick="setView('classic')">Classic</button>
-    <button id="t-board" onclick="setView('board')">Board</button>
-  </div>
-  <button class="iconbtn" id="gear" title="Board settings" style="display:none" onclick="openSettings()">⚙</button>
   <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
 </div>
 <div class="views">
-  <div id="classic">
-    <aside class="sidebar" id="sidebar"></aside>
-    <main class="main">
-      <div class="main-head"><span class="ico" id="head-ico">⭐</span><h1 id="head-title">Today</h1></div>
-      <div id="content"></div>
-    </main>
-  </div>
-  <div id="board"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main">
+    <div class="main-head">
+      <span class="ico" id="head-ico">⭐</span><h1 id="head-title">Today</h1>
+      <span class="grow"></span>
+      <button class="iconbtn" id="board-gear" title="Board settings" style="display:none" onclick="openBoardSettings()">⚙</button>
+    </div>
+    <div id="content"></div>
+  </main>
 </div>
 
 <!-- Edit dialog -->
@@ -384,10 +371,11 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<!-- Settings dialog -->
+<!-- Board settings dialog -->
 <div class="overlay" id="settings-overlay">
   <div class="panel">
     <h2>Board settings</h2>
+    <div class="field"><label>Board name</label><input id="b-name"></div>
     <div class="field">
       <label>Columns (each is a Things tag name)</label>
       <div id="cols-edit"></div>
@@ -395,11 +383,13 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="hint">Tip: create these as tags in Things (optionally nested under a "Kanban" tag). A card shows in the column whose tag it carries.</div>
     </div>
     <div class="field">
-      <label>Include on board</label>
+      <label>Include on board — a whole area, or specific projects</label>
       <div id="includes"></div>
     </div>
     <div class="btnrow">
-      <button class="btn primary" onclick="saveSettings()">Save</button>
+      <button class="btn primary" onclick="saveBoardSettings()">Save</button>
+      <button class="btn danger" onclick="deleteBoard()">Delete board</button>
+      <span class="spacer"></span>
       <button class="btn ghost" onclick="closeOverlay('settings-overlay')">Cancel</button>
     </div>
   </div>
@@ -407,34 +397,21 @@ INDEX_HTML = """<!DOCTYPE html>
 
 <script>
 const $ = (s, r=document) => r.querySelector(s);
-let VIEW = "classic";
-let AUTH = false;
+let AUTH = false, SIDEBAR = null, BOARDS = [];
 let SEL = {id:"today", icon:"⭐", title:"Today", kind:"builtin"};
+let MODE = "list";        // "list" | "board"
+let CUR_BOARD = null;     // board id when MODE==="board"
 let EDIT_ID = null;
-let SIDEBAR = null;
-
+const DEFAULT_COLUMNS = ["Backlog","In Progress","On Hold","Done"];
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function uid(){ return Math.random().toString(36).slice(2,10); }
 
 // --- theme ---
 function applyTheme(t){ document.documentElement.setAttribute("data-theme", t);
   $("#theme").textContent = t === "dark" ? "☀" : "☾"; localStorage.setItem("things-theme", t); }
-applyTheme(localStorage.getItem("things-theme") ||
-  (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
-$("#theme").onclick = () => applyTheme(
-  document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+applyTheme(localStorage.getItem("things-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+$("#theme").onclick = () => applyTheme(document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark");
 
-// --- view switch ---
-function setView(v){
-  VIEW = v;
-  $("#t-classic").classList.toggle("on", v==="classic");
-  $("#t-board").classList.toggle("on", v==="board");
-  $("#classic").style.display = v==="classic" ? "flex" : "none";
-  $("#board").classList.toggle("show", v==="board");
-  $("#gear").style.display = v==="board" ? "flex" : "none";
-  if (v==="board") loadBoard();
-}
-
-// --- progress ring ---
 function ring(p){
   const r=6, c=2*Math.PI*r, off=c*(1-p);
   if (p<=0) return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/></svg>`;
@@ -442,21 +419,20 @@ function ring(p){
     `<circle class="ring-fg" cx="8" cy="8" r="6" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 8 8)"/></svg>`;
 }
 
-// --- classic: sidebar ---
+// --- sidebar ---
+async function loadConfig(){ BOARDS = (await (await fetch("/api/config")).json()).config.boards; }
 async function loadSidebar(){
   const data = await (await fetch("/api/sidebar")).json();
   AUTH = !!data.auth;
   const el = $("#sidebar"); el.innerHTML = "";
   if (!data.ok){ el.innerHTML = `<div class="err">${esc(data.error||"error")}</div>`; return; }
   SIDEBAR = data.sidebar;
-  for (const b of SIDEBAR.builtins){
-    const row = document.createElement("div");
-    row.className = "nav-item"; row.dataset.id = b.id;
-    row.innerHTML = `<span class="ico">${b.icon}</span><span class="label">${esc(b.title)}</span>`+
-      (b.count!=null ? `<span class="count">${b.count}</span>` : "");
-    row.onclick = () => select({id:b.id, icon:b.icon, title:b.title, kind:"builtin"});
-    el.appendChild(row);
-  }
+  const bi = SIDEBAR.builtins, tIdx = bi.findIndex(b=>b.id==="today");
+  bi.slice(0, tIdx+1).forEach(b => el.appendChild(builtinEl(b)));
+  // Boards — right after Today
+  BOARDS.forEach(b => el.appendChild(boardNavEl(b)));
+  el.appendChild(addBoardEl());
+  bi.slice(tIdx+1).forEach(b => el.appendChild(builtinEl(b)));
   el.appendChild(Object.assign(document.createElement("div"),{className:"nav-sep"}));
   const areas = SIDEBAR.areas.concat(SIDEBAR.arealess.length ? [{uuid:null,title:"Projects",projects:SIDEBAR.arealess}] : []);
   for (const a of areas){
@@ -474,12 +450,38 @@ async function loadSidebar(){
     }
   }
 }
+function builtinEl(b){
+  const row = document.createElement("div");
+  row.className="nav-item"; row.dataset.id=b.id;
+  row.innerHTML = `<span class="ico">${b.icon}</span><span class="label">${esc(b.title)}</span>`+
+    (b.count!=null ? `<span class="count">${b.count}</span>` : "");
+  row.onclick = () => select({id:b.id, icon:b.icon, title:b.title, kind:"builtin"});
+  return row;
+}
+function boardNavEl(b){
+  const row = document.createElement("div");
+  row.className="nav-item"; row.dataset.id=b.id;
+  row.innerHTML = `<span class="ico">📋</span><span class="label">${esc(b.name)}</span>`;
+  row.onclick = () => showBoard(b.id);
+  return row;
+}
+function addBoardEl(){
+  const row = document.createElement("div");
+  row.className="nav-item add";
+  row.innerHTML = `<span class="ico">＋</span><span class="label">New board</span>`;
+  row.onclick = newBoard;
+  return row;
+}
 function setActive(id){
   document.querySelectorAll(".nav-item,.area-head,.project").forEach(n =>
     n.classList.toggle("active", n.dataset.id === String(id)));
 }
+
+// --- list view ---
 async function select(sel){
-  SEL = sel; setActive(sel.id);
+  MODE = "list"; CUR_BOARD = null; SEL = sel;
+  $(".main").classList.remove("board-mode"); $("#board-gear").style.display="none";
+  setActive(sel.id);
   $("#head-ico").textContent = sel.icon || ""; $("#head-title").textContent = sel.title;
   const c = $("#content"); c.innerHTML = `<div class="empty">loading…</div>`;
   const data = await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
@@ -522,26 +524,32 @@ function rowEl(it){
   return row;
 }
 
-// --- board ---
-async function loadBoard(){
-  const el = $("#board"); el.innerHTML = `<div class="empty">loading…</div>`;
-  const data = await (await fetch("/api/board")).json();
+// --- board view (in main panel) ---
+async function showBoard(id){
+  MODE = "board"; CUR_BOARD = id;
+  setActive(id);
+  $(".main").classList.add("board-mode"); $("#board-gear").style.display="flex";
+  const b = BOARDS.find(x=>x.id===id);
+  $("#head-ico").textContent = "📋"; $("#head-title").textContent = b ? b.name : "Board";
+  const c = $("#content"); c.innerHTML = `<div class="empty">loading…</div>`;
+  const data = await (await fetch("/api/board?id="+encodeURIComponent(id))).json();
   AUTH = !!data.auth;
-  if (!data.ok){ el.innerHTML = `<div class="err">${esc(data.error||"error")}</div>`; return; }
-  el.innerHTML = "";
-  if (!data.columns.length){ el.innerHTML = `<div class="empty">No columns. Open ⚙ settings to add columns and include projects.</div>`; return; }
-  for (const col of data.columns) el.appendChild(colEl(col));
+  if (!data.ok){ c.innerHTML = `<div class="err">${esc(data.error||"error")}</div>`; return; }
+  c.innerHTML = "";
+  const wrap = document.createElement("div"); wrap.className="board-wrap";
+  if (!data.columns.length){ wrap.innerHTML = `<div class="empty">No columns yet. Open ⚙ to add columns and include projects/areas.</div>`; }
+  for (const col of data.columns) wrap.appendChild(colEl(col, id));
+  c.appendChild(wrap);
 }
-function colEl(col){
-  const c = document.createElement("div"); c.className="col"; c.dataset.col = col.name==null?"":col.name;
+function colEl(col, boardId){
+  const c = document.createElement("div"); c.className="col";
   c.innerHTML = `<div class="col-head"><span>${esc(col.title)}</span><span>${col.cards.length}</span></div>`;
   const list = document.createElement("div"); list.className="col-cards";
   for (const card of col.cards) list.appendChild(cardEl(card));
-  // drop target
   c.addEventListener("dragover", e => { if(AUTH){ e.preventDefault(); c.classList.add("drop"); } });
   c.addEventListener("dragleave", () => c.classList.remove("drop"));
   c.addEventListener("drop", e => { e.preventDefault(); c.classList.remove("drop");
-    const id = e.dataTransfer.getData("text/id"); if(id) moveCard(id, col.name); });
+    const id = e.dataTransfer.getData("text/id"); if(id) moveCard(id, col.name, boardId); });
   c.appendChild(list);
   return c;
 }
@@ -557,67 +565,34 @@ function cardEl(card){
     ((tags||due||card.has_notes)?`<div class="cmeta">${card.has_notes?'<span class="note-ico">📄</span>':""}${tags}${due}</div>`:"");
   return el;
 }
-async function moveCard(id, column){
-  const r = await (await fetch("/api/move", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({id, column})})).json();
+async function moveCard(id, column, boardId){
+  const r = await (await fetch("/api/move",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({id, column, board_id:boardId})})).json();
   if(!r.ok){ alert("Move failed: "+(r.error||"")); }
-  loadBoard();
+  showBoard(boardId);
 }
 
-// --- edit dialog ---
-async function openEdit(uuid){
-  EDIT_ID = uuid;
-  const data = await (await fetch("/api/item?id="+encodeURIComponent(uuid))).json();
-  if(!data.ok){ alert("Could not load task."); return; }
-  const it = data.item;
-  $("#edit-context").textContent = it.project_title || "Task";
-  $("#f-title").value = it.title || "";
-  $("#f-notes").value = it.notes || "";
-  $("#f-when").value = "";
-  $("#f-deadline").value = it.deadline || "";
-  $("#f-tags").value = (it.tags||[]).join(", ");
-  const cl = $("#f-checklist");
-  if ((it.checklist||[]).length){
-    cl.innerHTML = `<div class="field"><label>Checklist</label><div class="checks">`+
-      it.checklist.map(c=>`<div class="ci ${c.status==="completed"?"done":""}">${c.status==="completed"?"☑":"☐"} ${esc(c.title)}</div>`).join("")+`</div></div>`;
-  } else cl.innerHTML = "";
-  const ro = !AUTH;
-  $("#edit-warn").style.display = ro ? "block" : "none";
-  ["f-title","f-notes","f-when","f-deadline","f-tags"].forEach(id => $("#"+id).disabled = ro);
-  $("#save-btn").disabled = ro;
-  openOverlay("edit-overlay");
+// --- board create/settings ---
+async function newBoard(){
+  const b = {id:uid(), name:"New Board", columns:[...DEFAULT_COLUMNS], include_areas:[], include_projects:[]};
+  BOARDS.push(b); await persistBoards();
+  await loadSidebar(); showBoard(b.id); openBoardSettings();
 }
-async function saveEdit(){
-  const tags = $("#f-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
-  const body = { id:EDIT_ID, title:$("#f-title").value, notes:$("#f-notes").value, tags };
-  const when = $("#f-when").value.trim(); if(when) body.when = when;
-  body.deadline = $("#f-deadline").value.trim();   // "" clears deadline
-  await postUpdate(body);
+async function persistBoards(){
+  const r = await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({boards:BOARDS})})).json();
+  if(r.ok) BOARDS = r.config.boards;
 }
-async function completeTask(){ await postUpdate({id:EDIT_ID, completed:true}); }
-async function cancelTask(){ await postUpdate({id:EDIT_ID, canceled:true}); }
-async function postUpdate(body){
-  const r = await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(body)})).json();
-  if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
-  closeOverlay("edit-overlay");
-  setTimeout(() => { VIEW==="board" ? loadBoard() : (loadSidebar().then(()=>select(SEL))); }, 350);
-}
-function openInThings(){ if(EDIT_ID) window.location.href = "things:///show?id="+encodeURIComponent(EDIT_ID); }
-
-// --- settings ---
-async function openSettings(){
-  const cfg = (await (await fetch("/api/config")).json()).config;
-  if(!SIDEBAR){ SIDEBAR = (await (await fetch("/api/sidebar")).json()).sidebar; }
-  // columns
+function openBoardSettings(){
+  const b = BOARDS.find(x=>x.id===CUR_BOARD); if(!b) return;
+  $("#b-name").value = b.name;
   const ce = $("#cols-edit"); ce.innerHTML = "";
-  (cfg.columns||[]).forEach(c => ce.appendChild(colInput(c)));
-  // includes
+  (b.columns||[]).forEach(c => ce.appendChild(colInput(c)));
   const inc = $("#includes"); inc.innerHTML = "";
-  const areaSet = new Set(cfg.include_areas||[]), projSet = new Set(cfg.include_projects||[]);
-  for (const a of SIDEBAR.areas){
+  const areaSet = new Set(b.include_areas||[]), projSet = new Set(b.include_projects||[]);
+  for (const a of (SIDEBAR.areas||[])){
     const ah = document.createElement("div"); ah.className="area-pick";
-    ah.innerHTML = `<label class="pick"><input type="checkbox" data-area="${a.uuid}" ${areaSet.has(a.uuid)?"checked":""}> ${esc(a.title)}</label>`;
+    ah.innerHTML = `<label class="pick"><input type="checkbox" data-area="${a.uuid}" ${areaSet.has(a.uuid)?"checked":""}> ${esc(a.title)} <span style="color:var(--muted);font-weight:400">(entire area)</span></label>`;
     inc.appendChild(ah);
     for (const p of a.projects){
       const pe = document.createElement("div"); pe.className="proj-pick";
@@ -633,24 +608,70 @@ function colInput(val){
   return d;
 }
 function addCol(){ $("#cols-edit").appendChild(colInput("")); }
-async function saveSettings(){
-  const columns = [...document.querySelectorAll("#cols-edit input")].map(i=>i.value.trim()).filter(Boolean);
-  const include_areas = [...document.querySelectorAll("#includes input[data-area]:checked")].map(i=>i.dataset.area);
-  const include_projects = [...document.querySelectorAll("#includes input[data-project]:checked")].map(i=>i.dataset.project);
-  await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({columns, include_areas, include_projects})});
+async function saveBoardSettings(){
+  const b = BOARDS.find(x=>x.id===CUR_BOARD); if(!b) return;
+  b.name = $("#b-name").value.trim() || "Untitled board";
+  b.columns = [...document.querySelectorAll("#cols-edit input")].map(i=>i.value.trim()).filter(Boolean);
+  b.include_areas = [...document.querySelectorAll("#includes input[data-area]:checked")].map(i=>i.dataset.area);
+  b.include_projects = [...document.querySelectorAll("#includes input[data-project]:checked")].map(i=>i.dataset.project);
+  await persistBoards();
   closeOverlay("settings-overlay");
-  if(VIEW==="board") loadBoard();
+  await loadSidebar(); showBoard(CUR_BOARD);
+}
+async function deleteBoard(){
+  if(!confirm("Delete this board? (Your tasks and tags in Things are untouched.)")) return;
+  BOARDS = BOARDS.filter(x=>x.id!==CUR_BOARD); await persistBoards();
+  closeOverlay("settings-overlay");
+  await loadSidebar(); select({id:"today", icon:"⭐", title:"Today", kind:"builtin"});
 }
 
-// --- overlay helpers ---
+// --- edit dialog ---
+async function openEdit(uuid){
+  EDIT_ID = uuid;
+  const data = await (await fetch("/api/item?id="+encodeURIComponent(uuid))).json();
+  if(!data.ok){ alert("Could not load task."); return; }
+  const it = data.item;
+  $("#edit-context").textContent = it.project_title || "Task";
+  $("#f-title").value = it.title || ""; $("#f-notes").value = it.notes || "";
+  $("#f-when").value = ""; $("#f-deadline").value = it.deadline || "";
+  $("#f-tags").value = (it.tags||[]).join(", ");
+  const cl = $("#f-checklist");
+  cl.innerHTML = (it.checklist||[]).length
+    ? `<div class="field"><label>Checklist</label><div class="checks">`+
+      it.checklist.map(c=>`<div class="ci ${c.status==="completed"?"done":""}">${c.status==="completed"?"☑":"☐"} ${esc(c.title)}</div>`).join("")+`</div></div>`
+    : "";
+  const ro = !AUTH;
+  $("#edit-warn").style.display = ro ? "block" : "none";
+  ["f-title","f-notes","f-when","f-deadline","f-tags"].forEach(id => $("#"+id).disabled = ro);
+  $("#save-btn").disabled = ro;
+  openOverlay("edit-overlay");
+}
+async function saveEdit(){
+  const tags = $("#f-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
+  const body = { id:EDIT_ID, title:$("#f-title").value, notes:$("#f-notes").value, tags };
+  const when = $("#f-when").value.trim(); if(when) body.when = when;
+  body.deadline = $("#f-deadline").value.trim();
+  await postUpdate(body);
+}
+async function completeTask(){ await postUpdate({id:EDIT_ID, completed:true}); }
+async function cancelTask(){ await postUpdate({id:EDIT_ID, canceled:true}); }
+async function postUpdate(body){
+  const r = await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)})).json();
+  if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
+  closeOverlay("edit-overlay");
+  setTimeout(() => { MODE==="board" ? showBoard(CUR_BOARD) : select(SEL); }, 350);
+}
+function openInThings(){ if(EDIT_ID) window.location.href = "things:///show?id="+encodeURIComponent(EDIT_ID); }
+
+// --- overlays ---
 function openOverlay(id){ $("#"+id).classList.add("show"); }
 function closeOverlay(id){ $("#"+id).classList.remove("show"); }
 document.querySelectorAll(".overlay").forEach(o => o.addEventListener("click", e => { if(e.target===o) o.classList.remove("show"); }));
 document.addEventListener("keydown", e => { if(e.key==="Escape") document.querySelectorAll(".overlay.show").forEach(o=>o.classList.remove("show")); });
 
 // --- boot ---
-loadSidebar().then(() => select(SEL));
+(async () => { await loadConfig(); await loadSidebar(); select(SEL); })();
 </script>
 </body>
 </html>

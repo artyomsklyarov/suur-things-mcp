@@ -129,22 +129,25 @@ uvx suur-things-mcp dashboard
 Or have the agent open it via the `open_dashboard` tool. The server binds
 `127.0.0.1` only and reads the database read-only.
 
-**Classic** — a faithful Things two-pane replica: sidebar (Inbox, Today, Upcoming,
-Anytime, Someday, Logbook, Trash, then your areas with nested projects and progress
-rings) and a main panel showing the selected list grouped by project (or by heading
-inside a project), with tag pills, deadlines, and notes indicators.
+One two-pane layout. The **sidebar** holds Things' built-in lists, your saved
+**project boards** (right after Today), and your areas with nested projects (progress
+rings included). Selecting a list/area/project shows it as a Things-style grouped list;
+selecting a board shows a Kanban in the same panel.
 
-**Board** — a custom Kanban that operates *on top of* Things. Columns are Things
-**tags** (so your board state syncs to iOS and shows up in Things itself). Configure it
-from the in-browser ⚙ settings panel:
+**Project boards** — custom Kanbans that operate *on top of* Things. Columns are Things
+**tags**, so board status syncs to iOS and shows up in Things itself. Each board has a
+⚙ settings panel (Notion-style):
 
+- **Name** — boards are saved; add as many as you like with "＋ New board".
 - **Columns** — name each column; each is a Things tag (e.g. `Backlog`, `In Progress`,
   `On Hold`, `Done`). Optionally create them as nested tags under a `Kanban` tag in Things.
-- **Include on board** — check the areas/projects whose to-dos populate the board.
-- A card sits in the column whose tag it carries; included cards with no column tag land
+- **Include on board** — check a **whole area** (pulls all its projects' tasks, ideal for
+  meta-project areas) or **specific projects**. Inclusion is area/project level, never
+  single tasks.
+- A card sits in the column whose tag it carries; included tasks with no column tag land
   in a leading **Unsorted** column.
 
-**Editing** — click any task (either view) to open an edit dialog (title, notes, when,
+**Editing** — click any task (list or board) to open an edit dialog (title, notes, when,
 deadline, tags, complete/cancel), or drag a card between columns. Both write through the
 URL Scheme and require `THINGS_AUTH_TOKEN`; without it the dashboard is read-only.
 

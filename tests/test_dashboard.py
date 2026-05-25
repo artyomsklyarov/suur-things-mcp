@@ -68,9 +68,25 @@ def test_config_roundtrip(tmp_path, monkeypatch):
 
     from suur_things_mcp import config as cfg
     importlib.reload(cfg)
-    saved = cfg.save({"columns": ["A", " B ", ""], "include_areas": ["x"], "include_projects": []})
-    assert saved["columns"] == ["A", "B"]  # trimmed, empties dropped
-    assert cfg.load()["include_areas"] == ["x"]
+    saved = cfg.save({"boards": [
+        {"id": "b1", "name": "Dev", "columns": ["A", " B ", ""], "include_areas": ["x"], "include_projects": []}
+    ]})
+    board = saved["boards"][0]
+    assert board["columns"] == ["A", "B"]  # trimmed, empties dropped
+    assert board["include_areas"] == ["x"] and board["id"] == "b1"
+    assert cfg.get_board("b1")["name"] == "Dev"
+
+
+def test_config_migrates_legacy_flat(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    cfg.save({"columns": ["X"], "include_areas": ["a"]})  # legacy flat shape
+    loaded = cfg.load()
+    assert loaded["boards"][0]["id"] == "default"
+    assert loaded["boards"][0]["columns"] == ["X"]
 
 
 def test_config_defaults_when_missing(tmp_path, monkeypatch):
@@ -79,7 +95,8 @@ def test_config_defaults_when_missing(tmp_path, monkeypatch):
 
     from suur_things_mcp import config as cfg
     importlib.reload(cfg)
-    assert cfg.load()["columns"] == cfg.DEFAULTS["columns"]
+    boards = cfg.load()["boards"]
+    assert boards[0]["id"] == "default" and boards[0]["columns"] == cfg.DEFAULT_COLUMNS
 
 
 def test_move_and_update_need_token_when_unset(monkeypatch):
@@ -99,8 +116,13 @@ def test_tags_after_move_preserves_non_status_tags(monkeypatch):
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")
 def test_board_endpoint_shape():
-    b = client.get("/api/board").json()
+    b = client.get("/api/board?id=default").json()
     assert b["ok"] is True and "columns" in b and "auth" in b
+
+
+def test_board_endpoint_unknown_id():
+    b = client.get("/api/board?id=does-not-exist").json()
+    assert b["ok"] is False
 
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")

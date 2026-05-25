@@ -19,8 +19,9 @@ writes stay on the URL Scheme.
   heavy deps (starlette + uvicorn already in the tree).
   - **Classic**: faithful Things two-pane replica (sidebar with areas + nested
     projects + progress rings; main panel grouped by project/heading).
-  - **Board**: custom Kanban whose columns are Things tags, scoped to areas/projects
-    chosen in an in-browser settings panel. Card status lives in Things, so it syncs.
+  - **Project boards**: saved Kanbans in the sidebar (after Today). Columns are Things
+    tags; each board is named and scoped to whole areas or specific projects via a
+    Notion-style ⚙ panel. Card status lives in Things, so it syncs. Multiple boards.
   - **Editing**: click any task → edit dialog; drag cards between columns. Writes go
     through the URL Scheme and require `THINGS_AUTH_TOKEN` (read-only without it).
 - **`plan_to_project` prompt** — hand it an implementation plan; the agent uses the
