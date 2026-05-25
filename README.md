@@ -129,30 +129,34 @@ uvx suur-things-mcp dashboard
 Or have the agent open it via the `open_dashboard` tool. The server binds
 `127.0.0.1` only and reads the database read-only.
 
-One two-pane layout. The **sidebar** holds Things' built-in lists, your saved
-**project boards** (right after Today), and your areas with nested projects (progress
-rings included). Selecting a list/area/project shows it as a Things-style grouped list;
-selecting a board shows a Kanban in the same panel.
+One two-pane layout. The **sidebar** holds Things' built-in lists, a **Priority Square**,
+your saved **project boards** (compact group, right after Today), and your areas with
+nested projects. Your current view is kept on refresh (it's in the URL hash).
 
-**Project boards** — custom Kanbans that operate *on top of* Things. Columns are Things
-**tags**, so board status syncs to iOS and shows up in Things itself. Each board has a
-⚙ settings panel (Notion-style):
+**Project boards** — a portfolio Kanban that operates *on top of* Things. Each **card is
+a project or an entire area** (a high-level overview: progress ring + open-task count),
+not a task. Drag a card between **stage columns** (Backlog / In Progress / On Hold / Done)
+to track where each project stands; click a card to open that project/area. Configure via
+the ⚙ panel (Notion-style):
 
-- **Name** — boards are saved; add as many as you like with "＋ New board".
-- **Columns** — name each column; each is a Things tag (e.g. `Backlog`, `In Progress`,
-  `On Hold`, `Done`). Optionally create them as nested tags under a `Kanban` tag in Things.
-- **Include on board** — check a **whole area** (pulls all its projects' tasks, ideal for
-  meta-project areas) or **specific projects**. Inclusion is area/project level, never
-  single tasks.
-- A card sits in the column whose tag it carries; included tasks with no column tag land
-  in a leading **Unsorted** column.
+- **Name** — boards are saved; add as many as you like (e.g. "My Projects", "Client
+  Projects") with the ＋ on the Boards group.
+- **Columns** — your project stages; rename/add/remove freely.
+- **Include** — check a **whole area** (great for meta-project areas) or **specific
+  projects**. Inclusion is area/project level, never single tasks.
 
-**Editing** — click any task (list or board) to open an edit dialog (title, notes, when,
-deadline, tags, complete/cancel), or drag a card between columns. Both write through the
-URL Scheme and require `THINGS_AUTH_TOKEN`; without it the dashboard is read-only.
+**Priority Square** — an Eisenhower matrix over your Today list. Drag tasks into **Do
+First / Schedule / Delegate / Don't Do** to plan your day.
 
-Board config is stored at `$XDG_CONFIG_HOME/suur-things-mcp/board.json`
-(`~/.config/...` by default).
+Project-stage placement and priority quadrants are **browser-side overlays** (stored in
+`board.json`, never written to Things — Things has no such concept), so dragging needs
+**no auth token**.
+
+**Editing** — click any task (list or Priority Square) to open an edit dialog (title,
+notes, when, deadline, tags, complete/cancel). This *does* write to Things via the URL
+Scheme and needs `THINGS_AUTH_TOKEN`; without it the edit dialog is read-only.
+
+Config is stored at `$XDG_CONFIG_HOME/suur-things-mcp/board.json` (`~/.config/...` by default).
 
 ## Configuration
 

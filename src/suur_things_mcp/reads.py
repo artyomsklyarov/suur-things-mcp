@@ -297,44 +297,61 @@ def list_items(list_id: str, completed_limit: int = 50) -> dict:
 
 # --- Kanban board (tag-based status, browser-config inclusion) ------------
 
-def _project_area_map() -> dict[str, str | None]:
-    return {p["uuid"]: p.get("area") for p in projects()}
+def _project_counts() -> dict[str, dict[str, int]]:
+    """uuid -> {open, total} leaf-action counts for projects (read-only DB)."""
+    uri = f"file:{_db_path()}?mode=ro&immutable=1"
+    con = sqlite3.connect(uri, uri=True)
+    try:
+        rows = con.execute(
+            "SELECT uuid, openUntrashedLeafActionsCount, untrashedLeafActionsCount "
+            "FROM TMTask WHERE type=1 AND trashed=0"
+        ).fetchall()
+    finally:
+        con.close()
+    return {u: {"open": o or 0, "total": t or 0} for (u, o, t) in rows}
 
 
-def kanban(config: dict) -> dict:
-    """Build the Kanban board for the configured columns + included scope.
+def board_cards(board: dict) -> list[dict]:
+    """High-level cards for a project board: one per included project/area.
 
-    Columns are Things tag names. A card lands in the first column whose tag it
-    carries; included cards with no column tag go to a leading "Unsorted" column.
+    Each card is an overview (progress + open count), not a task. Areas
+    aggregate their projects' counts. Placement into columns is the caller's
+    job (it lives in the board config, not in Things).
     """
-    columns: list[str] = config.get("columns") or []
-    include_projects = set(config.get("include_projects") or [])
-    include_areas = set(config.get("include_areas") or [])
-    project_area = _project_area_map()
+    counts = _project_counts()
+    project_by_id = {p["uuid"]: p for p in projects()}
+    area_by_id = {a["uuid"]: a for a in areas()}
+    project_area = {p["uuid"]: p.get("area") for p in projects()}
 
-    buckets: dict[str, list[dict]] = {c: [] for c in columns}
-    unsorted: list[dict] = []
+    def _ratio(open_c: int, total: int) -> float:
+        return round((total - open_c) / total, 3) if total else 0.0
 
-    for t in todos(status="incomplete"):
-        proj = t.get("project")
-        area = t.get("area")
-        included = (
-            proj in include_projects
-            or area in include_areas
-            or (proj is not None and project_area.get(proj) in include_areas)
-        )
-        if not included:
+    cards: list[dict] = []
+    for pid in board.get("include_projects") or []:
+        p = project_by_id.get(pid)
+        if not p:
             continue
-        tags = t.get("tags") or []
-        column = next((c for c in columns if c in tags), None)
-        (buckets[column] if column else unsorted).append(_card(t))
-
-    out: list[dict] = []
-    if unsorted:
-        out.append({"name": None, "title": "Unsorted", "cards": unsorted})
-    for c in columns:
-        out.append({"name": c, "title": c, "cards": buckets[c]})
-    return {"columns": out}
+        c = counts.get(pid, {"open": 0, "total": 0})
+        cards.append({
+            "kind": "project", "id": pid, "title": p["title"],
+            "area_title": p.get("area_title"),
+            "open": c["open"], "total": c["total"], "progress": _ratio(c["open"], c["total"]),
+        })
+    for aid in board.get("include_areas") or []:
+        a = area_by_id.get(aid)
+        if not a:
+            continue
+        open_sum = total_sum = 0
+        for pid, area_of in project_area.items():
+            if area_of == aid:
+                c = counts.get(pid, {"open": 0, "total": 0})
+                open_sum += c["open"]
+                total_sum += c["total"]
+        cards.append({
+            "kind": "area", "id": aid, "title": a["title"], "area_title": None,
+            "open": open_sum, "total": total_sum, "progress": _ratio(open_sum, total_sum),
+        })
+    return cards
 
 
 def item_detail(uuid: str) -> dict | None:
@@ -357,17 +374,3 @@ def item_detail(uuid: str) -> dict | None:
             for c in (it.get("checklist") or [])
         ],
     }
-
-
-def tags_after_move(uuid: str, target_column: str | None, column_tags: set[str]) -> list[str]:
-    """New tag set when moving a card to ``target_column``.
-
-    Drops every column tag the card currently has and adds the target, leaving
-    all non-status tags (e.g. SUUR, Errand) untouched. Empty list clears tags.
-    """
-    it = get(uuid)
-    current = (it.get("tags") if it else None) or []
-    kept = [t for t in current if t not in column_tags]
-    if target_column:
-        kept.append(target_column)
-    return kept

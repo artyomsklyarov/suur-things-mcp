@@ -99,25 +99,45 @@ def test_config_defaults_when_missing(tmp_path, monkeypatch):
     assert boards[0]["id"] == "default" and boards[0]["columns"] == cfg.DEFAULT_COLUMNS
 
 
-def test_move_and_update_need_token_when_unset(monkeypatch):
+def test_update_needs_token_when_unset(monkeypatch):
     monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
     assert client.post("/api/update", json={"id": "x", "title": "y"}).json()["ok"] is False
-    assert client.post("/api/move", json={"id": "x", "column": "Done"}).json()["ok"] is False
 
 
-def test_tags_after_move_preserves_non_status_tags(monkeypatch):
-    # Pure function: dropping status tags, keeping the rest, adding the target.
-    from suur_things_mcp import reads as r
-    monkeypatch.setattr(r, "get", lambda uuid, **k: {"tags": ["SUUR", "Backlog"]})
-    cols = {"Backlog", "In Progress", "Done"}
-    assert r.tags_after_move("x", "Done", cols) == ["SUUR", "Done"]
-    assert r.tags_after_move("x", None, cols) == ["SUUR"]
+def test_placement_and_priority_overlays_validated(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    saved = cfg.save({
+        "boards": [{"id": "b", "name": "B", "columns": ["A"], "placements": {"t1": "A", "t2": "Z"}}],
+        "priority": {"x": "do", "y": "nope"},
+    })
+    # placement to a non-existent column is dropped; invalid quadrant is dropped.
+    assert saved["boards"][0]["placements"] == {"t1": "A"}
+    assert saved["priority"] == {"x": "do"}
 
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")
 def test_board_endpoint_shape():
     b = client.get("/api/board?id=default").json()
     assert b["ok"] is True and "columns" in b and "auth" in b
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_board_cards_are_projects_and_areas():
+    from suur_things_mcp import reads as r
+    sb = r.sidebar()
+    area = next(a for a in sb["areas"] if a["projects"])
+    cards = r.board_cards({
+        "include_areas": [area["uuid"]],
+        "include_projects": [area["projects"][0]["uuid"]],
+        "columns": [],
+    })
+    assert any(c["kind"] == "area" for c in cards)
+    assert any(c["kind"] == "project" for c in cards)
+    assert all({"progress", "open", "total", "title"} <= set(c) for c in cards)
 
 
 def test_board_endpoint_unknown_id():

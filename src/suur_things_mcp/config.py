@@ -1,12 +1,14 @@
-"""Browser-side board configuration (supports multiple saved boards).
+"""Browser-side board configuration (multiple boards + planning overlays).
 
 The "extra stuff that operates on top of Things, but lives only in the browser":
-named Kanban boards, each scoped to chosen areas/projects, with an ordered list
-of status columns (each column is a Things tag name). Card status itself lives in
-Things as tags — this file only holds the overlay.
+  - named project boards, each scoped to chosen areas/projects, with status
+    columns and a per-board placement map (which column each project/area card
+    sits in).
+  - a priority overlay: which Eisenhower quadrant each Today task is in.
 
-Stored as JSON at ``$XDG_CONFIG_HOME/suur-things-mcp/board.json`` (falls back to
-``~/.config/...``). Override with ``SUUR_THINGS_CONFIG`` for tests.
+None of this is written back to Things (Things has no project-stage or quadrant
+concept). Stored as JSON at ``$XDG_CONFIG_HOME/suur-things-mcp/board.json``
+(falls back to ``~/.config/...``). Override with ``SUUR_THINGS_CONFIG`` for tests.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_COLUMNS = ["Backlog", "In Progress", "On Hold", "Done"]
+QUADRANTS = {"do", "schedule", "delegate", "eliminate"}
 
 
 def _path() -> Path:
@@ -37,6 +40,7 @@ def _default_board(name: str = "Project Board") -> dict[str, Any]:
         "columns": list(DEFAULT_COLUMNS),
         "include_areas": [],
         "include_projects": [],
+        "placements": {},
     }
 
 
@@ -51,28 +55,46 @@ def _clean_board(b: dict) -> dict[str, Any]:
         vals = b.get(key)
         if isinstance(vals, list):
             board[key] = [str(v) for v in vals if v]
+    placements = b.get("placements")
+    if isinstance(placements, dict):
+        # itemId -> column name (must be one of this board's columns)
+        valid = set(board["columns"])
+        board["placements"] = {
+            str(k): str(v) for k, v in placements.items() if str(v) in valid
+        }
     return board
 
 
 def _clean(data: dict) -> dict[str, Any]:
+    priority = data.get("priority")
+    priority = (
+        {str(k): str(v) for k, v in priority.items() if str(v) in QUADRANTS}
+        if isinstance(priority, dict)
+        else {}
+    )
     # New shape: {"boards": [...]}.
     if isinstance(data.get("boards"), list) and data["boards"]:
-        return {"boards": [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]}
+        boards = [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]
+        return {"boards": boards, "priority": priority}
     # Legacy flat shape: {columns, include_areas, include_projects} → one board.
     if any(k in data for k in ("columns", "include_areas", "include_projects")):
         legacy = {**data, "id": data.get("id") or "default", "name": data.get("name") or "Project Board"}
-        return {"boards": [_clean_board(legacy)]}
-    return {"boards": [_default_board()]}
+        return {"boards": [_clean_board(legacy)], "priority": priority}
+    return {"boards": [_default_board()], "priority": priority}
+
+
+def _fresh() -> dict[str, Any]:
+    return {"boards": [_default_board()], "priority": {}}
 
 
 def load() -> dict[str, Any]:
     path = _path()
     if not path.exists():
-        return {"boards": [_default_board()]}
+        return _fresh()
     try:
         return _clean(json.loads(path.read_text()))
     except (json.JSONDecodeError, OSError):
-        return {"boards": [_default_board()]}
+        return _fresh()
 
 
 def save(data: dict) -> dict[str, Any]:

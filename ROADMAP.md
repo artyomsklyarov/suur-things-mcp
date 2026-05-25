@@ -19,9 +19,12 @@ writes stay on the URL Scheme.
   heavy deps (starlette + uvicorn already in the tree).
   - **Classic**: faithful Things two-pane replica (sidebar with areas + nested
     projects + progress rings; main panel grouped by project/heading).
-  - **Project boards**: saved Kanbans in the sidebar (after Today). Columns are Things
-    tags; each board is named and scoped to whole areas or specific projects via a
-    Notion-style ⚙ panel. Card status lives in Things, so it syncs. Multiple boards.
+  - **Project boards**: saved portfolio Kanbans in the sidebar (compact group after
+    Today). Cards are projects/areas (overview), staged into columns by drag. Named,
+    multiple, scoped to whole areas or specific projects via a Notion-style ⚙ panel.
+  - **Priority Square**: Eisenhower matrix over Today; drag tasks into quadrants.
+  - Stage placement + priority quadrants are browser overlays (no token to drag);
+    current view is preserved on refresh (URL hash).
   - **Editing**: click any task → edit dialog; drag cards between columns. Writes go
     through the URL Scheme and require `THINGS_AUTH_TOKEN` (read-only without it).
 - **`plan_to_project` prompt** — hand it an implementation plan; the agent uses the
@@ -46,8 +49,8 @@ writes stay on the URL Scheme.
 
 ## Phase 3 — Live board + writes (partially shipped)
 
-- ✅ Dashboard writes: edit dialog + drag cards between Kanban columns (retag via
-  the URL Scheme, `THINGS_AUTH_TOKEN`).
+- ✅ Dashboard task edit dialog (writes via URL Scheme, `THINGS_AUTH_TOKEN`).
+  Board/priority dragging uses browser overlays — no token needed.
 - Dashboard auto-refresh (poll or SSE) — still TODO.
 - Drag in the Classic view to reschedule (`when=`) — still TODO.
 - Stable dashboard port across rapid restarts (currently hops if the port is in
