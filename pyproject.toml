@@ -1,6 +1,6 @@
 [project]
 name = "suur-things-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "A safe, fast MCP server for the Things 3 task manager (Cultured Code) on macOS — reads from the local SQLite database, writes only through the official Things URL Scheme."
 readme = "README.md"
 requires-python = ">=3.10"
