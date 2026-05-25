@@ -234,6 +234,31 @@ def test_set_item_repos_isolated(tmp_path, monkeypatch):
     assert "B" not in cfg.load()["links"] and "A" in cfg.load()["links"]
 
 
+def test_github_normalizes_ssh_and_url(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    assert cfg._normalize_github("git@github.com:owner/repo.git") == "owner/repo"
+    assert cfg._normalize_github("https://github.com/owner/repo") == "owner/repo"
+    assert cfg._normalize_github("owner/repo") == "owner/repo"
+    assert cfg._normalize_github("https://gitlab.com/owner/repo") is None
+
+
+def test_prefs_merge_isolated(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    cfg.set_link("X", "project", str(tmp_path))
+    cfg.merge({"prefs": {"editor": "cursor", "terminal": "Ghostty", "bogus": "x"}})
+    p = cfg.prefs()
+    assert p == {"editor": "cursor", "terminal": "Ghostty"}  # unknown key dropped
+    assert "X" in cfg.load()["links"]  # prefs save didn't wipe links
+
+
 def test_origin_guard_blocks_cross_site():
     cross = client.post("/api/config", headers={"sec-fetch-site": "cross-site"}, json={"boards": []})
     assert cross.status_code == 403

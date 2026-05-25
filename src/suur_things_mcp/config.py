@@ -23,8 +23,8 @@ from typing import Any
 DEFAULT_COLUMNS = ["Backlog", "In Progress", "On Hold", "Done"]
 QUADRANTS = {"do", "schedule", "delegate", "eliminate"}
 
-# Accept "owner/repo" or a github URL; capture "owner/repo".
-_GITHUB_RE = re.compile(r"^(?:https?://github\.com/)?([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
+# Accept "owner/repo", an https github URL, or a git@github.com SSH url; capture "owner/repo".
+_GITHUB_RE = re.compile(r"^(?:https?://github\.com/|git@github\.com:)?([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 
 
 def _normalize_repo(path: Any) -> str | None:
@@ -129,6 +129,13 @@ def _clean_board(b: dict) -> dict[str, Any]:
     return board
 
 
+def _clean_prefs(data: dict) -> dict[str, Any]:
+    p = data.get("prefs")
+    if not isinstance(p, dict):
+        return {}
+    return {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
+
+
 def _clean(data: dict) -> dict[str, Any]:
     priority = data.get("priority")
     priority = (
@@ -137,19 +144,24 @@ def _clean(data: dict) -> dict[str, Any]:
         else {}
     )
     link_table = _clean_links(data)
+    prefs = _clean_prefs(data)
     # New shape: {"boards": [...]}.
     if isinstance(data.get("boards"), list) and data["boards"]:
         boards = [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]
-        return {"boards": boards, "priority": priority, "links": link_table}
+        return {"boards": boards, "priority": priority, "links": link_table, "prefs": prefs}
     # Legacy flat shape: {columns, include_areas, include_projects} → one board.
     if any(k in data for k in ("columns", "include_areas", "include_projects")):
         legacy = {**data, "id": data.get("id") or "default", "name": data.get("name") or "Project Board"}
-        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table}
-    return {"boards": [_default_board()], "priority": priority, "links": link_table}
+        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table, "prefs": prefs}
+    return {"boards": [_default_board()], "priority": priority, "links": link_table, "prefs": prefs}
 
 
 def _fresh() -> dict[str, Any]:
-    return {"boards": [_default_board()], "priority": {}, "links": {}}
+    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {}}
+
+
+def prefs() -> dict[str, Any]:
+    return load().get("prefs", {})
 
 
 def load() -> dict[str, Any]:
@@ -238,7 +250,7 @@ def merge(partial: dict) -> dict[str, Any]:
     can't wipe links written by another writer, and vice versa.
     """
     cfg = load()
-    for key in ("boards", "priority", "links"):
+    for key in ("boards", "priority", "links", "prefs"):
         if key in partial:
             cfg[key] = partial[key]
     return save(cfg)

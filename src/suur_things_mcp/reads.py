@@ -290,9 +290,11 @@ def list_items(list_id: str, completed_limit: int = 50) -> dict:
         return {"id": list_id, "kind": "builtin", "items": [_card(i) for i in _BUILTIN_FNS[list_id]()]}
 
     obj = get(list_id)
+    notes = (obj.get("notes") or "").strip() if obj else ""
     if obj and obj.get("type") == "area":
-        return {"id": list_id, "kind": "area", "items": [_card(i) for i in todos(area_uuid=list_id)]}
-    return {"id": list_id, "kind": "project", "items": [_card(i) for i in todos(project_uuid=list_id)]}
+        # areas have no notes field in Things, but keep the shape uniform
+        return {"id": list_id, "kind": "area", "notes": notes, "items": [_card(i) for i in todos(area_uuid=list_id)]}
+    return {"id": list_id, "kind": "project", "notes": notes, "items": [_card(i) for i in todos(project_uuid=list_id)]}
 
 
 # --- Kanban board (tag-based status, browser-config inclusion) ------------

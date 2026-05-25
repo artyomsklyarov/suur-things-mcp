@@ -146,14 +146,37 @@ async def _config_post(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)})
 
 
+def _detect_github(repo_path: str) -> str | None:
+    """Read owner/repo from a repo's `origin` remote (https or ssh). Best-effort."""
+    try:
+        r = subprocess.run(
+            ["git", "-C", repo_path, "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0:
+            return boardcfg._normalize_github(r.stdout.strip())
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
 async def _link_post(request: Request) -> JSONResponse:
-    """Set one item's repo list, without touching anything else in the config."""
+    """Set one item's repo list, without touching anything else in the config.
+
+    Auto-detects each repo's GitHub from its `origin` remote when not provided.
+    """
     try:
         body = await request.json()
         item_id = str(body.get("item_id") or "")
         if not item_id:
             return JSONResponse({"ok": False, "error": "missing item_id"})
-        cfg = boardcfg.set_item_repos(item_id, body.get("kind", "project"), body.get("repos") or [])
+        repos = body.get("repos") or []
+        for r in repos:
+            if isinstance(r, dict) and r.get("repo") and not r.get("github"):
+                path = boardcfg._normalize_repo(r["repo"])
+                if path and os.path.isdir(path):
+                    r["github"] = _detect_github(path)
+        cfg = boardcfg.set_item_repos(item_id, body.get("kind", "project"), repos)
         return JSONResponse({"ok": True, "config": cfg})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc)})
@@ -201,19 +224,24 @@ async def _open(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "bad repo index"})
     entry = repos[idx]
     target = body.get("target")
+    prefs = boardcfg.prefs()
     if target == "github":
         gh = entry.get("github")
         if not gh or not _GITHUB_SLUG_RE.match(gh):
             return JSONResponse({"ok": False, "error": "no valid github for this repo"})
         subprocess.run(["open", f"https://github.com/{gh}"], check=False, timeout=5)
         return JSONResponse({"ok": True})
+    path = entry.get("repo")
+    if not path or not os.path.isdir(path):
+        return JSONResponse({"ok": False, "error": "repo path not found on disk"})
     if target == "editor":
-        path = entry.get("repo")
-        if not path or not os.path.isdir(path):
-            return JSONResponse({"ok": False, "error": "repo path not found on disk"})
-        editor = os.environ.get("SUUR_THINGS_EDITOR")
+        editor = prefs.get("editor") or os.environ.get("SUUR_THINGS_EDITOR")
         cmd = [editor, path] if editor and shutil.which(editor) else ["open", path]
         subprocess.run(cmd, check=False, timeout=5)
+        return JSONResponse({"ok": True})
+    if target == "terminal":
+        app = prefs.get("terminal") or os.environ.get("SUUR_THINGS_TERMINAL") or "Terminal"
+        subprocess.run(["open", "-a", app, path], check=False, timeout=5)
         return JSONResponse({"ok": True})
     return JSONResponse({"ok": False, "error": "bad target"})
 
@@ -368,6 +396,8 @@ INDEX_HTML = """<!DOCTYPE html>
   .due { display:inline-flex; align-items:center; gap:4px; color:var(--red); font-size:12px; white-space:nowrap; }
   .due .dot { width:9px; height:9px; border-radius:50%; background:var(--red); display:inline-block; }
   .empty, .err { color:var(--muted); padding:40px 4px; } .err { color:var(--red); }
+  .proj-notes { color:var(--muted); font-size:14px; line-height:1.55; margin:-4px 0 18px; max-width:760px; white-space:pre-wrap; }
+  .proj-notes a { color:var(--accent); }
 
   .col { background:var(--col-bg); border-radius:12px; width:300px; flex:0 0 300px; max-height:100%; display:flex; flex-direction:column; }
   .col-head { padding:13px 15px 9px; font-weight:600; font-size:13px; text-transform:uppercase;
@@ -427,6 +457,7 @@ INDEX_HTML = """<!DOCTYPE html>
 <div class="topbar">
   <div class="brand">SUUR THINGS</div>
   <span class="grow"></span>
+  <button class="iconbtn" id="prefs-btn" title="Preferences" onclick="openPrefs()">⚙</button>
   <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
 </div>
 <div class="views">
@@ -459,6 +490,16 @@ INDEX_HTML = """<!DOCTYPE html>
       <button class="btn ghost" onclick="openInThings()">Open in Things ↗</button>
       <button class="btn ghost" onclick="closeOverlay('edit-overlay')">Close</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="prefs-overlay">
+  <div class="panel">
+    <h2>Preferences</h2><div class="sub">How "Open in editor / terminal" launches. Saved locally.</div>
+    <div class="field"><label>Editor command (on your PATH — e.g. code, cursor, subl, idea)</label><input id="pf-editor" placeholder="code"></div>
+    <div class="field"><label>Terminal app (e.g. Ghostty, iTerm, Terminal, Warp)</label><input id="pf-terminal" placeholder="Terminal"></div>
+    <div class="hint">Blank = defaults (editor falls back to Finder; terminal to Terminal.app).</div>
+    <div class="btnrow"><button class="btn primary" onclick="savePrefs()">Save</button><span class="spacer"></span><button class="btn ghost" onclick="closeOverlay('prefs-overlay')">Cancel</button></div>
   </div>
 </div>
 
@@ -505,6 +546,7 @@ const QUADS=[
   {key:"eliminate",title:"Don't Do",sub:"Neither",cls:"q-elim"},
 ];
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function linkify(s){ return esc(s).replace(/(https?:\\/\\/[^\\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
 function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#theme").textContent=t==="dark"?"☀":"☾"; localStorage.setItem("things-theme",t); }
@@ -609,7 +651,8 @@ async function renderList(sel){
   const data=await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   const items=data.items, kind=data.kind; c.innerHTML="";
-  if(!items.length){ c.innerHTML=`<div class="empty">Nothing here.</div>`; return; }
+  if(data.notes){ const n=document.createElement("div"); n.className="proj-notes"; n.innerHTML=linkify(data.notes); c.appendChild(n); }
+  if(!items.length){ const e=document.createElement("div"); e.className="empty"; e.textContent="Nothing here."; c.appendChild(e); return; }
   const key=kind==="project"?"heading_title":"project_title";
   const groups=groupBy(items,key).sort((a,b)=>(a.key?1:0)-(b.key?1:0));
   for(const g of groups){ if(g.key){ const h=document.createElement("div"); h.className="grp-head"; h.textContent=g.key; c.appendChild(h);} for(const it of g.items) c.appendChild(rowEl(it)); }
@@ -664,6 +707,7 @@ function boardCardEl(card){
     const lbl = r.label || (r.github? r.github.split("/")[1] : "repo");
     repoHtml += `<span class="repo">${esc(lbl)}`+
       `<button class="rb" title="Open in editor" onclick="event.stopPropagation();openRepo('${card.id}',${i},'editor')">⌨</button>`+
+      `<button class="rb" title="Open in terminal" onclick="event.stopPropagation();openRepo('${card.id}',${i},'terminal')">❯</button>`+
       (r.github?`<button class="rb" title="Open on GitHub" onclick="event.stopPropagation();openRepo('${card.id}',${i},'github')">↗</button>`:"")+
       `</span>`;
   });
@@ -831,6 +875,15 @@ async function postUpdate(body){
   closeOverlay("edit-overlay"); setTimeout(route,350);   // re-render current view
 }
 function openInThings(){ if(EDIT_ID) window.location.href="things:///show?id="+encodeURIComponent(EDIT_ID); }
+
+// preferences (editor + terminal app)
+function openPrefs(){ const p=CONFIG.prefs||{}; $("#pf-editor").value=p.editor||""; $("#pf-terminal").value=p.terminal||""; openOverlay("prefs-overlay"); }
+async function savePrefs(){
+  const prefs={editor:$("#pf-editor").value.trim(), terminal:$("#pf-terminal").value.trim()};
+  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prefs})})).json();
+  if(r.ok) CONFIG=r.config;
+  closeOverlay("prefs-overlay");
+}
 
 function openOverlay(id){ $("#"+id).classList.add("show"); }
 function closeOverlay(id){ $("#"+id).classList.remove("show"); }

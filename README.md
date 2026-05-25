@@ -120,10 +120,14 @@ commands (exact name/prefix is client-controlled):
 
 Link a Things project or area to one or more local git repos (an app + its website,
 say) with `link_repo` / `unlink_repo` / `list_links`, or the 🔗 button on a board card.
-The link lives in `board.json` (never written to Things). Then `current_link` lets an
-agent sitting in a repo discover its project's tasks (it resolves your working dir via
-`CLAUDE_PROJECT_DIR` or an explicit `cwd`), and board cards get Open-in-editor /
-Open-on-GitHub buttons. The Phase-2 GitHub issue bridge is on the [roadmap](ROADMAP.md).
+The link lives in `board.json` (never written to Things). GitHub is **auto-detected**
+from the repo's `origin` remote when you link it. Then `current_link` lets an agent
+sitting in a repo discover its project's tasks (it resolves your working dir via
+`CLAUDE_PROJECT_DIR` or an explicit `cwd`), and board cards get **Open-in-editor (⌨) /
+terminal (❯) / GitHub (↗)** buttons. Set your editor command and terminal app in the
+topbar **⚙ Preferences** (`SUUR_THINGS_EDITOR` / `SUUR_THINGS_TERMINAL` also work).
+Selecting a project shows its Things notes/description at the top, like the app. The
+Phase-2 GitHub issue bridge is on the [roadmap](ROADMAP.md).
 
 More GTD prompts (`weekly-review`, `triage-inbox`, `whats-next`, `standup`) are on the [roadmap](ROADMAP.md).
 
