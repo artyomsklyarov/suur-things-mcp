@@ -444,6 +444,85 @@ def batch(
 
 
 # =========================================================================
+# REPO LINKS — connect a project/area to one or more local git repos
+# =========================================================================
+
+@mcp.tool()
+def link_repo(
+    item_uuid: Annotated[str, Field(description="UUID of the Things project or area to link.")],
+    repo_path: Annotated[str, Field(description="Absolute path to the local git repo.")],
+    github: Annotated[str | None, Field(description="'owner/repo' or a github URL.")] = None,
+    label: Annotated[str | None, Field(description="Optional label, e.g. 'iOS app' or 'Website'.")] = None,
+) -> dict[str, Any]:
+    """Link a local repo to a Things project/area. A project/area can have several.
+
+    Stored in the browser-side config (never written to Things). Used by
+    `current_link` (so an agent in that repo finds its tasks) and the dashboard.
+    """
+    detail = reads.get(item_uuid)
+    if not detail:
+        return {"ok": False, "error": "no project/area with that uuid"}
+    kind = "area" if detail.get("type") == "area" else "project"
+    boardcfg.set_link(item_uuid, kind, repo_path, github, label)
+    return {"ok": True, "item_uuid": item_uuid, "kind": kind}
+
+
+@mcp.tool()
+def unlink_repo(
+    item_uuid: str,
+    repo_path: Annotated[str | None, Field(description="Remove just this repo; omit to remove all repos for the item.")] = None,
+) -> dict[str, Any]:
+    """Remove a repo link (or all of an item's repo links)."""
+    boardcfg.remove_link(item_uuid, repo_path)
+    return {"ok": True}
+
+
+@mcp.tool()
+def list_links() -> list[dict]:
+    """All repo↔project/area links, with item titles resolved."""
+    out = []
+    for item_id, item in boardcfg.links().items():
+        detail = reads.get(item_id)
+        out.append({
+            "item_uuid": item_id,
+            "kind": item.get("kind"),
+            "title": detail.get("title") if detail else None,
+            "repos": item.get("repos", []),
+        })
+    return out
+
+
+@mcp.tool()
+def current_link(
+    cwd: Annotated[
+        str | None,
+        Field(description="Absolute path of your current working directory. PASS THIS EXPLICITLY — the server's own cwd is unreliable under uvx."),
+    ] = None,
+) -> dict | None:
+    """The Things project/area linked to your current repo, plus its open to-dos.
+
+    Resolves the directory in order: `cwd` arg → CLAUDE_PROJECT_DIR env → the
+    server's cwd. Returns null when the directory isn't under any linked repo.
+    """
+    path = cwd or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    link = boardcfg.link_for_path(path)
+    if not link:
+        return None
+    item_id = link["item_id"]
+    detail = reads.get(item_id)
+    items = reads.list_items(item_id)
+    return {
+        "item_uuid": item_id,
+        "kind": link["kind"],
+        "title": detail.get("title") if detail else None,
+        "resolved_path": path,
+        "matched_repo": link["repo"],
+        "repos": boardcfg.links().get(item_id, {}).get("repos", []),
+        "open_tasks": items.get("items", []),
+    }
+
+
+# =========================================================================
 
 def _do(command: str, params: dict) -> dict[str, Any]:
     """Execute a write command, returning a structured result the model can read."""
@@ -479,6 +558,25 @@ def plan_to_project(plan: str) -> str:
         "short and action-first.\n\n"
         "--- PLAN ---\n"
         f"{plan}"
+    )
+
+
+@mcp.prompt()
+def work_on_repo() -> str:
+    """Find this repo's Things project and work its tasks."""
+    return (
+        "Help the user work on the Things project/area tracked in their current repo.\n\n"
+        "1. Find your absolute working directory (e.g. `git rev-parse --show-toplevel`) "
+        "and call `current_link` with cwd set to that path. PASS cwd EXPLICITLY — do not "
+        "rely on the server's own cwd.\n"
+        "2. If it returns null, there's no link yet. Detect the repo's remote "
+        "(`git remote get-url origin`), find the matching Things project with "
+        "`search_todos`/`get_projects`, and offer to `link_repo(item_uuid, repo_path, github)`. "
+        "Note a project can have several repos (e.g. an app + its website) — link each.\n"
+        "3. If linked, review `open_tasks`, pick the single highest-leverage next task, and "
+        "propose it. When the work is done, close it with `complete_todo` (needs "
+        "THINGS_AUTH_TOKEN).\n"
+        "Stay scoped to this repo's project; don't pull in unrelated tasks."
     )
 
 

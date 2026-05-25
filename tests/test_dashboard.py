@@ -141,6 +141,63 @@ def test_board_endpoint_shape():
     assert b["ok"] is True and "columns" in b and "auth" in b
 
 
+def test_link_table_multi_repo_and_normalization(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    repo_a = tmp_path / "app"; repo_a.mkdir()
+    repo_b = tmp_path / "web"; repo_b.mkdir()
+    cfg.set_link("PROOF", "project", str(repo_a), "owner/proof-ios", "iOS app")
+    cfg.set_link("PROOF", "project", str(repo_b), "https://github.com/owner/proof-web.git", "Website")
+    repos = cfg.links()["PROOF"]["repos"]
+    assert len(repos) == 2
+    assert {r["github"] for r in repos} == {"owner/proof-ios", "owner/proof-web"}  # URL normalized
+    # bad github is dropped to None
+    cfg.set_link("X", "project", str(tmp_path / "x"), "not a repo slug")
+    (tmp_path / "x").mkdir()
+    assert cfg.links()["X"]["repos"][0]["github"] is None
+
+
+def test_link_for_path_longest_match_and_stale(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    parent = tmp_path / "dev"; parent.mkdir()
+    child = parent / "ilty"; child.mkdir()
+    cfg.set_link("DEV", "area", str(parent))
+    cfg.set_link("ILTY", "project", str(child))
+    # a path inside the child resolves to the deeper (longest) repo
+    assert cfg.link_for_path(str(child / "src"))["item_id"] == "ILTY"
+    assert cfg.link_for_path(str(parent / "other"))["item_id"] == "DEV"
+    # stale repo (deleted) is skipped
+    cfg.set_link("GONE", "project", str(tmp_path / "missing"))
+    assert cfg.link_for_path(str(tmp_path / "missing")) is None
+
+
+def test_open_endpoint_validates_without_shelling(monkeypatch, tmp_path):
+    # Guard against bad input; none of these reach subprocess.
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    assert client.post("/api/open", json={"item_id": "nope", "target": "editor"}).json()["ok"] is False
+    cfg.set_link("P", "project", str(tmp_path), "owner/repo")
+    assert client.post("/api/open", json={"item_id": "P", "repo_index": 9, "target": "github"}).json()["ok"] is False
+    assert client.post("/api/open", json={"item_id": "P", "repo_index": 0, "target": "evil"}).json()["ok"] is False
+
+
+def test_origin_guard_blocks_cross_site():
+    cross = client.post("/api/config", headers={"sec-fetch-site": "cross-site"}, json={"boards": []})
+    assert cross.status_code == 403
+    bad = client.post("/api/config", headers={"origin": "http://evil.example"}, json={"boards": []})
+    assert bad.status_code == 403
+
+
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")
 def test_board_cards_are_projects_and_areas():
     from suur_things_mcp import reads as r

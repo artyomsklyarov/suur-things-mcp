@@ -21,13 +21,18 @@ Run:
 from __future__ import annotations
 
 import os
+import re
+import shutil
 import socket
 import subprocess
 import threading
 from typing import Any
+from urllib.parse import urlparse
 
 import uvicorn
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
@@ -35,6 +40,25 @@ from starlette.routing import Route
 from . import config as boardcfg
 from . import reads
 from .urlscheme import ThingsURLError, execute
+
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
+_GITHUB_SLUG_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
+
+
+class _OriginGuard(BaseHTTPMiddleware):
+    """Reject cross-site POSTs. 127.0.0.1 binding alone doesn't stop a webpage in
+    your browser from POSTing to localhost (CSRF/DNS-rebind), and our POSTs can
+    write config and launch local apps. Same-origin fetches from our own page pass.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method == "POST":
+            if request.headers.get("sec-fetch-site") == "cross-site":
+                return JSONResponse({"ok": False, "error": "cross-site blocked"}, status_code=403)
+            origin = request.headers.get("origin")
+            if origin and urlparse(origin).hostname not in _ALLOWED_HOSTS:
+                return JSONResponse({"ok": False, "error": "bad origin"}, status_code=403)
+        return await call_next(request)
 
 DEFAULT_PORT = 8765
 _running: dict[str, Any] = {}
@@ -87,6 +111,9 @@ async def _board(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "board not found", "columns": []})
     try:
         cards = reads.board_cards(board)
+        link_table = boardcfg.links()
+        for card in cards:
+            card["repos"] = link_table.get(card["id"], {}).get("repos", [])
         placements = board.get("placements") or {}
         columns = board.get("columns") or []
         buckets: dict[str, list] = {c: [] for c in columns}
@@ -143,6 +170,39 @@ async def _update(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)})
 
 
+async def _open(request: Request) -> JSONResponse:
+    """Open a linked repo in the editor or its GitHub page.
+
+    Takes only an item_id + repo index + target; the path/url is looked up and
+    validated server-side (never trusted from the request).
+    """
+    body = await request.json()
+    item = boardcfg.links().get(str(body.get("item_id")))
+    if not item:
+        return JSONResponse({"ok": False, "error": "not linked"})
+    repos = item.get("repos", [])
+    idx = body.get("repo_index", 0)
+    if not isinstance(idx, int) or idx < 0 or idx >= len(repos):
+        return JSONResponse({"ok": False, "error": "bad repo index"})
+    entry = repos[idx]
+    target = body.get("target")
+    if target == "github":
+        gh = entry.get("github")
+        if not gh or not _GITHUB_SLUG_RE.match(gh):
+            return JSONResponse({"ok": False, "error": "no valid github for this repo"})
+        subprocess.run(["open", f"https://github.com/{gh}"], check=False, timeout=5)
+        return JSONResponse({"ok": True})
+    if target == "editor":
+        path = entry.get("repo")
+        if not path or not os.path.isdir(path):
+            return JSONResponse({"ok": False, "error": "repo path not found on disk"})
+        editor = os.environ.get("SUUR_THINGS_EDITOR")
+        cmd = [editor, path] if editor and shutil.which(editor) else ["open", path]
+        subprocess.run(cmd, check=False, timeout=5)
+        return JSONResponse({"ok": True})
+    return JSONResponse({"ok": False, "error": "bad target"})
+
+
 def create_app() -> Starlette:
     return Starlette(
         routes=[
@@ -155,7 +215,9 @@ def create_app() -> Starlette:
             Route("/api/config", _config_get),
             Route("/api/config", _config_post, methods=["POST"]),
             Route("/api/update", _update, methods=["POST"]),
-        ]
+            Route("/api/open", _open, methods=["POST"]),
+        ],
+        middleware=[Middleware(_OriginGuard)],
     )
 
 
@@ -303,6 +365,11 @@ INDEX_HTML = """<!DOCTYPE html>
   .card .cdesc { color:var(--muted); font-size:12px; margin-top:4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card .cfoot { margin-top:9px; display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
   .card .kind { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--pill-border); border-radius:9px; padding:0 6px; }
+  .card .crepos { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .card .repo { font-size:11px; color:var(--muted); border:1px solid var(--pill-border); border-radius:8px; padding:1px 3px 1px 8px; display:inline-flex; align-items:center; gap:1px; }
+  .card .rb { border:0; background:transparent; cursor:pointer; color:var(--muted); font-size:12px; padding:0 4px; border-radius:5px; line-height:1.6; }
+  .card .rb:hover { background:var(--row-hover); color:var(--text); }
+  .card .rb.add { border:1px dashed var(--pill-border); border-radius:8px; padding:0 7px; }
 
   .pri-wrap { display:flex; gap:16px; height:100%; }
   .pri-pool { width:300px; flex:0 0 300px; background:var(--col-bg); border-radius:12px; display:flex; flex-direction:column; }
@@ -554,11 +621,35 @@ function boardCardEl(card){
   el.onclick=()=>go("#l/"+encodeURIComponent(card.id));
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",card.id); el.classList.add("dragging"); });
   el.addEventListener("dragend",()=>el.classList.remove("dragging"));
+  let repoHtml="";
+  (card.repos||[]).forEach((r,i)=>{
+    const lbl = r.label || (r.github? r.github.split("/")[1] : "repo");
+    repoHtml += `<span class="repo">${esc(lbl)}`+
+      `<button class="rb" title="Open in editor" onclick="event.stopPropagation();openRepo('${card.id}',${i},'editor')">⌨</button>`+
+      (r.github?`<button class="rb" title="Open on GitHub" onclick="event.stopPropagation();openRepo('${card.id}',${i},'github')">↗</button>`:"")+
+      `</span>`;
+  });
+  repoHtml += `<button class="rb add" title="Link a repo" onclick="event.stopPropagation();linkRepoPrompt('${card.id}','${card.kind}')">🔗 repo</button>`;
   el.innerHTML=`<div class="ct">${esc(card.title)}</div>`+
     (card.area_title?`<div class="csub">${esc(card.area_title)}</div>`:"")+
     (card.desc?`<div class="cdesc">${esc(card.desc)}</div>`:"")+
-    `<div class="cfoot"><span class="kind">${card.kind}</span>${ring(card.progress)}<span>${card.open} open${card.total?` / ${card.total}`:""}</span></div>`;
+    `<div class="cfoot"><span class="kind">${card.kind}</span>${ring(card.progress)}<span>${card.open} open${card.total?` / ${card.total}`:""}</span></div>`+
+    `<div class="crepos">${repoHtml}</div>`;
   return el;
+}
+async function openRepo(itemId, idx, target){
+  const r=await (await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item_id:itemId,repo_index:idx,target})})).json();
+  if(!r.ok) alert("Open failed: "+(r.error||""));
+}
+function linkRepoPrompt(itemId, kind){
+  const path=prompt("Absolute path to the local repo:"); if(!path) return;
+  const github=prompt("GitHub (owner/repo or URL) — optional:")||null;
+  const label=prompt("Label (optional, e.g. iOS app):")||null;
+  CONFIG.links=CONFIG.links||{};
+  const item=CONFIG.links[itemId]||{kind, repos:[]};
+  item.kind=kind; item.repos=item.repos||[]; item.repos.push({repo:path, github, label});
+  CONFIG.links[itemId]=item;
+  saveConfig().then(()=>renderBoard(CUR_BOARD));
 }
 async function placeCard(boardId,itemId,column){
   const b=CONFIG.boards.find(x=>x.id===boardId); if(!b) return;

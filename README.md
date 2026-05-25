@@ -114,6 +114,16 @@ commands (exact name/prefix is client-controlled):
 | Prompt | What it does |
 |--------|--------------|
 | `plan_to_project` | Hand it an implementation plan; the agent uses `batch` to materialize a Things project (headings per phase, to-dos per step, checklist items per sub-task) |
+| `work_on_repo` | From inside a linked repo, the agent resolves which Things project/area it maps to, pulls that project's open to-dos, and works the next one |
+
+### Repo links
+
+Link a Things project or area to one or more local git repos (an app + its website,
+say) with `link_repo` / `unlink_repo` / `list_links`, or the 🔗 button on a board card.
+The link lives in `board.json` (never written to Things). Then `current_link` lets an
+agent sitting in a repo discover its project's tasks (it resolves your working dir via
+`CLAUDE_PROJECT_DIR` or an explicit `cwd`), and board cards get Open-in-editor /
+Open-on-GitHub buttons. The Phase-2 GitHub issue bridge is on the [roadmap](ROADMAP.md).
 
 More GTD prompts (`weekly-review`, `triage-inbox`, `whats-next`, `standup`) are on the [roadmap](ROADMAP.md).
 

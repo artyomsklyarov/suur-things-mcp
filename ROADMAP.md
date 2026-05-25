@@ -31,6 +31,23 @@ writes stay on the URL Scheme.
   `batch` tool to materialize a Things project (headings per phase, to-dos per step,
   checklist items per sub-task).
 
+## Repo linking ✅ (Phase 1 shipped)
+
+Connect a Things project/area to one or more local git repos (e.g. an app + its
+website). The link lives in the browser config (`links: {itemUuid: {kind, repos:[
+{repo, github, label}]}}`), never written to Things.
+
+- **Tools**: `link_repo`, `unlink_repo`, `list_links`, `current_link(cwd)`.
+- **`/things:work-on-repo` prompt** — the agent passes its cwd, `current_link`
+  resolves it to the linked project/area, returns the open tasks, and the agent
+  works them. cwd resolves via `cwd` arg → `CLAUDE_PROJECT_DIR` → `getcwd()` (never
+  trusts the bare server cwd under uvx).
+- **Dashboard**: per-card repo chips with Open-in-editor / Open-on-GitHub, plus a
+  🔗 to link more. `/api/open` takes only an item_id + index (server-side lookup +
+  validation); an `Origin`/`Sec-Fetch-Site` guard now protects all write endpoints.
+- **Phase 2 (next)**: `/things:repo-to-issue` + `/things:issues-to-todos` prompts
+  (agent runs `gh`; server never bundles it).
+
 ## Phase 2 — GTD copilot (prompts only, no new tools)
 
 - **`weekly-review`** — agent flags projects with no next action, Someday items

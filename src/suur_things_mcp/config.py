@@ -15,12 +15,70 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any
 
 DEFAULT_COLUMNS = ["Backlog", "In Progress", "On Hold", "Done"]
 QUADRANTS = {"do", "schedule", "delegate", "eliminate"}
+
+# Accept "owner/repo" or a github URL; capture "owner/repo".
+_GITHUB_RE = re.compile(r"^(?:https?://github\.com/)?([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
+
+
+def _normalize_repo(path: Any) -> str | None:
+    if not path:
+        return None
+    return os.path.normcase(os.path.realpath(os.path.expanduser(str(path))))
+
+
+def _normalize_github(value: Any) -> str | None:
+    if not value:
+        return None
+    m = _GITHUB_RE.match(str(value).strip())
+    return m.group(1) if m else None
+
+
+def _clean_link_entry(repo_entry: Any) -> dict[str, Any] | None:
+    if not isinstance(repo_entry, dict):
+        return None
+    repo = _normalize_repo(repo_entry.get("repo"))
+    if not repo:
+        return None
+    label = repo_entry.get("label")
+    return {
+        "repo": repo,
+        "github": _normalize_github(repo_entry.get("github")),
+        "label": str(label).strip() if label else None,
+    }
+
+
+def _clean_links(data: dict) -> dict[str, Any]:
+    """Normalize the link table. Each item (project/area) holds a LIST of repos.
+
+    Accepts the new shape ({"repos": [...]}) and a legacy single-repo entry; repos
+    are de-duplicated by normalized path (last write wins).
+    """
+    raw = data.get("links")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, entry in raw.items():
+        if not isinstance(entry, dict):
+            continue
+        kind = entry.get("kind") if entry.get("kind") in ("project", "area") else "project"
+        raw_repos = entry.get("repos")
+        if not isinstance(raw_repos, list) and entry.get("repo"):  # legacy single repo
+            raw_repos = [{"repo": entry.get("repo"), "github": entry.get("github"), "label": entry.get("label")}]
+        by_path: dict[str, dict] = {}
+        for r in raw_repos or []:
+            cleaned = _clean_link_entry(r)
+            if cleaned:
+                by_path[cleaned["repo"]] = cleaned  # dedup by path
+        if by_path:
+            out[str(key)] = {"kind": kind, "repos": list(by_path.values())}
+    return out
 
 
 def _path() -> Path:
@@ -72,19 +130,20 @@ def _clean(data: dict) -> dict[str, Any]:
         if isinstance(priority, dict)
         else {}
     )
+    link_table = _clean_links(data)
     # New shape: {"boards": [...]}.
     if isinstance(data.get("boards"), list) and data["boards"]:
         boards = [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]
-        return {"boards": boards, "priority": priority}
+        return {"boards": boards, "priority": priority, "links": link_table}
     # Legacy flat shape: {columns, include_areas, include_projects} → one board.
     if any(k in data for k in ("columns", "include_areas", "include_projects")):
         legacy = {**data, "id": data.get("id") or "default", "name": data.get("name") or "Project Board"}
-        return {"boards": [_clean_board(legacy)], "priority": priority}
-    return {"boards": [_default_board()], "priority": priority}
+        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table}
+    return {"boards": [_default_board()], "priority": priority, "links": link_table}
 
 
 def _fresh() -> dict[str, Any]:
-    return {"boards": [_default_board()], "priority": {}}
+    return {"boards": [_default_board()], "priority": {}, "links": {}}
 
 
 def load() -> dict[str, Any]:
@@ -110,6 +169,64 @@ def get_board(board_id: str) -> dict[str, Any] | None:
         if b["id"] == board_id:
             return b
     return None
+
+
+# --- Repo links (project/area ↔ one or more git repos) --------------------
+
+def links() -> dict[str, Any]:
+    return load().get("links", {})
+
+
+def set_link(item_uuid: str, kind: str, repo: str, github: str | None = None,
+             label: str | None = None) -> dict[str, Any]:
+    """Add (or replace by path) a repo link for a project/area. Save normalizes."""
+    cfg = load()
+    table = cfg.setdefault("links", {})
+    item = table.get(str(item_uuid)) or {"kind": kind, "repos": []}
+    item["kind"] = kind if kind in ("project", "area") else item.get("kind", "project")
+    norm = _normalize_repo(repo)
+    item["repos"] = [r for r in item.get("repos", []) if _normalize_repo(r.get("repo")) != norm]
+    item["repos"].append({"repo": repo, "github": github, "label": label})
+    table[str(item_uuid)] = item
+    return save(cfg)
+
+
+def remove_link(item_uuid: str, repo: str | None = None) -> dict[str, Any]:
+    """Remove one repo from an item (by path), or the whole item if repo is None."""
+    cfg = load()
+    table = cfg.get("links", {})
+    if repo is None:
+        table.pop(str(item_uuid), None)
+    elif str(item_uuid) in table:
+        norm = _normalize_repo(repo)
+        item = table[str(item_uuid)]
+        item["repos"] = [r for r in item.get("repos", []) if r.get("repo") != norm]
+        if not item["repos"]:
+            table.pop(str(item_uuid), None)
+    return save(cfg)
+
+
+def link_for_path(path: str) -> dict[str, Any] | None:
+    """The linked item whose repo equals/contains ``path`` (longest match wins).
+
+    Returns {item_id, kind, repo: <repo entry>} or None. Stale repos (path no
+    longer on disk) are skipped.
+    """
+    target = _normalize_repo(path)
+    if not target:
+        return None
+    best: dict[str, Any] | None = None
+    best_len = -1
+    for item_id, item in load().get("links", {}).items():
+        for r in item.get("repos", []):
+            repo = r.get("repo")
+            if not repo or not os.path.exists(repo):
+                continue
+            if target == repo or target.startswith(repo + os.sep):
+                if len(repo) > best_len:
+                    best_len = len(repo)
+                    best = {"item_id": item_id, "kind": item.get("kind"), "repo": r}
+    return best
 
 
 # --- Auth token resolution ------------------------------------------------
