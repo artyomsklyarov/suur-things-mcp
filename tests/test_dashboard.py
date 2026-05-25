@@ -4,6 +4,8 @@ The `/` route is static and runs anywhere. The data routes need a readable
 Things database, so they skip gracefully when Things isn't present (CI / Linux).
 """
 
+import json
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -257,6 +259,48 @@ def test_prefs_merge_isolated(tmp_path, monkeypatch):
     p = cfg.prefs()
     assert p == {"editor": "cursor", "terminal": "Ghostty"}  # unknown key dropped
     assert "X" in cfg.load()["links"]  # prefs save didn't wipe links
+
+
+def test_organize_parser_handles_claude_envelope_and_fences():
+    from suur_things_mcp import organize as org
+    inner = '[{"uuid":"a","suggested_title":"Buy milk","append_notes":null,"tags":["Errand"],"reason":"clearer"}]'
+    # claude --output-format json: array lives in a string field of an envelope
+    env = json.dumps({"type": "result", "result": inner})
+    out = org.parse_suggestions(env, "claude")
+    assert out[0]["uuid"] == "a" and out[0]["suggested_title"] == "Buy milk"
+    assert out[0]["tags"] == ["Errand"] and out[0]["append_notes"] is None
+    # codex / plain: fenced + prose around it
+    messy = 'Here you go:\n```json\n' + inner + '\n```\nDone.'
+    out2 = org.parse_suggestions(messy, "codex")
+    assert out2[0]["suggested_title"] == "Buy milk"
+
+
+def test_organize_parser_drops_blank_titles_and_caps():
+    from suur_things_mcp import organize as org
+    arr = '[{"uuid":"x","suggested_title":"   ","tags":["a","b","c","d","e","f"]}]'
+    out = org.parse_suggestions(arr, "codex")
+    assert out[0]["suggested_title"] is None  # blank -> None
+    assert len(out[0]["tags"]) == 5  # capped
+
+
+def test_organize_needs_token(monkeypatch, tmp_path):
+    monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("SUUR_THINGS_TOKEN_FILE", str(tmp_path / "no-token"))
+    r = client.post("/api/organize", json={"folder_id": "today"}).json()
+    assert r["ok"] is False and "TOKEN" in r["error"].upper()
+
+
+def test_organize_unknown_job():
+    assert client.get("/api/organize?job_id=nope").json()["status"] == "unknown"
+
+
+def test_update_supports_additive_writes(monkeypatch):
+    # The organize apply path relies on append_notes / add_tags reaching the URL params.
+    monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("SUUR_THINGS_TOKEN_FILE", "/nonexistent")
+    # No token -> ok False, but the endpoint must accept the fields without erroring.
+    r = client.post("/api/update", json={"id": "x", "append_notes": "n", "add_tags": ["t"]}).json()
+    assert r["ok"] is False  # token gate, not a crash
 
 
 def test_origin_guard_blocks_cross_site():

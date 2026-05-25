@@ -48,6 +48,22 @@ website). The link lives in the browser config (`links: {itemUuid: {kind, repos:
 - **Phase 2 (next)**: `/things:repo-to-issue` + `/things:issues-to-todos` prompts
   (agent runs `gh`; server never bundles it).
 
+## Auto-organize folder ✅ (shipped)
+
+A ✨ button on any folder (project / area / Inbox) that enriches its tasks with the
+help of your own agent, reviewed before anything is written.
+
+- **`/things:organize-folder` prompt** — agent-side: read folder, propose clearer
+  titles + notes + tags (reusing existing tags), review in chat, apply on approval.
+- **Dashboard button** — spawns your installed agent **headlessly with no tools and
+  no MCP** (`claude -p --strict-mcp-config --mcp-config '{}' --allowedTools "" --model
+  sonnet`), so it can only PROPOSE — it physically can't write or be injected into
+  writing. Background job (dedupe + single-run cap + 180s timeout); suggestions shown
+  in a per-field review modal; Apply writes additively (title replace, **append-notes**,
+  **add-tags** — never overwrites). No LLM/API key in the server; uses your agent's auth.
+- Configure the agent/model via `prefs.agent` / `prefs.agent_model` (or
+  `SUUR_THINGS_AGENT`). Needs `THINGS_AUTH_TOKEN` to apply.
+
 ## Phase 2 — GTD copilot (prompts only, no new tools)
 
 - **`weekly-review`** — agent flags projects with no next action, Someday items

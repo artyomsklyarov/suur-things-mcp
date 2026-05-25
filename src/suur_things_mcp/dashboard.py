@@ -37,9 +37,17 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
 
+import time
+import uuid as _uuid
+
 from . import config as boardcfg
+from . import organize as organizer
 from . import reads
 from .urlscheme import ThingsURLError, execute
+
+# In-memory organize jobs (single uvicorn worker). job_id -> dict.
+_ORGANIZE_JOBS: dict[str, dict] = {}
+_ORGANIZE_TTL = 1800  # evict finished jobs after 30 min
 
 _ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 _GITHUB_SLUG_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -197,6 +205,10 @@ async def _update(request: Request) -> JSONResponse:
             params[key] = body[key]
     if body.get("tags") is not None:
         params["tags"] = ",".join(body["tags"])
+    if body.get("append_notes"):
+        params["append-notes"] = body["append_notes"]
+    if body.get("add_tags"):
+        params["add-tags"] = ",".join(body["add_tags"])
     if body.get("completed"):
         params["completed"] = True
     if body.get("canceled"):
@@ -246,10 +258,77 @@ async def _open(request: Request) -> JSONResponse:
     return JSONResponse({"ok": False, "error": "bad target"})
 
 
+def _evict_jobs() -> None:
+    now = time.time()
+    for jid in [k for k, v in _ORGANIZE_JOBS.items()
+                if v.get("status") != "running" and now - v.get("ts", now) > _ORGANIZE_TTL]:
+        _ORGANIZE_JOBS.pop(jid, None)
+
+
+async def _organize_post(request: Request) -> JSONResponse:
+    """Start a background 'organize folder' agent run. Returns a job_id to poll."""
+    if not _auth_token():
+        return JSONResponse({"ok": False, "error": "THINGS_AUTH_TOKEN not set (needed to apply changes)"})
+    body = await request.json()
+    folder_id = str(body.get("folder_id") or "")
+    if not folder_id:
+        return JSONResponse({"ok": False, "error": "missing folder_id"})
+    agent = organizer.pick_agent(boardcfg.prefs())
+    if not agent:
+        return JSONResponse({"ok": False, "error": "no agent CLI found — install Claude Code or Codex"})
+
+    _evict_jobs()
+    for jid, job in _ORGANIZE_JOBS.items():  # dedupe: same folder already running
+        if job.get("status") == "running" and job.get("folder_id") == folder_id:
+            return JSONResponse({"ok": True, "job_id": jid})
+    if any(j.get("status") == "running" for j in _ORGANIZE_JOBS.values()):  # global cap of 1
+        return JSONResponse({"ok": False, "error": "another organize job is already running"})
+
+    try:
+        cards = reads.list_items(folder_id).get("items", [])[: organizer.MAX_TASKS]
+        tasks = []
+        for c in cards:
+            full = reads.get(c["uuid"]) or {}
+            tasks.append({"uuid": c["uuid"], "title": c.get("title"),
+                          "notes": full.get("notes"), "tags": full.get("tags") or c.get("tags")})
+        if not tasks:
+            return JSONResponse({"ok": False, "error": "no open tasks in this folder"})
+        obj = reads.get(folder_id)
+        title = (obj.get("title") if obj else None) or folder_id
+        existing_tags = [t.get("title") for t in reads.tags() if t.get("title")]
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+    model = boardcfg.prefs().get("agent_model") or organizer.DEFAULT_MODEL
+    job_id = _uuid.uuid4().hex[:8]
+    _ORGANIZE_JOBS[job_id] = {"status": "running", "folder_id": folder_id, "ts": time.time(),
+                              "suggestions": None, "error": None, "count": len(tasks)}
+
+    def _work() -> None:
+        try:
+            sug = organizer.organize(title, tasks, existing_tags, agent, model)
+            _ORGANIZE_JOBS[job_id].update(status="done", suggestions=sug, ts=time.time())
+        except Exception as exc:  # noqa: BLE001
+            _ORGANIZE_JOBS[job_id].update(status="error", error=str(exc), ts=time.time())
+
+    threading.Thread(target=_work, daemon=True, name=f"organize-{job_id}").start()
+    return JSONResponse({"ok": True, "job_id": job_id, "count": len(tasks), "agent": agent})
+
+
+async def _organize_get(request: Request) -> JSONResponse:
+    job = _ORGANIZE_JOBS.get(request.query_params.get("job_id", ""))
+    if not job:
+        return JSONResponse({"ok": True, "status": "unknown"})  # server restarted / evicted
+    return JSONResponse({"ok": True, "status": job["status"],
+                         "suggestions": job.get("suggestions"), "error": job.get("error")})
+
+
 def create_app() -> Starlette:
     return Starlette(
         routes=[
             Route("/", _index),
+            Route("/api/organize", _organize_get),
+            Route("/api/organize", _organize_post, methods=["POST"]),
             Route("/api/state", _state),
             Route("/api/sidebar", _sidebar),
             Route("/api/items", _items),
@@ -398,6 +477,11 @@ INDEX_HTML = """<!DOCTYPE html>
   .empty, .err { color:var(--muted); padding:40px 4px; } .err { color:var(--red); }
   .proj-notes { color:var(--muted); font-size:14px; line-height:1.55; margin:-4px 0 18px; max-width:760px; white-space:pre-wrap; }
   .proj-notes a { color:var(--accent); }
+  .org-row { border:1px solid var(--divider); border-radius:9px; padding:10px 12px; margin:8px 0; }
+  .org-cur { color:var(--muted); font-size:12px; text-decoration:line-through; margin-bottom:5px; }
+  .org-line { display:flex; gap:8px; align-items:flex-start; padding:3px 0; cursor:pointer; font-size:13px; }
+  .org-line input { margin-top:3px; flex:0 0 auto; }
+  .org-reason { color:var(--muted); font-size:11.5px; margin-top:4px; font-style:italic; }
 
   .col { background:var(--col-bg); border-radius:12px; width:300px; flex:0 0 300px; max-height:100%; display:flex; flex-direction:column; }
   .col-head { padding:13px 15px 9px; font-weight:600; font-size:13px; text-transform:uppercase;
@@ -466,6 +550,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="main-head">
       <span class="ico" id="head-ico">⭐</span><h1 id="head-title">Today</h1>
       <span class="grow"></span>
+      <button class="iconbtn" id="organize-btn" title="Auto-organize this folder with your agent" style="display:none" onclick="startOrganize()">✨</button>
       <button class="iconbtn" id="board-gear" title="Board settings" style="display:none" onclick="openBoardSettings()">⚙</button>
     </div>
     <div id="content"></div>
@@ -489,6 +574,18 @@ INDEX_HTML = """<!DOCTYPE html>
       <span class="spacer"></span>
       <button class="btn ghost" onclick="openInThings()">Open in Things ↗</button>
       <button class="btn ghost" onclick="closeOverlay('edit-overlay')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="organize-overlay">
+  <div class="panel" style="width:640px">
+    <h2>✨ Organize folder</h2><div class="sub">Your agent suggests improvements. Nothing is written until you Apply.</div>
+    <div id="org-body"></div>
+    <div class="btnrow" id="org-actions" style="display:none">
+      <button class="btn primary" onclick="applyOrganize()">Apply selected</button>
+      <span class="spacer"></span>
+      <button class="btn ghost" onclick="closeOverlay('organize-overlay')">Close</button>
     </div>
   </div>
 </div>
@@ -537,6 +634,7 @@ INDEX_HTML = """<!DOCTYPE html>
 const $ = (s, r=document) => r.querySelector(s);
 let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{}};
 let MODE="list", CUR_BOARD=null, SEL=null, EDIT_ID=null, CURRENT_ID="today", TODAY_CACHE=[];
+let LAST_ITEMS={}, ORG_SUG=[];
 let COLLAPSED=new Set(JSON.parse(localStorage.getItem("collapsed-areas")||"[]"));
 const DEFAULT_COLUMNS=["Backlog","In Progress","On Hold","Done"];
 const QUADS=[
@@ -651,6 +749,8 @@ async function renderList(sel){
   const data=await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   const items=data.items, kind=data.kind; c.innerHTML="";
+  LAST_ITEMS={}; items.forEach(it=>{ LAST_ITEMS[it.uuid]=it.title; });
+  $("#organize-btn").style.display=(kind==="project"||kind==="area"||sel.id==="inbox")?"flex":"none";
   if(data.notes){ const n=document.createElement("div"); n.className="proj-notes"; n.innerHTML=linkify(data.notes); c.appendChild(n); }
   if(!items.length){ const e=document.createElement("div"); e.className="empty"; e.textContent="Nothing here."; c.appendChild(e); return; }
   const key=kind==="project"?"heading_title":"project_title";
@@ -675,7 +775,7 @@ function rowEl(it){
 // --- board view ---
 async function renderBoard(id){
   MODE="board"; CUR_BOARD=id; setActive(id);
-  $(".main").classList.add("fill"); $("#board-gear").style.display="flex";
+  $(".main").classList.add("fill"); $("#board-gear").style.display="flex"; $("#organize-btn").style.display="none";
   const b=CONFIG.boards.find(x=>x.id===id);
   $("#head-ico").textContent="📋"; $("#head-title").textContent=b?b.name:"Board";
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
@@ -761,7 +861,7 @@ async function placeCard(boardId,itemId,column){
 // --- priority square ---
 async function renderPriority(){
   MODE="priority"; CUR_BOARD=null; setActive("priority");
-  $(".main").classList.add("fill"); $("#board-gear").style.display="none";
+  $(".main").classList.add("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
   $("#head-ico").textContent="◰"; $("#head-title").textContent="Priority Square";
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/items?id=today")).json();
@@ -875,6 +975,56 @@ async function postUpdate(body){
   closeOverlay("edit-overlay"); setTimeout(route,350);   // re-render current view
 }
 function openInThings(){ if(EDIT_ID) window.location.href="things:///show?id="+encodeURIComponent(EDIT_ID); }
+
+// auto-organize folder (spawns your agent, review before write)
+async function startOrganize(){
+  const r=await (await fetch("/api/organize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({folder_id:SEL.id})})).json();
+  if(!r.ok){ alert("Organize: "+(r.error||"failed")); return; }
+  openOverlay("organize-overlay");
+  $("#org-actions").style.display="none";
+  $("#org-body").innerHTML=`<div class="empty">Running ${esc(r.agent||"agent")} on ${r.count} task(s)… (up to ~2 min, costs a little on your agent account)</div>`;
+  pollOrganize(r.job_id, 0);
+}
+function pollOrganize(jobId, tries){
+  if(tries>90){ $("#org-body").innerHTML=`<div class="err">Timed out waiting for the agent.</div>`; return; }
+  fetch("/api/organize?job_id="+encodeURIComponent(jobId)).then(r=>r.json()).then(d=>{
+    if(d.status==="running"){ setTimeout(()=>pollOrganize(jobId,tries+1),2000); return; }
+    if(d.status==="unknown"){ $("#org-body").innerHTML=`<div class="err">Job was lost (server restarted). Try again.</div>`; return; }
+    if(d.status==="error"){ $("#org-body").innerHTML=`<div class="err">${esc(d.error||"failed")}</div>`; return; }
+    ORG_SUG=d.suggestions||[]; renderSuggestions();
+  }).catch(e=>{ $("#org-body").innerHTML=`<div class="err">${esc(""+e)}</div>`; });
+}
+function renderSuggestions(){
+  const body=$("#org-body"); body.innerHTML="";
+  const changed=ORG_SUG.filter(s=>s.suggested_title||s.append_notes||(s.tags&&s.tags.length));
+  if(!changed.length){ body.innerHTML=`<div class="empty">No suggestions — this folder looks tidy. 🎉</div>`; $("#org-actions").style.display="none"; return; }
+  for(const s of changed){
+    const row=document.createElement("div"); row.className="org-row"; row.dataset.uuid=s.uuid;
+    let h=`<div class="org-cur">${esc(LAST_ITEMS[s.uuid]||"")}</div>`;
+    if(s.suggested_title) h+=`<label class="org-line"><input type="checkbox" class="acc-title" checked data-val="${esc(s.suggested_title)}"> ✏️ ${esc(s.suggested_title)}</label>`;
+    if(s.append_notes) h+=`<label class="org-line"><input type="checkbox" class="acc-notes" checked data-val="${esc(s.append_notes)}"> 📝 ${esc(s.append_notes)}</label>`;
+    if(s.tags&&s.tags.length) h+=`<label class="org-line"><input type="checkbox" class="acc-tags" checked data-val="${esc(JSON.stringify(s.tags))}"> 🏷 ${s.tags.map(t=>`<span class="pill">${esc(t)}</span>`).join(" ")}</label>`;
+    if(s.reason) h+=`<div class="org-reason">${esc(s.reason)}</div>`;
+    row.innerHTML=h; body.appendChild(row);
+  }
+  $("#org-actions").style.display="flex";
+}
+async function applyOrganize(){
+  let n=0;
+  for(const row of [...document.querySelectorAll("#org-body .org-row")]){
+    const body={id:row.dataset.uuid};
+    const t=row.querySelector(".acc-title"); if(t&&t.checked) body.title=t.dataset.val;
+    const no=row.querySelector(".acc-notes"); if(no&&no.checked) body.append_notes=no.dataset.val;
+    const tg=row.querySelector(".acc-tags"); if(tg&&tg.checked){ try{ body.add_tags=JSON.parse(tg.dataset.val); }catch(e){} }
+    if(body.title||body.append_notes||body.add_tags){
+      const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+      if(r.ok) n++;
+    }
+  }
+  closeOverlay("organize-overlay");
+  setTimeout(()=>{ if(MODE==="list") renderList(SEL); }, 400);
+  alert(`Applied ${n} task update(s).`);
+}
 
 // preferences (editor + terminal app)
 function openPrefs(){ const p=CONFIG.prefs||{}; $("#pf-editor").value=p.editor||""; $("#pf-terminal").value=p.terminal||""; openOverlay("prefs-overlay"); }
