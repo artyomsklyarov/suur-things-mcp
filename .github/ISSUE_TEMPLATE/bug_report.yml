@@ -1,0 +1,50 @@
+name: 🐞 Bug report
+description: Something isn't working as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what actually happened.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: SUUR Things MCP version, macOS version, Things 3 version.
+      placeholder: "suur-things-mcp 0.3.0 · macOS 15 · Things 3.x"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - uvx (PyPI)
+        - uvx --from git (main)
+        - cloned + uv run
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Code
+        - Claude Desktop
+        - Codex
+        - Dashboard only
+        - Other
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / errors
+      description: Any error output. Redact your THINGS_AUTH_TOKEN if it appears.
+    validations:
+      required: false

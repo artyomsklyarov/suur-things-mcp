@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💡 Feature ideas & voting
+    url: https://github.com/artyomsklyarov/suur-things-mcp/discussions/categories/ideas
+    about: Suggest a feature or upvote others' ideas. Open-ended proposals live here so the community can weigh in on what to build next.
+  - name: 🙋 Questions & help
+    url: https://github.com/artyomsklyarov/suur-things-mcp/discussions/categories/q-a
+    about: Ask how something works or get setup help.

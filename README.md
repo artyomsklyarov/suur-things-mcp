@@ -270,6 +270,14 @@ uv run suur-things-mcp dashboard
 
 Tests build and assert URL-Scheme strings and dashboard endpoints without touching your real database, so they're safe to run anywhere. Contributions welcome — see the [roadmap](ROADMAP.md) for what's planned.
 
+## Contributing & ideas
+
+This is meant to be community-shaped — tell me what to build next.
+
+- **Suggest a feature or vote on others':** open a thread in [💡 Discussions → Ideas](https://github.com/artyomsklyarov/suur-things-mcp/discussions/categories/ideas). Anyone can propose ideas and upvote the ones they want; the most-wanted get pulled into the [roadmap](ROADMAP.md).
+- **Concrete request or a bug:** open a [feature request or bug report](https://github.com/artyomsklyarov/suur-things-mcp/issues/new/choose).
+- **Code:** see [Development](#development) — `uv run pytest` must pass (CI runs it on every PR).
+
 ## Credits & license
 
 Built by [Artyom Sklyarov](https://suur.io) · [suur.io](https://suur.io). MIT licensed — see [LICENSE](LICENSE).

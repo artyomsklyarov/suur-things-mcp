@@ -1,0 +1,45 @@
+name: ✨ Feature request
+description: Suggest a concrete feature or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape SUUR Things MCP! For open-ended ideas you'd like the
+        community to vote on, the [💡 Ideas discussion](https://github.com/artyomsklyarov/suur-things-mcp/discussions/categories/ideas)
+        is often the better home. Use this form for a specific, scoped request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The pain point or workflow you're trying to improve.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like it to do. Sketches, mockups, or example commands welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area?
+      options:
+        - MCP tools
+        - MCP prompts / agent workflows
+        - Dashboard
+        - Repo linking
+        - Packaging / install
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Alternatives you considered, related tools, or links.
+    validations:
+      required: false
