@@ -11,7 +11,7 @@ An [MCP](https://modelcontextprotocol.io) server for **Things 3** (Cultured Code
 
 ```bash
 # 1. point your agent at it (Claude Code shown)
-claude mcp add things -- uvx suur-things-mcp
+claude mcp add suurthings -- uvx suur-things-mcp
 # 2. (optional) open the dashboard
 uvx suur-things-mcp dashboard   # → http://127.0.0.1:8765
 ```
@@ -68,10 +68,10 @@ uvx suur-things-mcp dashboard  # run the dashboard instead
 
 ```bash
 # read-only (no token)
-claude mcp add things -- uvx suur-things-mcp
+claude mcp add suurthings -- uvx suur-things-mcp
 
 # read + write (modify existing items) — pass your token
-claude mcp add things --env THINGS_AUTH_TOKEN=your-token-here -- uvx suur-things-mcp
+claude mcp add suurthings --env THINGS_AUTH_TOKEN=your-token-here -- uvx suur-things-mcp
 ```
 
 ### Claude Desktop / Codex / other MCP clients
@@ -81,7 +81,7 @@ Add to your client's MCP config (e.g. `claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "things": {
+    "suurthings": {
       "command": "uvx",
       "args": ["suur-things-mcp"],
       "env": { "THINGS_AUTH_TOKEN": "your-token-here" }
@@ -162,7 +162,7 @@ Nuclear option (clear the cache): `uv cache clean suur-things-mcp`. From `main`,
 
 ## Prompts
 
-Packaged MCP **prompts** — workflows your client surfaces as slash commands (the exact name/prefix is client-controlled):
+Packaged MCP **prompts** — workflows your client surfaces as slash commands. In Claude Code they appear as **`/mcp__suurthings__<prompt>`** (type `/` to see them, e.g. `/mcp__suurthings__weekly_review`). The `mcp__<server>__` prefix is Claude Code's convention; `suurthings` is the name you register the server under:
 
 | Prompt | What it does |
 |--------|--------------|

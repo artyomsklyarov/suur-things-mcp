@@ -775,6 +775,26 @@ def issues_to_todos() -> str:
     )
 
 
+@mcp.prompt()
+def calm_today() -> str:
+    """Triage an overloaded Today into a calm, doable plan (defer, group, one next action)."""
+    return (
+        "Help the user calm an overloaded Today — Things-style, no guilt.\n\n"
+        "1. Read `get_today` (and `get_deadlines` for hard dates). Count what's really there.\n"
+        "2. Be honest about overload: a Today with 20+ items isn't a plan, it's a pile. Group "
+        "the items into a few themes, and separate what's genuinely date-critical today from "
+        "what has just been sitting there.\n"
+        "3. Propose a calmer plan, NOT a longer list:\n"
+        "   - The ONE thing to do first, with a one-line why.\n"
+        "   - A realistic 'also today' set (3-5 max).\n"
+        "   - Everything else: propose to DEFER (`schedule_todo` to tomorrow/anytime/someday) "
+        "or file into a project (`update_todo(list_id=...)`). Nothing gets deleted.\n"
+        "4. Show the plan and ASK before changing anything. On approval, apply the deferrals/"
+        "moves (needs THINGS_AUTH_TOKEN) and report: Today went from N items to a focused M.\n"
+        "Tone: calm and kind, never naggy. The goal is a Today the user can actually finish."
+    )
+
+
 def main() -> None:
     import sys
 

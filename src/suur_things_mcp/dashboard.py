@@ -751,6 +751,8 @@ INDEX_HTML = """<!DOCTYPE html>
   .btn.danger { color:var(--red); } .btn.ghost { border:0; color:var(--muted); } .spacer { flex:1; }
   .hint { font-size:12px; color:var(--muted); margin-top:6px; } .hint.warn { color:var(--red); }
   .col-edit { display:flex; gap:6px; margin:5px 0; align-items:center; } .col-edit input { flex:1; }
+  .col-edit.dragging { opacity:.4; }
+  .col-edit .drag { cursor:grab; color:var(--muted); user-select:none; padding:0 2px; font-size:13px; }
   .area-pick { font-weight:600; margin:12px 0 4px; } .proj-pick { padding-left:18px; }
   .pick { display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; font-weight:400; }
   .repo-row { display:flex; gap:6px; margin:6px 0; align-items:center; }
@@ -1335,8 +1337,21 @@ function openBoardSettings(){
   }
   openOverlay("settings-overlay");
 }
-function colInput(val){ const d=document.createElement("div"); d.className="col-edit";
-  d.innerHTML=`<input value="${esc(val)}" onchange="persistSettings()"><button class="btn ghost" onclick="this.parentElement.remove(); persistSettings()">✕</button>`; return d; }
+function colInput(val){
+  const d=document.createElement("div"); d.className="col-edit"; d.draggable=true;
+  d.innerHTML=`<span class="drag" title="Drag to reorder">⠿</span>`+
+    `<input value="${esc(val)}" onchange="persistSettings()">`+
+    `<button class="btn ghost" title="Remove" onclick="this.parentElement.remove(); persistSettings()">✕</button>`;
+  d.addEventListener("dragstart",e=>{ d.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; });
+  d.addEventListener("dragend",()=>{ d.classList.remove("dragging"); persistSettings(); });  // persist new order
+  d.addEventListener("dragover",e=>{ e.preventDefault();
+    const box=$("#cols-edit"), dragging=box.querySelector(".col-edit.dragging");
+    if(!dragging || dragging===d) return;
+    const r=d.getBoundingClientRect();
+    box.insertBefore(dragging, (e.clientY > r.top + r.height/2) ? d.nextSibling : d);
+  });
+  return d;
+}
 function addCol(){ $("#cols-edit").appendChild(colInput("")); }
 async function persistSettings(){
   const b=CONFIG.boards.find(x=>x.id===CUR_BOARD); if(!b) return;

@@ -38,7 +38,7 @@ website). The link lives in the browser config (`links: {itemUuid: {kind, repos:
 {repo, github, label}]}}`), never written to Things.
 
 - **Tools**: `link_repo`, `unlink_repo`, `list_links`, `current_link(cwd)`.
-- **`/things:work-on-repo` prompt** — the agent passes its cwd, `current_link`
+- **`work_on_repo` prompt** (`/mcp__suurthings__work_on_repo`) — the agent passes its cwd, `current_link`
   resolves it to the linked project/area, returns the open tasks, and the agent
   works them. cwd resolves via `cwd` arg → `CLAUDE_PROJECT_DIR` → `getcwd()` (never
   trusts the bare server cwd under uvx).
@@ -53,7 +53,7 @@ website). The link lives in the browser config (`links: {itemUuid: {kind, repos:
 A ✨ button on any folder (project / area / Inbox) that enriches its tasks with the
 help of your own agent, reviewed before anything is written.
 
-- **`/things:organize-folder` prompt** — agent-side: read folder, propose clearer
+- **`organize_folder` prompt** (`/mcp__suurthings__organize_folder`) — agent-side: read folder, propose clearer
   titles + notes + tags (reusing existing tags), review in chat, apply on approval.
 - **Dashboard button** — spawns your installed agent **headlessly with no tools and
   no MCP** (`claude -p --strict-mcp-config --mcp-config '{}' --allowedTools "" --model
