@@ -238,6 +238,28 @@ async def _update(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)})
 
 
+async def _rename(request: Request) -> JSONResponse:
+    """Rename a project inline from the dashboard header. (Board renames are client-side
+    config; areas can't be renamed — the Things URL Scheme has no area-update command.)"""
+    body = await request.json()
+    item_id = str(body.get("id") or "")
+    title = (body.get("title") or "").strip()
+    kind = body.get("kind")
+    if not item_id or not title:
+        return JSONResponse({"ok": False, "error": "missing id/title"})
+    if kind == "area":
+        return JSONResponse({"ok": False, "error": "Things' URL Scheme can't rename areas — rename it in the Things app."})
+    if kind != "project":
+        return JSONResponse({"ok": False, "error": "bad kind"})
+    if not _auth_token():
+        return JSONResponse({"ok": False, "error": "THINGS_AUTH_TOKEN not set"})
+    try:
+        execute("update-project", {"id": item_id, "title": title}, auth_token=_auth_token())
+        return JSONResponse({"ok": True})
+    except ThingsURLError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+
 async def _open(request: Request) -> JSONResponse:
     """Open a linked repo in the editor or its GitHub page.
 
@@ -357,6 +379,7 @@ def create_app() -> Starlette:
             Route("/api/config", _config_post, methods=["POST"]),
             Route("/api/link", _link_post, methods=["POST"]),
             Route("/api/update", _update, methods=["POST"]),
+            Route("/api/rename", _rename, methods=["POST"]),
             Route("/api/open", _open, methods=["POST"]),
         ],
         middleware=[Middleware(_OriginGuard)],
@@ -480,8 +503,27 @@ INDEX_HTML = """<!DOCTYPE html>
   .iconbtn:hover { background:var(--row-hover); }
   .views { position:absolute; top:44px; left:0; right:0; bottom:0; display:flex; }
 
-  .sidebar { width:272px; flex:0 0 272px; background:var(--side-bg); overflow-y:auto;
-    padding:14px 10px 20px; border-right:1px solid var(--divider); }
+  .sidebar { width:272px; flex:0 0 272px; background:var(--side-bg); border-right:1px solid var(--divider);
+    display:flex; flex-direction:column; min-height:0; }
+  .side-nav { flex:1; overflow-y:auto; padding:14px 10px 8px; }
+  .side-foot { flex:none; border:0; border-top:1px solid var(--divider); background:transparent; color:var(--muted);
+    cursor:pointer; text-align:left; font:inherit; font-size:12.5px; padding:10px 16px; display:flex; align-items:center; gap:8px; }
+  .side-foot:hover { color:var(--text); background:var(--row-hover); }
+  .side-foot.active { color:var(--text); background:var(--row-sel); }
+  .side-foot svg { width:15px; height:15px; flex:0 0 15px; }
+  .side-sep { height:1px; background:var(--divider); margin:10px 10px; }
+
+  .main-head h1.editable { cursor:text; border-radius:6px; padding:1px 5px; margin-left:-5px; }
+  .main-head h1.editable:hover { background:var(--row-hover); }
+  .main-head h1.editable:focus { outline:none; background:var(--main-bg); box-shadow:inset 0 0 0 2px var(--accent); }
+
+  .about { max-width:640px; line-height:1.62; padding-bottom:40px; }
+  .about h2 { font-size:17px; margin:26px 0 8px; }
+  .about p, .about li { color:var(--text); }
+  .about .lead { font-size:15px; color:var(--muted); }
+  .about a { color:var(--accent); text-decoration:none; } .about a:hover { text-decoration:underline; }
+  .about code { background:var(--side-bg); padding:1px 5px; border-radius:5px; font-size:12.5px; }
+  .about .muted { color:var(--muted); font-size:12.5px; }
   .nav-item, .project { display:flex; align-items:center; gap:9px; padding:6px 10px; margin:1px 0;
     border-radius:7px; cursor:pointer; white-space:nowrap; user-select:none; }
   .project { padding-left:14px; }
@@ -684,7 +726,13 @@ INDEX_HTML = """<!DOCTYPE html>
   <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
 </div>
 <div class="views">
-  <aside class="sidebar" id="sidebar"></aside>
+  <aside class="sidebar" id="sidebar">
+    <div class="side-nav" id="side-nav"></div>
+    <button class="side-foot" id="about-link" onclick="go('#about')">
+      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="5.1" r="0.95" fill="currentColor"/><rect x="7.2" y="6.9" width="1.6" height="4.8" rx="0.8" fill="currentColor"/></svg>
+      <span>About · Credits</span>
+    </button>
+  </aside>
   <main class="main">
     <div class="main-head">
       <span class="ico" id="head-ico">⭐</span><h1 id="head-title">Today</h1>
@@ -812,7 +860,23 @@ const SVG={
   priority:`<svg viewBox="0 0 16 16"><g><rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1.2" fill="#e0402b"/><rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1.2" fill="var(--muted)"/><rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1.2" fill="var(--muted)"/><rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1.2" fill="var(--muted)"/></g></svg>`,
   board:`<svg viewBox="0 0 16 16"><g fill="var(--muted)"><rect x="2.4" y="3" width="3.1" height="10" rx="1.2"/><rect x="6.45" y="3" width="3.1" height="7" rx="1.2"/><rect x="10.5" y="3" width="3.1" height="9" rx="1.2"/></g></svg>`,
   search:`<svg viewBox="0 0 16 16"><g fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.1"/><path d="M9.9 9.9 14 14"/></g></svg>`,
+  info:`<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4" fill="none" stroke="var(--muted)" stroke-width="1.5"/><circle cx="8" cy="5" r="1" fill="var(--muted)"/><rect x="7.15" y="6.9" width="1.7" height="5" rx="0.85" fill="var(--muted)"/></svg>`,
 };
+const ABOUT_HTML=`<div class="about">
+  <p class="lead">A local, Things-faithful dashboard and <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">MCP</a> server for <a href="https://culturedcode.com/things/" target="_blank" rel="noopener">Things 3</a> — so any AI agent can read and manage your tasks, and you get views Things doesn't have (project boards, an Eisenhower matrix, a cards view).</p>
+  <h2>How it works</h2>
+  <p><strong>Reads</strong> come straight from the local Things SQLite database (read-only) via the excellent <a href="https://github.com/thingsapi/things.py" target="_blank" rel="noopener">things.py</a>. <strong>Writes</strong> go <em>only</em> through the official Things URL Scheme — the path Cultured Code documents for automation. This server never writes the database directly, so it can't corrupt it. Boards and priority quadrants are local browser overlays (Things has no such concept); they never touch your Things data.</p>
+  <h2>Thanks</h2>
+  <ul>
+    <li><strong>Cultured Code</strong> — for <a href="https://culturedcode.com/things/" target="_blank" rel="noopener">Things 3</a>, the task app this is built around, and for documenting a safe automation path.</li>
+    <li><strong>things.py</strong> — the read layer that absorbs every schema quirk.</li>
+    <li><strong>Model Context Protocol</strong> — the open standard that lets any agent connect.</li>
+  </ul>
+  <h2>Who</h2>
+  <p>Built by <strong>Artyom Sklyarov</strong> at <a href="https://suur.io" target="_blank" rel="noopener">SUUR</a> — an indie studio. Free and open source (MIT).</p>
+  <p><a href="https://github.com/artyomsklyarov/suur-things-mcp" target="_blank" rel="noopener">github.com/artyomsklyarov/suur-things-mcp</a> · <a href="https://suur.io" target="_blank" rel="noopener">suur.io</a></p>
+  <p class="muted">An agent connected here can read your to-do and note content, which is sent to whatever model you use. Nothing here phones home — no telemetry, no bundled model. "Things" is a trademark of Cultured Code GmbH &amp; Co. KG; this is an independent, unofficial project, not affiliated with or endorsed by Cultured Code.</p>
+</div>`;
 function findProject(id){
   for(const a of ((SIDEBAR&&SIDEBAR.areas)||[])){ const p=a.projects.find(p=>p.uuid===id); if(p) return p; }
   for(const p of ((SIDEBAR&&SIDEBAR.arealess)||[])){ if(p.uuid===id) return p; }
@@ -854,6 +918,7 @@ async function saveItemRepos(itemId, kind, repos){
 function go(h){ if(location.hash===h) route(); else location.hash=h; }
 function route(){
   const h=location.hash;
+  if(h==="#about") return renderAbout();
   if(h==="#p") return renderPriority();
   if(h.startsWith("#b/")){ const id=decodeURIComponent(h.slice(3)); if(CONFIG.boards.find(b=>b.id===id)) return renderBoard(id); }
   if(h.startsWith("#l/")){ let rest=h.slice(3); let view="list";
@@ -874,7 +939,7 @@ async function runSearch(){
   $("#viewtog").classList.remove("show"); $("#filterbar").classList.remove("show");
   $(".main").classList.remove("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
   document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.remove("active"));
-  $("#head-ico").innerHTML=SVG.search; $("#head-title").textContent="Search";
+  $("#head-ico").innerHTML=SVG.search; $("#head-title").textContent="Search"; setHeadEditable(null);
   const c=$("#content"); c.innerHTML=`<div class="empty">searching…</div>`;
   const data=await (await fetch("/api/search?q="+encodeURIComponent(q))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
@@ -891,7 +956,7 @@ async function loadSidebar(){
   SIDEBAR=data.sidebar; renderSidebar();
 }
 function renderSidebar(){
-  const el=$("#sidebar"); el.innerHTML="";
+  const el=$("#side-nav"); el.innerHTML="";
   const bi=SIDEBAR.builtins, tIdx=bi.findIndex(b=>b.id==="today");
   bi.slice(0,tIdx+1).forEach(b=>el.appendChild(builtinEl(b)));
   const pri=document.createElement("div"); pri.className="nav-item"; pri.dataset.id="priority";
@@ -906,7 +971,7 @@ function renderSidebar(){
     row.innerHTML=`<span class="ico">${SVG.board}</span><span class="label">${esc(b.name)}</span>`;
     row.onclick=()=>go("#b/"+encodeURIComponent(b.id)); el.appendChild(row);
   });
-  bi.slice(tIdx+1).forEach(b=>el.appendChild(builtinEl(b)));
+  bi.slice(tIdx+1).filter(b=>!["logbook","trash"].includes(b.id)).forEach(b=>el.appendChild(builtinEl(b)));
   el.appendChild(Object.assign(document.createElement("div"),{className:"nav-sep"}));
   const areas=SIDEBAR.areas.concat(SIDEBAR.arealess.length?[{uuid:null,title:"Projects",projects:SIDEBAR.arealess}]:[]);
   for(const a of areas){
@@ -924,6 +989,8 @@ function renderSidebar(){
       row.onclick=()=>go("#l/"+encodeURIComponent(p.uuid)); el.appendChild(row);
     }
   }
+  el.appendChild(Object.assign(document.createElement("div"),{className:"side-sep"}));
+  bi.filter(b=>["logbook","trash"].includes(b.id)).forEach(b=>el.appendChild(builtinEl(b)));  // Logbook + Trash last
   setActive(CURRENT_ID);
 }
 function toggleArea(uuid){ COLLAPSED.has(uuid)?COLLAPSED.delete(uuid):COLLAPSED.add(uuid);
@@ -941,7 +1008,7 @@ function builtinEl(b){
   }
   return row;
 }
-function setActive(id){ CURRENT_ID=id; document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.toggle("active", n.dataset.id===String(id))); }
+function setActive(id){ CURRENT_ID=id; document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.toggle("active", n.dataset.id===String(id))); const al=$("#about-link"); if(al) al.classList.remove("active"); }
 function resolveList(id){
   const bi=(SIDEBAR&&SIDEBAR.builtins)||[]; const b=bi.find(x=>x.id===id);
   if(b) return {id:b.id,icon:b.icon,title:b.title,kind:"builtin"};
@@ -959,6 +1026,7 @@ async function renderList(sel, view="list"){
   MODE=view; CUR_BOARD=null; SEL=sel;
   $("#board-gear").style.display="none"; setActive(sel.id);
   setHeadIcon(sel); $("#head-title").textContent=sel.title;
+  setHeadEditable(sel.kind==="project"?"project":null, sel.id);
   $("#viewtog").classList.add("show");
   $("#vt-list").classList.toggle("on",view==="list"); $("#vt-matrix").classList.toggle("on",matrix); $("#vt-cards").classList.toggle("on",cards);
   $(".main").classList.toggle("fill", matrix);
@@ -1055,6 +1123,7 @@ async function renderBoard(id){
   $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
   const b=CONFIG.boards.find(x=>x.id===id);
   $("#head-ico").innerHTML=SVG.board; $("#head-title").textContent=b?b.name:"Board";
+  setHeadEditable(b?"board":null, b?b.id:null);
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/board?id="+encodeURIComponent(id))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
@@ -1142,7 +1211,7 @@ async function renderPriority(){
   MODE="matrix"; CUR_BOARD=null; setActive("priority");
   $(".main").classList.add("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
   $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
-  $("#head-ico").innerHTML=SVG.priority; $("#head-title").textContent="Priority Matrix";
+  $("#head-ico").innerHTML=SVG.priority; $("#head-title").textContent="Priority Matrix"; setHeadEditable(null);
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/items?id=today")).json();
   LIST_ITEMS=data.ok?data.items:[]; LIST_KIND="builtin"; renderMatrix(LIST_ITEMS);
@@ -1381,6 +1450,49 @@ function closeOverlay(id){ $("#"+id).classList.remove("show"); }
 document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{ if(e.target===o){ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); } }));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.querySelectorAll(".overlay.show").forEach(o=>{ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); }); });
 
+// --- inline header rename (boards + projects; areas can't — no URL-scheme area update) ---
+function setHeadEditable(type, id){
+  const h=$("#head-title");
+  h.dataset.etype=type||""; h.dataset.eid=id||"";
+  h.contentEditable = type?"true":"false";
+  h.classList.toggle("editable", !!type);
+  h.title = type ? "Click to rename" : "";
+}
+async function commitHeadRename(){
+  const h=$("#head-title"); const type=h.dataset.etype, id=h.dataset.eid;
+  const name=h.textContent.trim(), orig=(h.dataset.orig||"").trim();
+  if(h.dataset.cancel){ h.dataset.cancel=""; h.textContent=orig; return; }
+  if(!type) return;
+  if(!name || name===orig){ h.textContent=orig||name; return; }
+  if(type==="board"){
+    const b=CONFIG.boards.find(x=>x.id===id);
+    if(b){ b.name=name; await saveConfig(); renderSidebar(); }
+    return;
+  }
+  if(type==="project"){
+    const r=await (await fetch("/api/rename",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id, title:name, kind:"project"})})).json();
+    if(!r.ok){ alert("Rename failed: "+(r.error||"")); h.textContent=orig; return; }
+    loadSidebar();  // reflect new name in the nav tree
+  }
+}
+(()=>{ const h=$("#head-title"); if(!h) return;
+  h.addEventListener("focus",()=>{ h.dataset.orig=h.textContent; });
+  h.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); h.blur(); }
+    else if(e.key==="Escape"){ e.preventDefault(); h.dataset.cancel="1"; h.blur(); } });
+  h.addEventListener("blur", commitHeadRename);
+})();
+
+function renderAbout(){
+  MODE="about"; CUR_BOARD=null;
+  document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.remove("active"));
+  const al=$("#about-link"); if(al) al.classList.add("active");
+  $(".main").classList.remove("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
+  $("#viewtog").classList.remove("show"); $("#filterbar").classList.remove("show");
+  setHeadEditable(null); $("#head-ico").innerHTML=SVG.info; $("#head-title").textContent="About";
+  $("#content").innerHTML=ABOUT_HTML;
+}
+
 async function reschedule(id, when){
   if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to reschedule by drag."); return; }
   const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id, when})})).json();
@@ -1393,7 +1505,8 @@ function canAutoRefresh(){
   if(document.hidden) return false;                       // background tab
   if(document.querySelector(".overlay.show")) return false; // editing / organizing / prefs
   if(document.querySelector(".dragging")) return false;     // mid drag
-  if(MODE==="search"||CUR_FILTER) return false;             // focused on a filter/search
+  if(document.activeElement===$("#head-title")) return false; // renaming the header
+  if(MODE==="search"||MODE==="about"||CUR_FILTER) return false; // focused on a filter/search/about
   return MODE==="list"||MODE==="matrix"||MODE==="board";
 }
 function softRefresh(){

@@ -39,7 +39,7 @@ So an agent can't corrupt your database through this server even if it tries. Th
 
 These are the workflows this unlocks once an agent can see and shape your task system:
 
-- **Plan → project, instantly.** Hand Claude an implementation plan and the `plan_to_project` prompt; it materializes a real Things project — headings per phase, to-dos per step, checklist items per sub-task — in one `batch` call.
+- **Plan → project, instantly.** Hand Claude an implementation plan and the `plan_to_project` prompt; it materializes a real Things project — a to-do per step with sub-tasks as checklist items — in one `batch` call. (Things' URL Scheme can't create headings, so phases get folded into titles/notes rather than faked.)
 - **"What should I work on in this repo?"** Link a Things project to a local git repo. From inside that repo, the `work_on_repo` prompt resolves which project you're in (via `CLAUDE_PROJECT_DIR` / cwd), pulls its open to-dos, and works the next one.
 - **Sweep code TODOs into Things.** Point your agent at the codebase: it greps `TODO`/`FIXME`, and `batch`-creates to-dos with `file:line` references — no new tool needed, the agent already has Grep + this server.
 - **Auto-organize a messy Inbox.** Hit the ✨ button on any folder (or use the `organize_folder` prompt). It spawns *your* agent **headlessly with zero tools and zero MCP**, so it can only *propose* cleaner titles/notes/tags — never write or be prompt-injected. You review every change before it's applied. (And yes, an agent can re-file Inbox items into the right projects — `update` supports moving via `list-id`.)
@@ -166,7 +166,7 @@ Packaged MCP **prompts** — workflows your client surfaces as slash commands (t
 
 | Prompt | What it does |
 |--------|--------------|
-| `plan_to_project` | Turn an implementation plan into a structured Things project (headings → to-dos → checklist) via `batch` |
+| `plan_to_project` | Turn an implementation plan into a Things project — a to-do per step, sub-tasks as checklist items — via `batch` (no headings; URL-Scheme limit) |
 | `work_on_repo` | From inside a linked repo, resolve its Things project, pull open to-dos, work the next one |
 | `organize_folder` | Propose clearer titles/notes/tags for a folder (reusing existing tags), review in chat, apply on approval |
 | `weekly_review` | GTD weekly review — flag stalled projects, rotting Someday items, overdue deadlines; propose fixes |
