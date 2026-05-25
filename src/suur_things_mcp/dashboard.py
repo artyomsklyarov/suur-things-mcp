@@ -41,7 +41,7 @@ _running: dict[str, Any] = {}
 
 
 def _auth_token() -> str | None:
-    return os.environ.get("THINGS_AUTH_TOKEN")
+    return boardcfg.auth_token()
 
 
 # --- Read endpoints -------------------------------------------------------

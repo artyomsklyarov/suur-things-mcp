@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
+from . import config as boardcfg
 from . import reads
 from .urlscheme import ThingsURLError, execute
 
@@ -35,7 +36,7 @@ mcp = FastMCP(
 
 
 def _auth() -> str | None:
-    return os.environ.get("THINGS_AUTH_TOKEN")
+    return boardcfg.auth_token()
 
 
 # =========================================================================

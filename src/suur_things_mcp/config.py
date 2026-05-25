@@ -110,3 +110,32 @@ def get_board(board_id: str) -> dict[str, Any] | None:
         if b["id"] == board_id:
             return b
     return None
+
+
+# --- Auth token resolution ------------------------------------------------
+
+def _token_path() -> Path:
+    override = os.environ.get("SUUR_THINGS_TOKEN_FILE")
+    if override:
+        return Path(override)
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(Path.home(), ".config")
+    return Path(base) / "suur-things-mcp" / "token"
+
+
+def auth_token() -> str | None:
+    """The Things URL Scheme auth token, for write-backs.
+
+    Resolved from ``THINGS_AUTH_TOKEN`` first, then a private token file at
+    ``$XDG_CONFIG_HOME/suur-things-mcp/token`` (outside any repo). Returns None
+    if neither is set — callers then stay read-only.
+    """
+    env = os.environ.get("THINGS_AUTH_TOKEN")
+    if env and env.strip():
+        return env.strip()
+    path = _token_path()
+    if path.exists():
+        try:
+            return path.read_text().strip() or None
+        except OSError:
+            return None
+    return None

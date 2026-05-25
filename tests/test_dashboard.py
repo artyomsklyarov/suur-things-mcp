@@ -99,9 +99,25 @@ def test_config_defaults_when_missing(tmp_path, monkeypatch):
     assert boards[0]["id"] == "default" and boards[0]["columns"] == cfg.DEFAULT_COLUMNS
 
 
-def test_update_needs_token_when_unset(monkeypatch):
+def test_update_needs_token_when_unset(monkeypatch, tmp_path):
     monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
+    # Also disable the token-file fallback so "unset" really means no token.
+    monkeypatch.setenv("SUUR_THINGS_TOKEN_FILE", str(tmp_path / "no-token"))
     assert client.post("/api/update", json={"id": "x", "title": "y"}).json()["ok"] is False
+
+
+def test_auth_token_reads_file_fallback(tmp_path, monkeypatch):
+    monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
+    tok = tmp_path / "token"
+    tok.write_text("  abc123\n")
+    monkeypatch.setenv("SUUR_THINGS_TOKEN_FILE", str(tok))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    assert cfg.auth_token() == "abc123"  # trimmed
+    monkeypatch.setenv("THINGS_AUTH_TOKEN", "envwins")
+    assert cfg.auth_token() == "envwins"  # env takes precedence
 
 
 def test_placement_and_priority_overlays_validated(tmp_path, monkeypatch):
