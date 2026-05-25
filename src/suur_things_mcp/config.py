@@ -136,6 +136,26 @@ def _clean_prefs(data: dict) -> dict[str, Any]:
     return {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
 
 
+def _clean_timeblocks(data: dict) -> dict[str, Any]:
+    """Dashboard-only day-timeline placements: {uuid: {date, start "HH:MM", mins}}.
+    Never written to Things — purely a browser overlay like `priority`."""
+    tb = data.get("timeblocks")
+    if not isinstance(tb, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for k, v in tb.items():
+        if not isinstance(v, dict):
+            continue
+        date, start = str(v.get("date", "")).strip(), str(v.get("start", "")).strip()
+        try:
+            mins = int(v.get("mins", 30))
+        except (TypeError, ValueError):
+            mins = 30
+        if date and start:
+            out[str(k)] = {"date": date, "start": start, "mins": max(5, min(mins, 1440))}
+    return out
+
+
 def _clean(data: dict) -> dict[str, Any]:
     priority = data.get("priority")
     priority = (
@@ -145,19 +165,20 @@ def _clean(data: dict) -> dict[str, Any]:
     )
     link_table = _clean_links(data)
     prefs = _clean_prefs(data)
+    tb = _clean_timeblocks(data)
     # New shape: {"boards": [...]}.
     if isinstance(data.get("boards"), list) and data["boards"]:
         boards = [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]
-        return {"boards": boards, "priority": priority, "links": link_table, "prefs": prefs}
+        return {"boards": boards, "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb}
     # Legacy flat shape: {columns, include_areas, include_projects} → one board.
     if any(k in data for k in ("columns", "include_areas", "include_projects")):
         legacy = {**data, "id": data.get("id") or "default", "name": data.get("name") or "Project Board"}
-        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table, "prefs": prefs}
-    return {"boards": [_default_board()], "priority": priority, "links": link_table, "prefs": prefs}
+        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb}
+    return {"boards": [_default_board()], "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb}
 
 
 def _fresh() -> dict[str, Any]:
-    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {}}
+    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {}, "timeblocks": {}}
 
 
 def prefs() -> dict[str, Any]:
@@ -250,7 +271,7 @@ def merge(partial: dict) -> dict[str, Any]:
     can't wipe links written by another writer, and vice versa.
     """
     cfg = load()
-    for key in ("boards", "priority", "links", "prefs"):
+    for key in ("boards", "priority", "links", "prefs", "timeblocks"):
         if key in partial:
             cfg[key] = partial[key]
     return save(cfg)

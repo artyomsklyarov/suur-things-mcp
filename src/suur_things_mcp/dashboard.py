@@ -275,6 +275,32 @@ async def _pulse(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "repos": out})
 
 
+async def _add(request: Request) -> JSONResponse:
+    """Quick-add a to-do or project from the dashboard. Create-only → no token needed.
+    (Areas can't be created — the URL Scheme has no add-area command.)"""
+    body = await request.json()
+    kind = body.get("kind", "todo")
+    title = (body.get("title") or "").strip()
+    if not title:
+        return JSONResponse({"ok": False, "error": "missing title"})
+    try:
+        if kind == "project":
+            params: dict[str, Any] = {"title": title}
+            if body.get("area_id"):
+                params["area-id"] = body["area_id"]
+            execute("add-project", params)
+        else:
+            params = {"title": title}
+            if body.get("when"):
+                params["when"] = body["when"]
+            if body.get("list_id"):
+                params["list-id"] = body["list_id"]
+            execute("add", params)
+        return JSONResponse({"ok": True})
+    except ThingsURLError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+
 async def _rename(request: Request) -> JSONResponse:
     """Rename a project inline from the dashboard header. (Board renames are client-side
     config; areas can't be renamed — the Things URL Scheme has no area-update command.)"""
@@ -418,6 +444,7 @@ def create_app() -> Starlette:
             Route("/api/link", _link_post, methods=["POST"]),
             Route("/api/update", _update, methods=["POST"]),
             Route("/api/rename", _rename, methods=["POST"]),
+            Route("/api/add", _add, methods=["POST"]),
             Route("/api/open", _open, methods=["POST"]),
         ],
         middleware=[Middleware(_OriginGuard)],
@@ -660,6 +687,22 @@ INDEX_HTML = """<!DOCTYPE html>
   .taskcard .tc-sub { color:var(--muted); font-size:12px; margin-top:3px; }
   .taskcard .tc-tags { margin-top:8px; display:flex; flex-wrap:wrap; gap:5px; }
 
+  /* Timeline (day) view */
+  .tl-wrap { display:flex; gap:16px; height:100%; }
+  .tl-pool { width:260px; flex:0 0 260px; background:var(--col-bg); border-radius:12px; display:flex; flex-direction:column; }
+  .tl-pool.drop { outline:2px dashed var(--accent); outline-offset:-4px; }
+  .tl-durbar { padding:8px 12px 10px; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .tl-durbar .durtog { display:inline-flex; gap:2px; background:var(--chip-bg); border-radius:7px; padding:2px; }
+  .tl-cal { flex:1; overflow-y:auto; }
+  .tl-grid { position:relative; margin:6px 8px 6px 0; }
+  .tl-hour { position:absolute; left:50px; right:4px; border-top:1px solid var(--divider); height:0; }
+  .tl-hlabel { position:absolute; left:0; width:42px; text-align:right; color:var(--muted); font-size:11px; margin-top:-7px; }
+  .tl-block { position:absolute; left:54px; right:10px; background:var(--card-bg); border-left:3px solid var(--accent);
+    border-radius:6px; box-shadow:var(--card-shadow); padding:3px 9px; overflow:hidden; cursor:grab; }
+  .tl-block.dragging { opacity:.4; }
+  .tl-block .bt { font-weight:600; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tl-block .bsub { color:var(--muted); font-size:11px; }
+
   /* Things-style edit card */
   .editcard { background:var(--main-bg); border-radius:12px; width:460px; max-width:100%; max-height:84vh;
     overflow-y:auto; box-shadow:0 18px 56px rgba(0,0,0,.4); padding:16px 18px 12px; position:relative; }
@@ -764,6 +807,7 @@ INDEX_HTML = """<!DOCTYPE html>
   <div class="brand">SUUR THINGS</div>
   <input id="q" class="search" placeholder="Search tasks…" autocomplete="off" oninput="onSearch()">
   <span class="grow"></span>
+  <button class="iconbtn" id="add-btn" title="Add to-do or project" onclick="openAdd()">＋</button>
   <button class="iconbtn" id="prefs-btn" title="Preferences" onclick="openPrefs()">⚙</button>
   <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
 </div>
@@ -783,6 +827,7 @@ INDEX_HTML = """<!DOCTYPE html>
         <button class="vt" id="vt-list" onclick="setListView('list')">List</button>
         <button class="vt" id="vt-matrix" onclick="setListView('matrix')">Matrix</button>
         <button class="vt" id="vt-cards" onclick="setListView('cards')">Cards</button>
+        <button class="vt" id="vt-timeline" onclick="setListView('timeline')">Timeline</button>
       </div>
       <button class="iconbtn" id="organize-btn" title="Auto-organize this folder with your agent" style="display:none" onclick="startOrganize()">✨</button>
       <button class="iconbtn" id="board-gear" title="Board settings" style="display:none" onclick="openBoardSettings()">⚙</button>
@@ -834,6 +879,19 @@ INDEX_HTML = """<!DOCTYPE html>
       <span class="spacer"></span>
       <button class="btn ghost" onclick="closeOverlay('organize-overlay')">Close</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="add-overlay">
+  <div class="panel" style="width:440px">
+    <h2>Add</h2><div class="sub">Quick-add to Things. No token needed.</div>
+    <div class="viewtog show" id="add-kind" style="margin-bottom:12px">
+      <button class="vt on" data-kind="todo" onclick="setAddKind('todo')">To-Do</button>
+      <button class="vt" data-kind="project" onclick="setAddKind('project')">Project</button>
+    </div>
+    <div class="field"><input id="add-title" placeholder="Title…" onkeydown="if(event.key==='Enter')submitAdd()"></div>
+    <div class="hint" id="add-where"></div>
+    <div class="btnrow"><button class="btn primary" onclick="submitAdd()">Add</button><span class="spacer"></span><button class="btn ghost" onclick="closeOverlay('add-overlay')">Cancel</button></div>
   </div>
 </div>
 
@@ -966,6 +1024,7 @@ function route(){
   if(h.startsWith("#l/")){ let rest=h.slice(3); let view="list";
     if(rest.endsWith("/m")){ view="matrix"; rest=rest.slice(0,-2); }
     else if(rest.endsWith("/c")){ view="cards"; rest=rest.slice(0,-2); }
+    else if(rest.endsWith("/t")){ view="timeline"; rest=rest.slice(0,-2); }
     const sel=resolveList(decodeURIComponent(rest)); if(sel) return renderList(sel, view); }
   return go("#l/today");
 }
@@ -1064,14 +1123,14 @@ function resolveList(id){
 // --- list view ---
 let LIST_ITEMS=[], LIST_KIND="", LIST_NOTES=null, CUR_FILTER=null;
 async function renderList(sel, view="list"){
-  const matrix=view==="matrix", cards=view==="cards";
+  const matrix=view==="matrix", cards=view==="cards", timeline=view==="timeline";
   MODE=view; CUR_BOARD=null; SEL=sel;
   $("#board-gear").style.display="none"; setActive(sel.id);
   setHeadIcon(sel); $("#head-title").textContent=sel.title;
   setHeadEditable(sel.kind==="project"?"project":null, sel.id);
   $("#viewtog").classList.add("show");
-  $("#vt-list").classList.toggle("on",view==="list"); $("#vt-matrix").classList.toggle("on",matrix); $("#vt-cards").classList.toggle("on",cards);
-  $(".main").classList.toggle("fill", matrix);
+  $("#vt-list").classList.toggle("on",view==="list"); $("#vt-matrix").classList.toggle("on",matrix); $("#vt-cards").classList.toggle("on",cards); $("#vt-timeline").classList.toggle("on",timeline);
+  $(".main").classList.toggle("fill", matrix||timeline);
   const c=$("#content"); $("#filterbar").classList.remove("show"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
@@ -1083,9 +1142,10 @@ async function renderList(sel, view="list"){
     if(LIST_KIND==="area") items=areaProjects(sel.id).map(p=>({uuid:p.uuid,title:p.title,progress:p.progress,_proj:true})).concat(items);
     renderMatrix(items);
   } else if(cards){ renderCards(LIST_ITEMS); }
+  else if(timeline){ renderTimeline(LIST_ITEMS); }
   else { buildFilterBar(); renderRows(); }
 }
-function setListView(v){ if(SEL) go("#l/"+encodeURIComponent(SEL.id)+(v==="matrix"?"/m":v==="cards"?"/c":"")); }
+function setListView(v){ if(SEL) go("#l/"+encodeURIComponent(SEL.id)+(v==="matrix"?"/m":v==="cards"?"/c":v==="timeline"?"/t":"")); }
 function areaProjects(areaId){ const a=((SIDEBAR&&SIDEBAR.areas)||[]).find(x=>x.uuid===areaId); return a?a.projects:[]; }
 function projCardEl(p){
   const el=document.createElement("div"); el.className="projcard";
@@ -1313,6 +1373,66 @@ function dropZone(elm,quad,items){
   });
 }
 
+// --- timeline (day) view; blocks are a dashboard-only overlay, never written to Things ---
+const TL_START=6, TL_END=23, TL_H=44;   // 6am–11pm, 44px per hour
+let TL_DUR=30;                            // default block length (minutes)
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+async function saveTimeblocks(){
+  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({timeblocks:CONFIG.timeblocks})})).json();
+  if(r.ok) CONFIG=r.config;
+}
+function renderTimeline(items){
+  const c=$("#content"); c.innerHTML=""; CONFIG.timeblocks=CONFIG.timeblocks||{};
+  const day=todayStr();
+  const wrap=document.createElement("div"); wrap.className="tl-wrap";
+  // --- pool of unscheduled tasks (also a drop target to unschedule) ---
+  const pool=document.createElement("div"); pool.className="tl-pool";
+  const unscheduled=items.filter(t=>!(CONFIG.timeblocks[t.uuid] && CONFIG.timeblocks[t.uuid].date===day));
+  pool.innerHTML=`<div class="col-head"><span>Unscheduled</span><span>${unscheduled.length}</span></div>`+
+    `<div class="tl-durbar">New block <span class="durtog"></span> min</div>`;
+  const pc=document.createElement("div"); pc.className="col-cards";
+  if(!unscheduled.length) pc.innerHTML=`<div class="empty" style="padding:14px 6px">All slotted 🎉</div>`;
+  unscheduled.forEach(t=>pc.appendChild(priCardEl(t))); pool.appendChild(pc);
+  pool.addEventListener("dragover",e=>{ e.preventDefault(); pool.classList.add("drop"); });
+  pool.addEventListener("dragleave",()=>pool.classList.remove("drop"));
+  pool.addEventListener("drop",e=>{ e.preventDefault(); pool.classList.remove("drop");
+    const id=e.dataTransfer.getData("text/id"); if(id && CONFIG.timeblocks[id]){ delete CONFIG.timeblocks[id]; saveTimeblocks().then(()=>renderTimeline(items)); } });
+  wrap.appendChild(pool);
+  [15,30,60].forEach(m=>{ const b=document.createElement("button"); b.className="vt"+(TL_DUR===m?" on":""); b.textContent=m; b.onclick=()=>{ TL_DUR=m; renderTimeline(items); }; pool.querySelector(".durtog").appendChild(b); });
+  // --- the day grid ---
+  const cal=document.createElement("div"); cal.className="tl-cal";
+  const grid=document.createElement("div"); grid.className="tl-grid"; grid.style.height=((TL_END-TL_START)*TL_H)+"px";
+  for(let h=TL_START; h<=TL_END; h++){
+    const top=(h-TL_START)*TL_H;
+    const line=document.createElement("div"); line.className="tl-hour"; line.style.top=top+"px"; grid.appendChild(line);
+    const lab=document.createElement("div"); lab.className="tl-hlabel"; lab.style.top=top+"px"; lab.textContent=(h%12||12)+(h<12?"a":"p"); grid.appendChild(lab);
+  }
+  items.forEach(t=>{
+    const b=CONFIG.timeblocks[t.uuid]; if(!b || b.date!==day) return;
+    const [hh,mm]=b.start.split(":").map(Number); const startMin=hh*60+(mm||0);
+    const el=document.createElement("div"); el.className="tl-block"; el.draggable=true;
+    el.style.top=(((startMin-TL_START*60)/60)*TL_H)+"px"; el.style.height=Math.max(18,(b.mins/60)*TL_H-2)+"px";
+    el.innerHTML=`<div class="bt">${esc(t.title||"(untitled)")}</div><div class="bsub">${b.start} · ${b.mins}m</div>`;
+    el.onclick=()=>openEdit(t.uuid);
+    el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",t.uuid); el.classList.add("dragging"); });
+    el.addEventListener("dragend",()=>el.classList.remove("dragging"));
+    grid.appendChild(el);
+  });
+  grid.addEventListener("dragover",e=>e.preventDefault());
+  grid.addEventListener("drop",e=>{
+    e.preventDefault(); const id=e.dataTransfer.getData("text/id"); if(!id) return;
+    const r=grid.getBoundingClientRect();
+    let minutes=TL_START*60 + ((e.clientY-r.top)/TL_H)*60;
+    minutes=Math.round(minutes/15)*15;
+    minutes=Math.max(TL_START*60, Math.min(minutes, TL_END*60-15));
+    const hh=String(Math.floor(minutes/60)).padStart(2,"0"), mm=String(minutes%60).padStart(2,"0");
+    const ex=CONFIG.timeblocks[id];
+    CONFIG.timeblocks[id]={date:day, start:hh+":"+mm, mins: ex?ex.mins:TL_DUR};
+    saveTimeblocks().then(()=>renderTimeline(items));
+  });
+  cal.appendChild(grid); wrap.appendChild(cal); c.appendChild(wrap);
+}
+
 // --- board create / settings (auto-save) ---
 async function newBoard(){
   const b={id:uid(),name:"New Board",columns:[...DEFAULT_COLUMNS],include_areas:[],include_projects:[],placements:{}};
@@ -1534,6 +1654,26 @@ async function savePrefs(){
   closeOverlay("prefs-overlay");
 }
 
+// --- quick add (＋ in topbar): to-do or project (create-only, no token) ---
+let ADD_KIND="todo";
+function openAdd(){ ADD_KIND="todo"; setAddKind("todo"); $("#add-title").value=""; openOverlay("add-overlay"); setTimeout(()=>$("#add-title").focus(),0); }
+function setAddKind(k){ ADD_KIND=k; document.querySelectorAll("#add-kind .vt").forEach(b=>b.classList.toggle("on", b.dataset.kind===k)); updateAddWhere(); }
+function updateAddWhere(){
+  let w;
+  if(ADD_KIND==="project") w=(SEL&&SEL.kind==="area")?("in area: "+SEL.title):"top level (areas can't be created via the URL Scheme)";
+  else w=(SEL&&(SEL.kind==="project"||SEL.kind==="area"))?("in: "+SEL.title):"to Inbox";
+  $("#add-where").textContent="→ "+w;
+}
+async function submitAdd(){
+  const title=$("#add-title").value.trim(); if(!title) return;
+  const body={kind:ADD_KIND, title};
+  if(ADD_KIND==="project"){ if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
+  else if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id;
+  const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
+  closeOverlay("add-overlay"); loadSidebar(); setTimeout(route, 350);
+}
+
 function openOverlay(id){ $("#"+id).classList.add("show"); }
 function closeOverlay(id){ $("#"+id).classList.remove("show"); }
 document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{ if(e.target===o){ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); } }));
@@ -1596,7 +1736,7 @@ function canAutoRefresh(){
   if(document.querySelector(".dragging")) return false;     // mid drag
   if(document.activeElement===$("#head-title")) return false; // renaming the header
   if(MODE==="search"||MODE==="about"||CUR_FILTER) return false; // focused on a filter/search/about
-  return MODE==="list"||MODE==="matrix"||MODE==="board";
+  return MODE==="list"||MODE==="matrix"||MODE==="board"||MODE==="timeline";
 }
 function softRefresh(){
   const c=$("#content"); const top=c?c.scrollTop:0;
