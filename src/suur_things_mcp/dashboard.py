@@ -20,6 +20,7 @@ Run:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -238,6 +239,42 @@ async def _update(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(exc)})
 
 
+async def _pulse(request: Request) -> JSONResponse:
+    """Best-effort git/GitHub pulse for a linked item's repos (board cards): commits in
+    the last 7 days, time since last commit, open PR count. Missing repo dirs / no `gh`
+    just yield fewer fields — never an error."""
+    item = boardcfg.links().get(str(request.query_params.get("item_id", "")))
+    if not item:
+        return JSONResponse({"ok": False, "repos": []})
+    out: list[dict[str, Any]] = []
+    for entry in item.get("repos", []):
+        gh = entry.get("github") or ""
+        info: dict[str, Any] = {"label": entry.get("label") or (gh.split("/")[-1] if gh else "repo")}
+        repo = entry.get("repo")
+        if repo and os.path.isdir(repo):
+            try:
+                r = subprocess.run(["git", "-C", repo, "log", "-1", "--format=%cr"],
+                                   capture_output=True, text=True, timeout=5)
+                if r.returncode == 0 and r.stdout.strip():
+                    info["last_commit"] = r.stdout.strip()
+                r2 = subprocess.run(["git", "-C", repo, "rev-list", "--count", "--since=7 days ago", "HEAD"],
+                                    capture_output=True, text=True, timeout=5)
+                if r2.returncode == 0 and r2.stdout.strip().isdigit():
+                    info["commits_7d"] = int(r2.stdout.strip())
+            except Exception:  # noqa: BLE001
+                pass
+        if gh and _GITHUB_SLUG_RE.match(gh) and shutil.which("gh"):
+            try:
+                r3 = subprocess.run(["gh", "pr", "list", "-R", gh, "--state", "open", "--json", "number"],
+                                    capture_output=True, text=True, timeout=8)
+                if r3.returncode == 0:
+                    info["open_prs"] = len(json.loads(r3.stdout or "[]"))
+            except Exception:  # noqa: BLE001
+                pass
+        out.append(info)
+    return JSONResponse({"ok": True, "repos": out})
+
+
 async def _rename(request: Request) -> JSONResponse:
     """Rename a project inline from the dashboard header. (Board renames are client-side
     config; areas can't be renamed — the Things URL Scheme has no area-update command.)"""
@@ -374,6 +411,7 @@ def create_app() -> Starlette:
             Route("/api/items", _items),
             Route("/api/item", _item),
             Route("/api/search", _search),
+            Route("/api/pulse", _pulse),
             Route("/api/board", _board),
             Route("/api/config", _config_get),
             Route("/api/config", _config_post, methods=["POST"]),
@@ -677,6 +715,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .card .cfoot { margin-top:9px; display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
   .card .kind { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--pill-border); border-radius:9px; padding:0 6px; }
   .card .crepos { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .card .cpulse { color:var(--muted); font-size:11px; margin-top:8px; }
   .card .repo { font-size:11px; color:var(--muted); border:1px solid var(--pill-border); border-radius:8px; padding:1px 3px 1px 8px; display:inline-flex; align-items:center; gap:1px; }
   .card .rb { border:0; background:transparent; cursor:pointer; color:var(--muted); font-size:12px; padding:0 4px; border-radius:5px; line-height:1.6; }
   .card .rb:hover { background:var(--row-hover); color:var(--text); }
@@ -1166,7 +1205,22 @@ function boardCardEl(card){
     (card.desc?`<div class="cdesc">${esc(card.desc)}</div>`:"")+
     `<div class="cfoot"><span class="kind">${card.kind}</span>${ring(card.progress)}<span>${card.open} open${card.total?` / ${card.total}`:""}</span></div>`+
     `<div class="crepos">${repoHtml}</div>`;
+  if((card.repos||[]).length) fetchPulse(card.id, el);
   return el;
+}
+async function fetchPulse(itemId, el){
+  try{
+    const d=await (await fetch("/api/pulse?item_id="+encodeURIComponent(itemId))).json();
+    if(!d.ok || !(d.repos||[]).length) return;
+    const lines=d.repos.map(r=>{
+      const bits=[];
+      if(r.commits_7d!=null) bits.push(`${r.commits_7d} commit${r.commits_7d===1?"":"s"}/wk`);
+      if(r.last_commit) bits.push("last "+r.last_commit);
+      if(r.open_prs!=null) bits.push(`${r.open_prs} open PR${r.open_prs===1?"":"s"}`);
+      return bits.length?bits.join(" · "):null;
+    }).filter(Boolean);
+    if(lines.length){ const p=document.createElement("div"); p.className="cpulse"; p.textContent=lines.join("   ·   "); el.appendChild(p); }
+  }catch(e){}
 }
 async function openRepo(itemId, idx, target){
   const r=await (await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item_id:itemId,repo_index:idx,target})})).json();

@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync deps
+        run: uv sync --dev
+      - name: Run tests
+        run: uv run pytest -q
+      # Data-route tests skip automatically when Things isn't present (Linux/CI);
+      # URL-building + dashboard-route tests run everywhere.

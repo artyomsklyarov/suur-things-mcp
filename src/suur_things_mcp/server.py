@@ -14,7 +14,7 @@ import json
 import os
 from typing import Annotated, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from pydantic import Field
 
 from . import config as boardcfg
@@ -492,34 +492,70 @@ def list_links() -> list[dict]:
     return out
 
 
+async def _root_paths(ctx: Context) -> list[str]:
+    """Filesystem paths from the MCP client's advertised `roots` (best-effort).
+
+    Clients that support the roots capability (many non-Claude-Code clients) tell the
+    server their open workspace folders this way; we map `file://` roots to paths.
+    Returns [] if the client doesn't support roots.
+    """
+    from urllib.parse import unquote, urlparse
+
+    try:
+        result = await ctx.session.list_roots()
+    except Exception:  # noqa: BLE001 — client may not advertise roots
+        return []
+    paths: list[str] = []
+    for root in getattr(result, "roots", []) or []:
+        uri = str(getattr(root, "uri", ""))
+        if uri.startswith("file://"):
+            p = unquote(urlparse(uri).path)
+            if p:
+                paths.append(p)
+    return paths
+
+
 @mcp.tool()
-def current_link(
+async def current_link(
     cwd: Annotated[
         str | None,
-        Field(description="Absolute path of your current working directory. PASS THIS EXPLICITLY — the server's own cwd is unreliable under uvx."),
+        Field(description="Absolute path of your current working directory. Pass it explicitly when you can — the server's own cwd is unreliable under uvx."),
     ] = None,
+    ctx: Context | None = None,
 ) -> dict | None:
     """The Things project/area linked to your current repo, plus its open to-dos.
 
-    Resolves the directory in order: `cwd` arg → CLAUDE_PROJECT_DIR env → the
-    server's cwd. Returns null when the directory isn't under any linked repo.
+    Resolves the directory in order: `cwd` arg → CLAUDE_PROJECT_DIR env → the MCP
+    client's workspace roots (for clients that expose them) → the server's cwd.
+    Returns null when no candidate path is under a linked repo.
     """
-    path = cwd or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    link = boardcfg.link_for_path(path)
-    if not link:
-        return None
-    item_id = link["item_id"]
-    detail = reads.get(item_id)
-    items = reads.list_items(item_id)
-    return {
-        "item_uuid": item_id,
-        "kind": link["kind"],
-        "title": detail.get("title") if detail else None,
-        "resolved_path": path,
-        "matched_repo": link["repo"],
-        "repos": boardcfg.links().get(item_id, {}).get("repos", []),
-        "open_tasks": items.get("items", []),
-    }
+    candidates: list[str] = []
+    if cwd:
+        candidates.append(cwd)
+    env = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env:
+        candidates.append(env)
+    if ctx is not None:
+        candidates.extend(await _root_paths(ctx))
+    candidates.append(os.getcwd())
+
+    for path in candidates:
+        link = boardcfg.link_for_path(path)
+        if not link:
+            continue
+        item_id = link["item_id"]
+        detail = reads.get(item_id)
+        items = reads.list_items(item_id)
+        return {
+            "item_uuid": item_id,
+            "kind": link["kind"],
+            "title": detail.get("title") if detail else None,
+            "resolved_path": path,
+            "matched_repo": link["repo"],
+            "repos": boardcfg.links().get(item_id, {}).get("repos", []),
+            "open_tasks": items.get("items", []),
+        }
+    return None
 
 
 # =========================================================================
