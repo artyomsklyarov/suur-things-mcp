@@ -295,6 +295,8 @@ async def _add(request: Request) -> JSONResponse:
             params = {"title": title}
             if body.get("when"):
                 params["when"] = body["when"]
+            if body.get("tags"):
+                params["tags"] = ",".join(body["tags"])
             if body.get("list_id"):
                 params["list-id"] = body["list_id"]
             execute("add", params)
@@ -376,6 +378,7 @@ async def _organize_post(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "THINGS_AUTH_TOKEN not set (needed to apply changes)"})
     body = await request.json()
     folder_id = str(body.get("folder_id") or "")
+    workflow = str(body.get("workflow") or "organize")   # organize | triage | calm
     if not folder_id:
         return JSONResponse({"ok": False, "error": "missing folder_id"})
     agent = organizer.pick_agent(boardcfg.prefs())
@@ -383,8 +386,8 @@ async def _organize_post(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "no agent CLI found — install Claude Code or Codex"})
 
     _evict_jobs()
-    for jid, job in _ORGANIZE_JOBS.items():  # dedupe: same folder already running
-        if job.get("status") == "running" and job.get("folder_id") == folder_id:
+    for jid, job in _ORGANIZE_JOBS.items():  # dedupe: same folder+workflow already running
+        if job.get("status") == "running" and job.get("folder_id") == folder_id and job.get("workflow") == workflow:
             return JSONResponse({"ok": True, "job_id": jid})
     if any(j.get("status") == "running" for j in _ORGANIZE_JOBS.values()):  # global cap of 1
         return JSONResponse({"ok": False, "error": "another organize job is already running"})
@@ -401,17 +404,23 @@ async def _organize_post(request: Request) -> JSONResponse:
         obj = reads.get(folder_id)
         title = (obj.get("title") if obj else None) or folder_id
         existing_tags = [t.get("title") for t in reads.tags() if t.get("title")]
+        dest_names: list[str] = []
+        if workflow == "triage":   # give the agent valid filing destinations (resolved to ids client-side)
+            dest_names = [p["title"] for p in reads.projects()
+                          if p.get("status") == "incomplete" and p.get("title")] \
+                         + [a["title"] for a in reads.areas() if a.get("title")]
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc)})
 
     model = boardcfg.prefs().get("agent_model") or organizer.DEFAULT_MODEL
     job_id = _uuid.uuid4().hex[:8]
-    _ORGANIZE_JOBS[job_id] = {"status": "running", "folder_id": folder_id, "ts": time.time(),
-                              "suggestions": None, "error": None, "count": len(tasks)}
+    _ORGANIZE_JOBS[job_id] = {"status": "running", "folder_id": folder_id, "workflow": workflow,
+                              "ts": time.time(), "suggestions": None, "error": None, "count": len(tasks)}
 
     def _work() -> None:
         try:
-            sug = organizer.organize(title, tasks, existing_tags, agent, model)
+            sug = organizer.organize(title, tasks, existing_tags, agent, model,
+                                     workflow=workflow, projects=dest_names)
             _ORGANIZE_JOBS[job_id].update(status="done", suggestions=sug, ts=time.time())
         except Exception as exc:  # noqa: BLE001
             _ORGANIZE_JOBS[job_id].update(status="error", error=str(exc), ts=time.time())
@@ -913,7 +922,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <button class="vt on" data-kind="todo" onclick="setAddKind('todo')">To-Do</button>
       <button class="vt" data-kind="project" onclick="setAddKind('project')">Project</button>
     </div>
-    <div class="field"><input id="add-title" placeholder="Title…" onkeydown="if(event.key==='Enter')submitAdd()"></div>
+    <div class="field"><input id="add-title" placeholder="e.g. buy milk tomorrow #errand" onkeydown="if(event.key==='Enter')submitAdd()"></div>
     <div class="hint" id="add-where"></div>
     <div class="btnrow"><button class="btn primary" onclick="submitAdd()">Add</button><span class="spacer"></span><button class="btn ghost" onclick="closeOverlay('add-overlay')">Cancel</button></div>
   </div>
@@ -1006,6 +1015,15 @@ function findProject(id){
   for(const p of ((SIDEBAR&&SIDEBAR.arealess)||[])){ if(p.uuid===id) return p; }
   return null;
 }
+function resolveDestId(name){  // triage: map an agent-proposed destination NAME → project/area uuid
+  name=(name||"").trim().toLowerCase(); if(!name) return null;
+  for(const a of ((SIDEBAR&&SIDEBAR.areas)||[])){
+    if((a.title||"").trim().toLowerCase()===name) return a.uuid;
+    for(const p of a.projects){ if((p.title||"").trim().toLowerCase()===name) return p.uuid; }
+  }
+  for(const p of ((SIDEBAR&&SIDEBAR.arealess)||[])){ if((p.title||"").trim().toLowerCase()===name) return p.uuid; }
+  return null;
+}
 function setHeadIcon(sel){
   const el=$("#head-ico");
   if(sel.kind==="builtin" && SVG[sel.id]){ el.innerHTML=SVG[sel.id]; return; }
@@ -1067,6 +1085,9 @@ function ckCommands(){
   out.push({label:"New to-do…", hint:"Create", icon:"", run:()=>{closeCmdk(); openAdd();}});
   out.push({label:"New project…", hint:"Create", icon:"", run:()=>{closeCmdk(); openAdd(); setAddKind("project");}});
   out.push({label:"New board", hint:"Create", icon:"", run:()=>{closeCmdk(); newBoard();}});
+  out.push({label:"Organize this list ✨", hint:"Agent", icon:"", run:()=>{ if(SEL){ closeCmdk(); startOrganize(SEL.id,"organize"); } else alert("Open a list first."); }});
+  out.push({label:"Triage Inbox ✨", hint:"Agent", icon:"", run:()=>{ closeCmdk(); startOrganize("inbox","triage"); }});
+  out.push({label:"Calm my Today ✨", hint:"Agent", icon:"", run:()=>{ closeCmdk(); startOrganize("today","calm"); }});
   if(SEL && MODE!=="board" && MODE!=="about"){ [["list","List"],["matrix","Matrix"],["cards","Cards"],["timeline","Timeline"]].forEach(([v,l])=>out.push({label:"Switch to "+l+" view", hint:"View", icon:"", run:()=>{closeCmdk(); setListView(v);}})); }
   out.push({label:"Toggle light / dark", hint:"App", icon:"", run:()=>{ $("#theme").click(); }});
   out.push({label:"Preferences", hint:"App", icon:"", run:()=>{closeCmdk(); openPrefs();}});
@@ -1692,8 +1713,10 @@ async function postUpdate(body){
 function openInThings(){ if(EDIT_ID) window.location.href="things:///show?id="+encodeURIComponent(EDIT_ID); }
 
 // auto-organize folder (spawns your agent, review before write)
-async function startOrganize(){
-  const r=await (await fetch("/api/organize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({folder_id:SEL.id})})).json();
+async function startOrganize(folderId, workflow){
+  folderId = folderId || (SEL && SEL.id); workflow = workflow || "organize";
+  if(!folderId){ alert("Open a list first."); return; }
+  const r=await (await fetch("/api/organize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({folder_id:folderId, workflow})})).json();
   if(!r.ok){ alert("Organize: "+(r.error||"failed")); return; }
   openOverlay("organize-overlay");
   $("#org-actions").style.display="none";
@@ -1711,12 +1734,14 @@ function pollOrganize(jobId, tries){
 }
 function renderSuggestions(){
   const body=$("#org-body"); body.innerHTML="";
-  const changed=ORG_SUG.filter(s=>s.suggested_title||s.append_notes||(s.tags&&s.tags.length));
-  if(!changed.length){ body.innerHTML=`<div class="empty">No suggestions — this folder looks tidy. 🎉</div>`; $("#org-actions").style.display="none"; return; }
+  const changed=ORG_SUG.filter(s=>s.suggested_title||s.append_notes||(s.tags&&s.tags.length)||s.when||s.dest);
+  if(!changed.length){ body.innerHTML=`<div class="empty">No suggestions — looks tidy. 🎉</div>`; $("#org-actions").style.display="none"; return; }
   for(const s of changed){
     const row=document.createElement("div"); row.className="org-row"; row.dataset.uuid=s.uuid;
     let h=`<div class="org-cur">${esc(LAST_ITEMS[s.uuid]||"")}</div>`;
     if(s.suggested_title) h+=`<label class="org-line"><input type="checkbox" class="acc-title" checked data-val="${esc(s.suggested_title)}"> ✏️ ${esc(s.suggested_title)}</label>`;
+    if(s.dest) h+=`<label class="org-line"><input type="checkbox" class="acc-dest" checked data-val="${esc(s.dest)}"> 📁 → ${esc(s.dest)}</label>`;
+    if(s.when) h+=`<label class="org-line"><input type="checkbox" class="acc-when" checked data-val="${esc(s.when)}"> 📅 ${esc(s.when)}</label>`;
     if(s.append_notes) h+=`<label class="org-line"><input type="checkbox" class="acc-notes" checked data-val="${esc(s.append_notes)}"> 📝 ${esc(s.append_notes)}</label>`;
     if(s.tags&&s.tags.length) h+=`<label class="org-line"><input type="checkbox" class="acc-tags" checked data-val="${esc(JSON.stringify(s.tags))}"> 🏷 ${s.tags.map(t=>`<span class="pill">${esc(t)}</span>`).join(" ")}</label>`;
     if(s.reason) h+=`<div class="org-reason">${esc(s.reason)}</div>`;
@@ -1731,7 +1756,9 @@ async function applyOrganize(){
     const t=row.querySelector(".acc-title"); if(t&&t.checked) body.title=t.dataset.val;
     const no=row.querySelector(".acc-notes"); if(no&&no.checked) body.append_notes=no.dataset.val;
     const tg=row.querySelector(".acc-tags"); if(tg&&tg.checked){ try{ body.add_tags=JSON.parse(tg.dataset.val); }catch(e){} }
-    if(body.title||body.append_notes||body.add_tags){
+    const wn=row.querySelector(".acc-when"); if(wn&&wn.checked) body.when=wn.dataset.val;
+    const ds=row.querySelector(".acc-dest"); if(ds&&ds.checked){ const lid=resolveDestId(ds.dataset.val); if(lid) body.list_id=lid; }
+    if(body.title||body.append_notes||body.add_tags||body.when||body.list_id){
       const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
       if(r.ok) n++;
     }
@@ -1760,11 +1787,36 @@ function updateAddWhere(){
   else w=(SEL&&(SEL.kind==="project"||SEL.kind==="area"))?("in: "+SEL.title):"to Inbox";
   $("#add-where").textContent="→ "+w;
 }
+function weekdayDate(s){
+  const map={sunday:0,sun:0,monday:1,mon:1,tuesday:2,tue:2,tues:2,wednesday:3,wed:3,thursday:4,thu:4,thurs:4,friday:5,fri:5,saturday:6,sat:6};
+  if(!(s in map)) return null;
+  const t=new Date(), tgt=map[s]; let d=(tgt-t.getDay()+7)%7; if(d===0) d=7;  // next, not today
+  const x=new Date(t.getFullYear(),t.getMonth(),t.getDate()+d);
+  return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");
+}
+// strict trailing-token parse: #tags + one when-keyword/weekday/yyyy-mm-dd; the rest stays literal
+function parseNL(raw){
+  const WHEN=new Set(["today","tomorrow","evening","anytime","someday"]);
+  let words=raw.trim().split(/\s+/); let when=null; const tags=[]; let changed=true;
+  while(words.length>1 && changed){
+    changed=false; const last=words[words.length-1], lc=last.toLowerCase();
+    if(last.startsWith("#")&&last.length>1){ tags.unshift(last.slice(1)); words.pop(); changed=true; continue; }
+    if(!when){
+      if(WHEN.has(lc)){ when=lc; words.pop(); changed=true; continue; }
+      else if(/^\d{4}-\d{2}-\d{2}$/.test(last)){ when=last; words.pop(); changed=true; continue; }
+      else { const wd=weekdayDate(lc); if(wd){ when=wd; words.pop(); changed=true; continue; } }
+    }
+  }
+  return {title:words.join(" ").trim()||raw.trim(), when, tags};
+}
 async function submitAdd(){
-  const title=$("#add-title").value.trim(); if(!title) return;
-  const body={kind:ADD_KIND, title};
-  if(ADD_KIND==="project"){ if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
-  else if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id;
+  const raw=$("#add-title").value.trim(); if(!raw) return;
+  const body={kind:ADD_KIND};
+  if(ADD_KIND==="project"){ body.title=raw; if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
+  else {
+    const p=parseNL(raw); body.title=p.title; if(p.when) body.when=p.when; if(p.tags.length) body.tags=p.tags;
+    if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id;
+  }
   const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
   if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
   closeOverlay("add-overlay"); loadSidebar(); setTimeout(route, 350);
