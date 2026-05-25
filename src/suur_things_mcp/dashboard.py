@@ -565,6 +565,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .row.is-done .title { color:var(--muted); }
   .box { width:17px; height:17px; flex:0 0 17px; border:1.5px solid var(--check-border);
     border-radius:5px; display:flex; align-items:center; justify-content:center; }
+  .row .box:hover { border-color:var(--accent); }
   .box.done { background:var(--accent); border-color:var(--accent); }
   .box.done::after { content:"✓"; color:#fff; font-size:11px; font-weight:700; }
   .box.cancel { background:var(--muted); border-color:var(--muted); }
@@ -1113,6 +1114,8 @@ function rowEl(it){
   row.addEventListener("dragend",()=>row.classList.remove("dragging"));
   const m=metaHtml(it);
   row.innerHTML=`<span class="box ${done?"done":cancel?"cancel":""}"></span><span class="title">${esc(it.title||"(untitled)")}</span>`+(m?`<span class="meta">${m}</span>`:"");
+  if(!done&&!cancel){ const box=row.querySelector(".box"); box.title="Complete"; box.style.cursor="pointer";
+    box.onclick=(e)=>{ e.stopPropagation(); applyStatus(it.uuid,"completed").then(ok=>{ if(ok) rerenderCurrent(); }); }; }
   return row;
 }
 
@@ -1377,8 +1380,25 @@ async function saveEdit(){
   const when=$("#f-when").value.trim(); if(when) body.when=when;
   body.deadline=$("#f-deadline").value.trim(); await postUpdate(body);
 }
-async function completeTask(){ await postUpdate({id:EDIT_ID,completed:true}); }
-async function cancelTask(){ await postUpdate({id:EDIT_ID,canceled:true}); }
+// Completing/canceling keeps the item VISIBLE as done (check + strikethrough) until a
+// full refresh logs it — like Things, instead of vanishing instantly.
+async function applyStatus(uuid, field){
+  if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to check off tasks."); return false; }
+  const body={id:uuid}; body[field]=true;
+  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  if(!r.ok){ alert("Update failed: "+(r.error||"")); return false; }
+  const it=(LIST_ITEMS||[]).find(x=>x.uuid===uuid); if(it) it.status=(field==="completed"?"completed":"canceled");
+  loadSidebar(); return true;   // refresh counts; the item stays in LIST_ITEMS until next full fetch
+}
+function rerenderCurrent(){
+  if(MODE==="cards") return renderCards(LIST_ITEMS);
+  if(MODE==="matrix"){ let items=LIST_ITEMS.slice();
+    if(LIST_KIND==="area") items=areaProjects(SEL.id).map(p=>({uuid:p.uuid,title:p.title,progress:p.progress,_proj:true})).concat(items);
+    return renderMatrix(items); }
+  if(MODE==="list") return renderRows();
+}
+async function completeTask(){ if(await applyStatus(EDIT_ID,"completed")){ closeOverlay("edit-overlay"); rerenderCurrent(); } }
+async function cancelTask(){ if(await applyStatus(EDIT_ID,"canceled")){ closeOverlay("edit-overlay"); rerenderCurrent(); } }
 async function postUpdate(body){
   const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
   if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
