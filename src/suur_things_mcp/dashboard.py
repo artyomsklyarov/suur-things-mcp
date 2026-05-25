@@ -5,15 +5,13 @@ One two-pane UI. The sidebar holds Things' built-in lists, a Priority Square
 projects. The main panel shows whatever you select.
 
   - Lists/areas/projects → Things-style grouped list.
-  - A project board → a Kanban whose cards are the included projects/areas
-    (high-level overview), staged into columns. Click a card to open it.
-  - Priority Square → drag today's tasks into Do First / Schedule / Delegate /
-    Don't Do quadrants.
+  - A project board → a portfolio Kanban whose cards are the included
+    projects/areas, staged into columns. Click a card to open it.
+  - Priority Square → drag today's tasks into Eisenhower quadrants.
 
 Project-stage placement and priority quadrants are browser-side overlays (stored
-in board.json, never written to Things — Things has no such concept), so dragging
-needs no auth token. Editing a task's fields does write to Things via the URL
-Scheme and needs THINGS_AUTH_TOKEN.
+in board.json, never written to Things), so dragging needs no auth token. Editing
+a task's fields writes to Things via the URL Scheme and needs THINGS_AUTH_TOKEN.
 
 Run:
   - `suur-things-mcp dashboard`  → foreground (CLI), opens your browser
@@ -212,7 +210,7 @@ INDEX_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Things</title>
+<title>SUUR Things</title>
 <style>
   :root {
     --side-bg:#f3f4f6; --main-bg:#ffffff; --text:#1d1d20; --muted:#8a8f98;
@@ -233,10 +231,12 @@ INDEX_HTML = """<!DOCTYPE html>
   body { font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
     background:var(--main-bg); color:var(--text); -webkit-font-smoothing:antialiased; }
 
-  .topbar { height:44px; display:flex; align-items:center; justify-content:flex-end; gap:10px;
-    padding:0 16px; border-bottom:1px solid var(--divider); background:var(--main-bg); }
+  .topbar { height:44px; display:flex; align-items:center; gap:10px; padding:0 16px;
+    border-bottom:1px solid var(--divider); background:var(--main-bg); }
+  .brand { font-weight:800; font-size:13px; letter-spacing:.13em; }
+  .grow { flex:1; }
   .iconbtn { border:1px solid var(--divider); background:var(--main-bg); color:var(--text); width:30px;
-    height:30px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; }
+    height:30px; border-radius:8px; cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; flex:0 0 30px; }
   .iconbtn:hover { background:var(--row-hover); }
   .views { position:absolute; top:44px; left:0; right:0; bottom:0; display:flex; }
 
@@ -255,10 +255,11 @@ INDEX_HTML = """<!DOCTYPE html>
     text-transform:uppercase; letter-spacing:.04em; color:var(--muted); display:flex; align-items:center; }
   .group-head .add { margin-left:auto; cursor:pointer; font-size:14px; padding:0 4px; border-radius:5px; }
   .group-head .add:hover { background:var(--row-hover); color:var(--text); }
-  .area-head { padding:7px 10px 3px; margin-top:8px; font-weight:600; font-size:13.5px;
-    display:flex; align-items:center; gap:8px; white-space:nowrap; cursor:pointer; border-radius:7px; }
+  .area-head { padding:7px 6px 3px; margin-top:8px; font-weight:600; font-size:13.5px;
+    display:flex; align-items:center; gap:4px; white-space:nowrap; cursor:pointer; border-radius:7px; }
   .area-head:hover { background:var(--row-hover); }
-  .area-head .stack { color:var(--muted); font-size:12px; }
+  .area-head .chev { width:15px; flex:0 0 15px; text-align:center; color:var(--muted); font-size:9px; cursor:pointer; border-radius:4px; }
+  .area-head .chev:hover { background:var(--divider); }
   svg.ring { flex:0 0 16px; }
   .ring-bg { fill:none; stroke:var(--ring-bg); stroke-width:2; }
   .ring-fg { fill:none; stroke:var(--ring-fg); stroke-width:2; stroke-linecap:round; }
@@ -290,7 +291,6 @@ INDEX_HTML = """<!DOCTYPE html>
   .due .dot { width:9px; height:9px; border-radius:50%; background:var(--red); display:inline-block; }
   .empty, .err { color:var(--muted); padding:40px 4px; } .err { color:var(--red); }
 
-  /* Kanban columns + project cards */
   .col { background:var(--col-bg); border-radius:12px; width:300px; flex:0 0 300px; max-height:100%; display:flex; flex-direction:column; }
   .col-head { padding:13px 15px 9px; font-weight:600; font-size:13px; text-transform:uppercase;
     letter-spacing:.03em; color:var(--muted); display:flex; justify-content:space-between; }
@@ -300,31 +300,29 @@ INDEX_HTML = """<!DOCTYPE html>
   .card.dragging { opacity:.4; }
   .card .ct { font-weight:600; margin-bottom:2px; }
   .card .csub { color:var(--muted); font-size:12px; }
+  .card .cdesc { color:var(--muted); font-size:12px; margin-top:4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card .cfoot { margin-top:9px; display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
   .card .kind { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--pill-border); border-radius:9px; padding:0 6px; }
 
-  /* Priority square */
   .pri-wrap { display:flex; gap:16px; height:100%; }
   .pri-pool { width:300px; flex:0 0 300px; background:var(--col-bg); border-radius:12px; display:flex; flex-direction:column; }
-  .pri-pool .col-head { } .pri-pool .col-cards { }
   .matrix { flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:14px; min-width:0; }
   .quad { border:1px solid var(--divider); border-radius:12px; display:flex; flex-direction:column; min-height:0; }
   .quad-head { padding:11px 14px 8px; border-bottom:1px solid var(--divider); }
   .quad-head .qt { font-weight:700; } .quad-head .qs { color:var(--muted); font-size:12px; }
   .quad .cards { padding:8px 10px; overflow-y:auto; flex:1; }
   .quad.drop, .pri-pool.drop { outline:2px dashed var(--accent); outline-offset:-4px; }
-  .q-do .quad-head { border-color:var(--red); } .q-do .quad-head .qt { color:var(--red); }
+  .q-do .quad-head .qt { color:var(--red); }
   .q-sched .quad-head .qt { color:#2e9e5b; }
   .q-deleg .quad-head .qt { color:#d98a1f; }
   .pcard { background:var(--card-bg); border-radius:8px; padding:8px 11px; margin:6px 0; box-shadow:var(--card-shadow); cursor:pointer; }
   .pcard.dragging { opacity:.4; } .pcard .pt { font-weight:500; }
   .pcard .psub { color:var(--muted); font-size:12px; margin-top:2px; }
 
-  /* Modals */
   .overlay { position:fixed; inset:0; background:var(--overlay); display:none; align-items:flex-start; justify-content:center; z-index:20; padding:60px 16px; }
   .overlay.show { display:flex; }
   .panel { background:var(--main-bg); border-radius:14px; width:520px; max-width:100%; max-height:84vh; overflow-y:auto; box-shadow:0 16px 50px rgba(0,0,0,.35); padding:22px 24px; }
-  .panel h2 { margin:0 0 16px; font-size:18px; }
+  .panel h2 { margin:0 0 4px; font-size:18px; } .panel .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
   .field { margin-bottom:14px; } .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
   .field input:not([type=checkbox]), .field textarea { width:100%; font:inherit; color:var(--text); background:var(--side-bg); border:1px solid var(--divider); border-radius:8px; padding:8px 10px; }
   .field input[type=checkbox] { width:16px; height:16px; flex:0 0 16px; margin:0; }
@@ -341,7 +339,11 @@ INDEX_HTML = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<div class="topbar"><button class="iconbtn" id="theme" title="Toggle light/dark">◐</button></div>
+<div class="topbar">
+  <div class="brand">SUUR THINGS</div>
+  <span class="grow"></span>
+  <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
+</div>
 <div class="views">
   <aside class="sidebar" id="sidebar"></aside>
   <main class="main">
@@ -356,7 +358,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
 <div class="overlay" id="edit-overlay">
   <div class="panel">
-    <h2 id="edit-context"></h2>
+    <h2 id="edit-context"></h2><div class="sub">Edit task</div>
     <div class="field"><label>Title</label><input id="f-title"></div>
     <div class="field"><label>Notes</label><textarea id="f-notes"></textarea></div>
     <div class="field"><label>When (today / tomorrow / anytime / someday / yyyy-mm-dd)</label><input id="f-when" placeholder="leave blank to keep"></div>
@@ -377,8 +379,8 @@ INDEX_HTML = """<!DOCTYPE html>
 
 <div class="overlay" id="settings-overlay">
   <div class="panel">
-    <h2>Board settings</h2>
-    <div class="field"><label>Board name</label><input id="b-name"></div>
+    <h2>Board settings</h2><div class="sub">Changes save automatically.</div>
+    <div class="field"><label>Board name</label><input id="b-name" onchange="persistSettings()"></div>
     <div class="field">
       <label>Columns (project stages)</label>
       <div id="cols-edit"></div>
@@ -389,10 +391,9 @@ INDEX_HTML = """<!DOCTYPE html>
       <div id="includes"></div>
     </div>
     <div class="btnrow">
-      <button class="btn primary" onclick="saveBoardSettings()">Save</button>
-      <button class="btn danger" onclick="deleteBoard()">Delete board</button>
+      <button class="btn primary" onclick="closeOverlay('settings-overlay')">Done</button>
       <span class="spacer"></span>
-      <button class="btn ghost" onclick="closeOverlay('settings-overlay')">Cancel</button>
+      <button class="btn danger" onclick="deleteBoard()">Delete board</button>
     </div>
   </div>
 </div>
@@ -400,19 +401,18 @@ INDEX_HTML = """<!DOCTYPE html>
 <script>
 const $ = (s, r=document) => r.querySelector(s);
 let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{}};
-let MODE="list", CUR_BOARD=null, SEL={id:"today",icon:"⭐",title:"Today",kind:"builtin"}, EDIT_ID=null;
-let TODAY_CACHE=[];
+let MODE="list", CUR_BOARD=null, SEL=null, EDIT_ID=null, CURRENT_ID="today", TODAY_CACHE=[];
+let COLLAPSED=new Set(JSON.parse(localStorage.getItem("collapsed-areas")||"[]"));
 const DEFAULT_COLUMNS=["Backlog","In Progress","On Hold","Done"];
 const QUADS=[
-  {key:"do",       title:"Do First",  sub:"Urgent · Important",     cls:"q-do"},
-  {key:"schedule", title:"Schedule",  sub:"Important · Not urgent", cls:"q-sched"},
-  {key:"delegate", title:"Delegate",  sub:"Urgent · Not important", cls:"q-deleg"},
-  {key:"eliminate",title:"Don't Do",  sub:"Neither",                cls:"q-elim"},
+  {key:"do",title:"Do First",sub:"Urgent · Important",cls:"q-do"},
+  {key:"schedule",title:"Schedule",sub:"Important · Not urgent",cls:"q-sched"},
+  {key:"delegate",title:"Delegate",sub:"Urgent · Not important",cls:"q-deleg"},
+  {key:"eliminate",title:"Don't Do",sub:"Neither",cls:"q-elim"},
 ];
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
-// theme
 function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#theme").textContent=t==="dark"?"☀":"☾"; localStorage.setItem("things-theme",t); }
 applyTheme(localStorage.getItem("things-theme") || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"));
 $("#theme").onclick=()=>applyTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");
@@ -421,23 +421,33 @@ function ring(p){ const r=6,c=2*Math.PI*r,off=c*(1-p);
   if(p<=0) return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/></svg>`;
   return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/><circle class="ring-fg" cx="8" cy="8" r="6" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 8 8)"/></svg>`; }
 
-// data load
 async function loadConfig(){ CONFIG=(await (await fetch("/api/config")).json()).config; }
 async function saveConfig(){ const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(CONFIG)})).json(); if(r.ok) CONFIG=r.config; }
 
-// sidebar
+// --- navigation (hash-based, Back/Forward works) ---
+function go(h){ if(location.hash===h) route(); else location.hash=h; }
+function route(){
+  const h=location.hash;
+  if(h==="#p") return renderPriority();
+  if(h.startsWith("#b/")){ const id=decodeURIComponent(h.slice(3)); if(CONFIG.boards.find(b=>b.id===id)) return renderBoard(id); }
+  if(h.startsWith("#l/")){ const sel=resolveList(decodeURIComponent(h.slice(3))); if(sel) return renderList(sel); }
+  return go("#l/today");
+}
+window.addEventListener("hashchange", route);
+
+// --- sidebar ---
 async function loadSidebar(){
   const data=await (await fetch("/api/sidebar")).json();
-  AUTH=!!data.auth; const el=$("#sidebar"); el.innerHTML="";
-  if(!data.ok){ el.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
-  SIDEBAR=data.sidebar;
+  AUTH=!!data.auth; if(!data.ok){ $("#sidebar").innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
+  SIDEBAR=data.sidebar; renderSidebar();
+}
+function renderSidebar(){
+  const el=$("#sidebar"); el.innerHTML="";
   const bi=SIDEBAR.builtins, tIdx=bi.findIndex(b=>b.id==="today");
   bi.slice(0,tIdx+1).forEach(b=>el.appendChild(builtinEl(b)));
-  // Priority Square — right after Today
   const pri=document.createElement("div"); pri.className="nav-item"; pri.dataset.id="priority";
-  pri.innerHTML=`<span class="ico">◰</span><span class="label">Priority Square</span>`; pri.onclick=showPriority;
+  pri.innerHTML=`<span class="ico">◰</span><span class="label">Priority Square</span>`; pri.onclick=()=>go("#p");
   el.appendChild(pri);
-  // Boards group (compact)
   const gh=document.createElement("div"); gh.className="group-head";
   gh.innerHTML=`<span>Boards</span><span class="add" title="New board">＋</span>`;
   gh.querySelector(".add").onclick=(e)=>{e.stopPropagation(); newBoard();};
@@ -445,29 +455,36 @@ async function loadSidebar(){
   CONFIG.boards.forEach(b=>{
     const row=document.createElement("div"); row.className="project"; row.dataset.id=b.id;
     row.innerHTML=`<span class="ico">📋</span><span class="label">${esc(b.name)}</span>`;
-    row.onclick=()=>showBoard(b.id); el.appendChild(row);
+    row.onclick=()=>go("#b/"+encodeURIComponent(b.id)); el.appendChild(row);
   });
   bi.slice(tIdx+1).forEach(b=>el.appendChild(builtinEl(b)));
   el.appendChild(Object.assign(document.createElement("div"),{className:"nav-sep"}));
   const areas=SIDEBAR.areas.concat(SIDEBAR.arealess.length?[{uuid:null,title:"Projects",projects:SIDEBAR.arealess}]:[]);
   for(const a of areas){
+    const collapsible=!!a.uuid, collapsed=collapsible&&COLLAPSED.has(a.uuid);
     const head=document.createElement("div"); head.className="area-head"; if(a.uuid) head.dataset.id=a.uuid;
-    head.innerHTML=`<span class="stack">▥</span><span class="label">${esc(a.title)}</span>`;
-    if(a.uuid) head.onclick=()=>select({id:a.uuid,icon:"▥",title:a.title,kind:"area"});
+    head.innerHTML=`<span class="chev">${collapsible?(collapsed?"▶":"▼"):""}</span><span class="label">${esc(a.title)}</span>`;
+    if(collapsible){
+      head.querySelector(".chev").onclick=(e)=>{e.stopPropagation(); toggleArea(a.uuid);};
+      head.onclick=()=>go("#l/"+encodeURIComponent(a.uuid));
+    }
     el.appendChild(head);
-    for(const p of a.projects){
+    if(!collapsed) for(const p of a.projects){
       const row=document.createElement("div"); row.className="project"; row.dataset.id=p.uuid;
       row.innerHTML=`${ring(p.progress)}<span class="label">${esc(p.title)}</span>`;
-      row.onclick=()=>select({id:p.uuid,icon:"",title:p.title,kind:"project"}); el.appendChild(row);
+      row.onclick=()=>go("#l/"+encodeURIComponent(p.uuid)); el.appendChild(row);
     }
   }
+  setActive(CURRENT_ID);
 }
+function toggleArea(uuid){ COLLAPSED.has(uuid)?COLLAPSED.delete(uuid):COLLAPSED.add(uuid);
+  localStorage.setItem("collapsed-areas", JSON.stringify([...COLLAPSED])); renderSidebar(); }
 function builtinEl(b){
   const row=document.createElement("div"); row.className="nav-item"; row.dataset.id=b.id;
   row.innerHTML=`<span class="ico">${b.icon}</span><span class="label">${esc(b.title)}</span>`+(b.count!=null?`<span class="count">${b.count}</span>`:"");
-  row.onclick=()=>select({id:b.id,icon:b.icon,title:b.title,kind:"builtin"}); return row;
+  row.onclick=()=>go("#l/"+encodeURIComponent(b.id)); return row;
 }
-function setActive(id){ document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.toggle("active", n.dataset.id===String(id))); }
+function setActive(id){ CURRENT_ID=id; document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.toggle("active", n.dataset.id===String(id))); }
 function resolveList(id){
   const bi=(SIDEBAR&&SIDEBAR.builtins)||[]; const b=bi.find(x=>x.id===id);
   if(b) return {id:b.id,icon:b.icon,title:b.title,kind:"builtin"};
@@ -478,35 +495,22 @@ function resolveList(id){
   return null;
 }
 
-// routing (refresh-safe)
-function setHash(h){ if(location.hash!==h) history.replaceState(null,"",h); }
-function route(){
-  const h=location.hash;
-  if(h==="#p") return showPriority();
-  if(h.startsWith("#b/")){ const id=decodeURIComponent(h.slice(3)); if(CONFIG.boards.find(b=>b.id===id)) return showBoard(id); }
-  if(h.startsWith("#l/")){ const sel=resolveList(decodeURIComponent(h.slice(3))); if(sel) return select(sel); }
-  return select({id:"today",icon:"⭐",title:"Today",kind:"builtin"});
-}
-
-// list view
-async function select(sel){
-  MODE="list"; CUR_BOARD=null; SEL=sel; setHash("#l/"+encodeURIComponent(sel.id));
+// --- list view ---
+async function renderList(sel){
+  MODE="list"; CUR_BOARD=null; SEL=sel;
   $(".main").classList.remove("fill"); $("#board-gear").style.display="none"; setActive(sel.id);
   $("#head-ico").textContent=sel.icon||""; $("#head-title").textContent=sel.title;
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
-  renderList(data.items,data.kind);
-}
-function groupBy(items,key){ const g=[],idx={};
-  for(const it of items){ const k=it[key]||"\\u0000"; if(!(k in idx)){idx[k]=g.length; g.push({key:it[key]||null,items:[]});} g[idx[k]].items.push(it);} return g; }
-function renderList(items,kind){
-  const c=$("#content"); c.innerHTML="";
+  const items=data.items, kind=data.kind; c.innerHTML="";
   if(!items.length){ c.innerHTML=`<div class="empty">Nothing here.</div>`; return; }
   const key=kind==="project"?"heading_title":"project_title";
   const groups=groupBy(items,key).sort((a,b)=>(a.key?1:0)-(b.key?1:0));
   for(const g of groups){ if(g.key){ const h=document.createElement("div"); h.className="grp-head"; h.textContent=g.key; c.appendChild(h);} for(const it of g.items) c.appendChild(rowEl(it)); }
 }
+function groupBy(items,key){ const g=[],idx={};
+  for(const it of items){ const k=it[key]||"\\u0000"; if(!(k in idx)){idx[k]=g.length; g.push({key:it[key]||null,items:[]});} g[idx[k]].items.push(it);} return g; }
 function metaHtml(it){ let m="";
   if(it.has_notes) m+=`<span class="note-ico">📄</span>`;
   (it.tags||[]).forEach(t=>m+=`<span class="pill">${esc(t)}</span>`);
@@ -520,9 +524,9 @@ function rowEl(it){
   return row;
 }
 
-// board view: project/area cards staged into columns (placement = overlay)
-async function showBoard(id){
-  MODE="board"; CUR_BOARD=id; setHash("#b/"+encodeURIComponent(id)); setActive(id);
+// --- board view ---
+async function renderBoard(id){
+  MODE="board"; CUR_BOARD=id; setActive(id);
   $(".main").classList.add("fill"); $("#board-gear").style.display="flex";
   const b=CONFIG.boards.find(x=>x.id===id);
   $("#head-ico").textContent="📋"; $("#head-title").textContent=b?b.name:"Board";
@@ -531,7 +535,7 @@ async function showBoard(id){
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   c.innerHTML="";
   const wrap=document.createElement("div"); wrap.className="board-wrap";
-  if(!data.columns.length){ wrap.innerHTML=`<div class="empty">No columns yet. Open ⚙ to add stages and include projects/areas.</div>`; }
+  if(!data.columns.length) wrap.innerHTML=`<div class="empty">No columns yet. Open ⚙ to add stages and include projects/areas.</div>`;
   for(const col of data.columns) wrap.appendChild(boardColEl(col,id));
   c.appendChild(wrap);
 }
@@ -547,11 +551,12 @@ function boardColEl(col,boardId){
 }
 function boardCardEl(card){
   const el=document.createElement("div"); el.className="card"; el.draggable=true;
-  el.onclick=()=>{ const sel=resolveList(card.id); if(sel) select(sel); };
+  el.onclick=()=>go("#l/"+encodeURIComponent(card.id));
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",card.id); el.classList.add("dragging"); });
   el.addEventListener("dragend",()=>el.classList.remove("dragging"));
   el.innerHTML=`<div class="ct">${esc(card.title)}</div>`+
     (card.area_title?`<div class="csub">${esc(card.area_title)}</div>`:"")+
+    (card.desc?`<div class="cdesc">${esc(card.desc)}</div>`:"")+
     `<div class="cfoot"><span class="kind">${card.kind}</span>${ring(card.progress)}<span>${card.open} open${card.total?` / ${card.total}`:""}</span></div>`;
   return el;
 }
@@ -559,67 +564,60 @@ async function placeCard(boardId,itemId,column){
   const b=CONFIG.boards.find(x=>x.id===boardId); if(!b) return;
   b.placements=b.placements||{};
   if(column) b.placements[itemId]=column; else delete b.placements[itemId];
-  await saveConfig(); showBoard(boardId);
+  await saveConfig(); renderBoard(boardId);
 }
 
-// priority square: Today tasks → Eisenhower quadrants (quadrant = overlay)
-async function showPriority(){
-  MODE="priority"; CUR_BOARD=null; setHash("#p"); setActive("priority");
+// --- priority square ---
+async function renderPriority(){
+  MODE="priority"; CUR_BOARD=null; setActive("priority");
   $(".main").classList.add("fill"); $("#board-gear").style.display="none";
   $("#head-ico").textContent="◰"; $("#head-title").textContent="Priority Square";
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/items?id=today")).json();
-  TODAY_CACHE = data.ok ? data.items : [];
-  renderPriority();
+  TODAY_CACHE=data.ok?data.items:[]; drawPriority();
 }
-function renderPriority(){
+function drawPriority(){
   const c=$("#content"); c.innerHTML="";
   const pr=CONFIG.priority||{};
   const wrap=document.createElement("div"); wrap.className="pri-wrap";
-  // pool (unassigned)
   const pool=document.createElement("div"); pool.className="pri-pool";
   const unassigned=TODAY_CACHE.filter(t=>!QUADS.some(q=>q.key===pr[t.uuid]));
   pool.innerHTML=`<div class="col-head"><span>Today</span><span>${unassigned.length}</span></div>`;
-  const pcards=document.createElement("div"); pcards.className="col-cards";
-  if(!unassigned.length) pcards.innerHTML=`<div class="empty" style="padding:16px 6px">All sorted 🎉</div>`;
-  unassigned.forEach(t=>pcards.appendChild(priCardEl(t)));
-  pool.appendChild(pcards);
-  dropZone(pool, null);
-  wrap.appendChild(pool);
-  // matrix
+  const pc=document.createElement("div"); pc.className="col-cards";
+  if(!unassigned.length) pc.innerHTML=`<div class="empty" style="padding:16px 6px">All sorted 🎉</div>`;
+  unassigned.forEach(t=>pc.appendChild(priCardEl(t))); pool.appendChild(pc); dropZone(pool,null); wrap.appendChild(pool);
   const matrix=document.createElement("div"); matrix.className="matrix";
   for(const q of QUADS){
     const quad=document.createElement("div"); quad.className="quad "+q.cls;
     quad.innerHTML=`<div class="quad-head"><div class="qt">${q.title}</div><div class="qs">${q.sub}</div></div>`;
     const cards=document.createElement("div"); cards.className="cards";
     TODAY_CACHE.filter(t=>pr[t.uuid]===q.key).forEach(t=>cards.appendChild(priCardEl(t)));
-    quad.appendChild(cards); dropZone(quad, q.key); matrix.appendChild(quad);
+    quad.appendChild(cards); dropZone(quad,q.key); matrix.appendChild(quad);
   }
   wrap.appendChild(matrix); c.appendChild(wrap);
 }
 function priCardEl(t){
-  const el=document.createElement("div"); el.className="pcard"; el.draggable=true;
-  el.onclick=()=>openEdit(t.uuid);
+  const el=document.createElement("div"); el.className="pcard"; el.draggable=true; el.onclick=()=>openEdit(t.uuid);
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",t.uuid); el.classList.add("dragging"); });
   el.addEventListener("dragend",()=>el.classList.remove("dragging"));
   el.innerHTML=`<div class="pt">${esc(t.title||"(untitled)")}</div>`+(t.project_title?`<div class="psub">${esc(t.project_title)}</div>`:"");
   return el;
 }
-function dropZone(elm, quad){
+function dropZone(elm,quad){
   elm.addEventListener("dragover",e=>{ e.preventDefault(); elm.classList.add("drop"); });
   elm.addEventListener("dragleave",()=>elm.classList.remove("drop"));
   elm.addEventListener("drop",e=>{ e.preventDefault(); elm.classList.remove("drop");
     const id=e.dataTransfer.getData("text/id"); if(!id) return;
-    CONFIG.priority=CONFIG.priority||{};
-    if(quad) CONFIG.priority[id]=quad; else delete CONFIG.priority[id];
-    saveConfig().then(renderPriority);
+    CONFIG.priority=CONFIG.priority||{}; if(quad) CONFIG.priority[id]=quad; else delete CONFIG.priority[id];
+    saveConfig().then(drawPriority);
   });
 }
 
-// board create / settings
+// --- board create / settings (auto-save) ---
 async function newBoard(){
   const b={id:uid(),name:"New Board",columns:[...DEFAULT_COLUMNS],include_areas:[],include_projects:[],placements:{}};
-  CONFIG.boards.push(b); await saveConfig(); await loadSidebar(); showBoard(b.id); openBoardSettings();
+  CONFIG.boards.push(b); await saveConfig(); renderSidebar(); CUR_BOARD=b.id; go("#b/"+encodeURIComponent(b.id));
+  setTimeout(openBoardSettings,80);
 }
 function openBoardSettings(){
   const b=CONFIG.boards.find(x=>x.id===CUR_BOARD); if(!b) return;
@@ -629,34 +627,35 @@ function openBoardSettings(){
   const aSet=new Set(b.include_areas||[]), pSet=new Set(b.include_projects||[]);
   for(const a of (SIDEBAR.areas||[])){
     const ah=document.createElement("div"); ah.className="area-pick";
-    ah.innerHTML=`<label class="pick"><input type="checkbox" data-area="${a.uuid}" ${aSet.has(a.uuid)?"checked":""}> ${esc(a.title)} <span style="color:var(--muted);font-weight:400">(entire area)</span></label>`;
+    ah.innerHTML=`<label class="pick"><input type="checkbox" data-area="${a.uuid}" ${aSet.has(a.uuid)?"checked":""} onchange="persistSettings()"> ${esc(a.title)} <span style="color:var(--muted);font-weight:400">(entire area)</span></label>`;
     inc.appendChild(ah);
     for(const p of a.projects){
       const pe=document.createElement("div"); pe.className="proj-pick";
-      pe.innerHTML=`<label class="pick"><input type="checkbox" data-project="${p.uuid}" ${pSet.has(p.uuid)?"checked":""}> ${esc(p.title)}</label>`;
+      pe.innerHTML=`<label class="pick"><input type="checkbox" data-project="${p.uuid}" ${pSet.has(p.uuid)?"checked":""} onchange="persistSettings()"> ${esc(p.title)}</label>`;
       inc.appendChild(pe);
     }
   }
   openOverlay("settings-overlay");
 }
 function colInput(val){ const d=document.createElement("div"); d.className="col-edit";
-  d.innerHTML=`<input value="${esc(val)}"><button class="btn ghost" onclick="this.parentElement.remove()">✕</button>`; return d; }
+  d.innerHTML=`<input value="${esc(val)}" onchange="persistSettings()"><button class="btn ghost" onclick="this.parentElement.remove(); persistSettings()">✕</button>`; return d; }
 function addCol(){ $("#cols-edit").appendChild(colInput("")); }
-async function saveBoardSettings(){
+async function persistSettings(){
   const b=CONFIG.boards.find(x=>x.id===CUR_BOARD); if(!b) return;
   b.name=$("#b-name").value.trim()||"Untitled board";
   b.columns=[...document.querySelectorAll("#cols-edit input")].map(i=>i.value.trim()).filter(Boolean);
   b.include_areas=[...document.querySelectorAll("#includes input[data-area]:checked")].map(i=>i.dataset.area);
   b.include_projects=[...document.querySelectorAll("#includes input[data-project]:checked")].map(i=>i.dataset.project);
-  await saveConfig(); closeOverlay("settings-overlay"); await loadSidebar(); showBoard(CUR_BOARD);
+  await saveConfig(); renderSidebar();
+  if(MODE==="board"&&CUR_BOARD===b.id) renderBoard(b.id);   // refresh behind the modal
 }
 async function deleteBoard(){
   if(!confirm("Delete this board? (Your projects, tasks and tags in Things are untouched.)")) return;
   CONFIG.boards=CONFIG.boards.filter(x=>x.id!==CUR_BOARD); await saveConfig();
-  closeOverlay("settings-overlay"); await loadSidebar(); select({id:"today",icon:"⭐",title:"Today",kind:"builtin"});
+  closeOverlay("settings-overlay"); renderSidebar(); go("#l/today");
 }
 
-// edit dialog
+// --- edit dialog ---
 async function openEdit(uuid){
   EDIT_ID=uuid;
   const data=await (await fetch("/api/item?id="+encodeURIComponent(uuid))).json();
@@ -682,8 +681,7 @@ async function cancelTask(){ await postUpdate({id:EDIT_ID,canceled:true}); }
 async function postUpdate(body){
   const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
   if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
-  closeOverlay("edit-overlay");
-  setTimeout(()=>{ MODE==="board"?showBoard(CUR_BOARD):MODE==="priority"?showPriority():select(SEL); },350);
+  closeOverlay("edit-overlay"); setTimeout(route,350);   // re-render current view
 }
 function openInThings(){ if(EDIT_ID) window.location.href="things:///show?id="+encodeURIComponent(EDIT_ID); }
 

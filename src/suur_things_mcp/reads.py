@@ -332,9 +332,11 @@ def board_cards(board: dict) -> list[dict]:
         if not p:
             continue
         c = counts.get(pid, {"open": 0, "total": 0})
+        notes = (p.get("notes") or "").strip()
         cards.append({
             "kind": "project", "id": pid, "title": p["title"],
             "area_title": p.get("area_title"),
+            "desc": notes[:160] + ("…" if len(notes) > 160 else ""),
             "open": c["open"], "total": c["total"], "progress": _ratio(c["open"], c["total"]),
         })
     for aid in board.get("include_areas") or []:

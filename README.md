@@ -144,6 +144,9 @@ the ⚙ panel (Notion-style):
 - **Columns** — your project stages; rename/add/remove freely.
 - **Include** — check a **whole area** (great for meta-project areas) or **specific
   projects**. Inclusion is area/project level, never single tasks.
+- Changes in the ⚙ panel **save automatically**; **Delete board** lives there too.
+  Project cards show the project's description; areas collapse in the sidebar; your
+  current view and theme survive a refresh, and the browser Back button works.
 
 **Priority Square** — an Eisenhower matrix over your Today list. Drag tasks into **Do
 First / Schedule / Delegate / Don't Do** to plan your day.
