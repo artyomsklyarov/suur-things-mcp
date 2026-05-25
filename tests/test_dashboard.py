@@ -160,6 +160,19 @@ def test_link_table_multi_repo_and_normalization(tmp_path, monkeypatch):
     assert cfg.links()["X"]["repos"][0]["github"] is None
 
 
+def test_repo_path_strips_surrounding_quotes(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+    import os as _os
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    d = tmp_path / "My Repo"; d.mkdir()
+    cfg.set_link("P", "project", f"'{d}'")  # pasted shell-quoted path
+    stored = cfg.links()["P"]["repos"][0]["repo"]
+    assert stored == _os.path.normcase(_os.path.realpath(str(d)))  # quotes stripped, absolute
+
+
 def test_link_for_path_longest_match_and_stale(tmp_path, monkeypatch):
     monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
     import importlib
@@ -189,6 +202,36 @@ def test_open_endpoint_validates_without_shelling(monkeypatch, tmp_path):
     cfg.set_link("P", "project", str(tmp_path), "owner/repo")
     assert client.post("/api/open", json={"item_id": "P", "repo_index": 9, "target": "github"}).json()["ok"] is False
     assert client.post("/api/open", json={"item_id": "P", "repo_index": 0, "target": "evil"}).json()["ok"] is False
+
+
+def test_merge_preserves_other_sections(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    repo = tmp_path / "r"; repo.mkdir()
+    cfg.set_link("ILTY", "project", str(repo), "owner/ilty")
+    # Saving ONLY boards must NOT wipe the link written separately (the old bug).
+    cfg.merge({"boards": [{"id": "b", "name": "B", "columns": ["X"]}]})
+    assert "ILTY" in cfg.load()["links"]
+    assert cfg.load()["boards"][0]["name"] == "B"
+
+
+def test_set_item_repos_isolated(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    a = tmp_path / "a"; a.mkdir()
+    b = tmp_path / "b"; b.mkdir()
+    cfg.set_link("A", "project", str(a))
+    # Editing B's repos leaves A untouched; empty list removes the item.
+    cfg.set_item_repos("B", "project", [{"repo": str(b), "label": "web"}])
+    assert {"A", "B"} <= set(cfg.load()["links"])
+    cfg.set_item_repos("B", "project", [])
+    assert "B" not in cfg.load()["links"] and "A" in cfg.load()["links"]
 
 
 def test_origin_guard_blocks_cross_site():

@@ -30,7 +30,13 @@ _GITHUB_RE = re.compile(r"^(?:https?://github\.com/)?([\w.-]+/[\w.-]+?)(?:\.git)
 def _normalize_repo(path: Any) -> str | None:
     if not path:
         return None
-    return os.path.normcase(os.path.realpath(os.path.expanduser(str(path))))
+    # Strip surrounding quotes/whitespace — pasted paths often arrive shell-quoted
+    # (e.g. '/Users/.../My Folder'). Without this they look relative and realpath
+    # would wrongly prepend the process cwd.
+    s = str(path).strip().strip("'\"").strip()
+    if not s:
+        return None
+    return os.path.normcase(os.path.realpath(os.path.expanduser(s)))
 
 
 def _normalize_github(value: Any) -> str | None:
@@ -203,6 +209,38 @@ def remove_link(item_uuid: str, repo: str | None = None) -> dict[str, Any]:
         item["repos"] = [r for r in item.get("repos", []) if r.get("repo") != norm]
         if not item["repos"]:
             table.pop(str(item_uuid), None)
+    return save(cfg)
+
+
+def set_item_repos(item_uuid: str, kind: str, repos: list) -> dict[str, Any]:
+    """Replace just one item's repo list (or remove it), preserving everything else.
+
+    Loads fresh + saves, so it never clobbers other items, boards, or priority —
+    this is what makes concurrent edits (CLI, another tab) safe.
+    """
+    cfg = load()
+    table = cfg.setdefault("links", {})
+    clean = [r for r in (repos or []) if isinstance(r, dict) and r.get("repo")]
+    if clean:
+        table[str(item_uuid)] = {
+            "kind": kind if kind in ("project", "area") else "project",
+            "repos": clean,
+        }
+    else:
+        table.pop(str(item_uuid), None)
+    return save(cfg)
+
+
+def merge(partial: dict) -> dict[str, Any]:
+    """Save only the top-level sections present in ``partial`` (boards/priority/links).
+
+    Sections not included are read fresh from disk and preserved, so saving boards
+    can't wipe links written by another writer, and vice versa.
+    """
+    cfg = load()
+    for key in ("boards", "priority", "links"):
+        if key in partial:
+            cfg[key] = partial[key]
     return save(cfg)
 
 

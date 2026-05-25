@@ -138,8 +138,23 @@ async def _config_get(_request: Request) -> JSONResponse:
 
 
 async def _config_post(request: Request) -> JSONResponse:
+    # Section merge: only the keys present in the body are overwritten; others are
+    # read fresh and preserved (so saving boards can't wipe links, and vice versa).
     try:
-        return JSONResponse({"ok": True, "config": boardcfg.save(await request.json())})
+        return JSONResponse({"ok": True, "config": boardcfg.merge(await request.json())})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+
+async def _link_post(request: Request) -> JSONResponse:
+    """Set one item's repo list, without touching anything else in the config."""
+    try:
+        body = await request.json()
+        item_id = str(body.get("item_id") or "")
+        if not item_id:
+            return JSONResponse({"ok": False, "error": "missing item_id"})
+        cfg = boardcfg.set_item_repos(item_id, body.get("kind", "project"), body.get("repos") or [])
+        return JSONResponse({"ok": True, "config": cfg})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc)})
 
@@ -214,6 +229,7 @@ def create_app() -> Starlette:
             Route("/api/board", _board),
             Route("/api/config", _config_get),
             Route("/api/config", _config_post, methods=["POST"]),
+            Route("/api/link", _link_post, methods=["POST"]),
             Route("/api/update", _update, methods=["POST"]),
             Route("/api/open", _open, methods=["POST"]),
         ],
@@ -500,7 +516,18 @@ function ring(p){ const r=6,c=2*Math.PI*r,off=c*(1-p);
   return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/><circle class="ring-fg" cx="8" cy="8" r="6" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 8 8)"/></svg>`; }
 
 async function loadConfig(){ CONFIG=(await (await fetch("/api/config")).json()).config; }
-async function saveConfig(){ const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(CONFIG)})).json(); if(r.ok) CONFIG=r.config; }
+// Save only the sections this client owns in this action, so a concurrent edit
+// (CLI / another tab) to a different section is never clobbered.
+async function saveConfig(){
+  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({boards:CONFIG.boards, priority:CONFIG.priority})})).json();
+  if(r.ok) CONFIG=r.config;
+}
+async function saveItemRepos(itemId, kind, repos){
+  const r=await (await fetch("/api/link",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({item_id:itemId, kind, repos})})).json();
+  if(r.ok) CONFIG=r.config;
+}
 
 // --- navigation (hash-based, Back/Forward works) ---
 function go(h){ if(location.hash===h) route(); else location.hash=h; }
@@ -677,10 +704,7 @@ async function persistRepos(){
     repo:  row.querySelector(".rr-path").value.trim(),
     github:row.querySelector(".rr-gh").value.trim()||null,
   })).filter(r=>r.repo);
-  CONFIG.links=CONFIG.links||{};
-  if(repos.length) CONFIG.links[REPOS_ITEM.id]={kind:REPOS_ITEM.kind, repos};
-  else delete CONFIG.links[REPOS_ITEM.id];
-  await saveConfig();
+  await saveItemRepos(REPOS_ITEM.id, REPOS_ITEM.kind, repos);  // per-item, no clobber
   if(MODE==="board"&&CUR_BOARD) renderBoard(CUR_BOARD);
 }
 async function placeCard(boardId,itemId,column){
