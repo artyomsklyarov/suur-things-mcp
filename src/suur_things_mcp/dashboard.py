@@ -403,6 +403,8 @@ INDEX_HTML = """<!DOCTYPE html>
   .col-edit { display:flex; gap:6px; margin:5px 0; align-items:center; } .col-edit input { flex:1; }
   .area-pick { font-weight:600; margin:12px 0 4px; } .proj-pick { padding-left:18px; }
   .pick { display:flex; align-items:center; gap:8px; padding:3px 0; cursor:pointer; font-weight:400; }
+  .repo-row { display:flex; gap:6px; margin:6px 0; align-items:center; }
+  .repo-row .rr-label { flex:0 0 130px; } .repo-row .rr-path { flex:1; } .repo-row .rr-gh { flex:0 0 160px; }
 </style>
 </head>
 <body>
@@ -441,6 +443,15 @@ INDEX_HTML = """<!DOCTYPE html>
       <button class="btn ghost" onclick="openInThings()">Open in Things ↗</button>
       <button class="btn ghost" onclick="closeOverlay('edit-overlay')">Close</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="repos-overlay">
+  <div class="panel">
+    <h2 id="repos-title">Linked repos</h2><div class="sub">A project can have several (e.g. app + website). Changes save automatically.</div>
+    <div id="repos-list"></div>
+    <button class="btn" style="margin-top:6px" onclick="addRepoRow()">+ Add repo</button>
+    <div class="btnrow"><button class="btn primary" onclick="closeOverlay('repos-overlay')">Done</button></div>
   </div>
 </div>
 
@@ -629,7 +640,7 @@ function boardCardEl(card){
       (r.github?`<button class="rb" title="Open on GitHub" onclick="event.stopPropagation();openRepo('${card.id}',${i},'github')">↗</button>`:"")+
       `</span>`;
   });
-  repoHtml += `<button class="rb add" title="Link a repo" onclick="event.stopPropagation();linkRepoPrompt('${card.id}','${card.kind}')">🔗 repo</button>`;
+  repoHtml += `<button class="rb add" title="Manage repos" onclick="event.stopPropagation();openReposModal('${card.id}','${card.kind}','${encodeURIComponent(card.title)}')">🔗 repos</button>`;
   el.innerHTML=`<div class="ct">${esc(card.title)}</div>`+
     (card.area_title?`<div class="csub">${esc(card.area_title)}</div>`:"")+
     (card.desc?`<div class="cdesc">${esc(card.desc)}</div>`:"")+
@@ -641,15 +652,36 @@ async function openRepo(itemId, idx, target){
   const r=await (await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item_id:itemId,repo_index:idx,target})})).json();
   if(!r.ok) alert("Open failed: "+(r.error||""));
 }
-function linkRepoPrompt(itemId, kind){
-  const path=prompt("Absolute path to the local repo:"); if(!path) return;
-  const github=prompt("GitHub (owner/repo or URL) — optional:")||null;
-  const label=prompt("Label (optional, e.g. iOS app):")||null;
+let REPOS_ITEM=null;
+function openReposModal(itemId, kind, titleEnc){
+  REPOS_ITEM={id:itemId, kind};
+  $("#repos-title").textContent = "Repos · " + decodeURIComponent(titleEnc);
+  const list=$("#repos-list"); list.innerHTML="";
+  const repos=((CONFIG.links||{})[itemId]||{}).repos||[];
+  (repos.length?repos:[{}]).forEach(r=>list.appendChild(repoRow(r)));
+  openOverlay("repos-overlay");
+}
+function repoRow(r){
+  const d=document.createElement("div"); d.className="repo-row";
+  d.innerHTML=`<input class="rr-label" placeholder="Label (e.g. iOS app)" value="${esc(r.label||"")}" onchange="persistRepos()">`+
+    `<input class="rr-path" placeholder="/absolute/path/to/repo" value="${esc(r.repo||"")}" onchange="persistRepos()">`+
+    `<input class="rr-gh" placeholder="owner/repo (optional)" value="${esc(r.github||"")}" onchange="persistRepos()">`+
+    `<button class="btn ghost" title="Remove" onclick="this.parentElement.remove(); persistRepos()">✕</button>`;
+  return d;
+}
+function addRepoRow(){ $("#repos-list").appendChild(repoRow({})); }
+async function persistRepos(){
+  if(!REPOS_ITEM) return;
+  const repos=[...document.querySelectorAll("#repos-list .repo-row")].map(row=>({
+    label: row.querySelector(".rr-label").value.trim()||null,
+    repo:  row.querySelector(".rr-path").value.trim(),
+    github:row.querySelector(".rr-gh").value.trim()||null,
+  })).filter(r=>r.repo);
   CONFIG.links=CONFIG.links||{};
-  const item=CONFIG.links[itemId]||{kind, repos:[]};
-  item.kind=kind; item.repos=item.repos||[]; item.repos.push({repo:path, github, label});
-  CONFIG.links[itemId]=item;
-  saveConfig().then(()=>renderBoard(CUR_BOARD));
+  if(repos.length) CONFIG.links[REPOS_ITEM.id]={kind:REPOS_ITEM.kind, repos};
+  else delete CONFIG.links[REPOS_ITEM.id];
+  await saveConfig();
+  if(MODE==="board"&&CUR_BOARD) renderBoard(CUR_BOARD);
 }
 async function placeCard(boardId,itemId,column){
   const b=CONFIG.boards.find(x=>x.id===boardId); if(!b) return;
