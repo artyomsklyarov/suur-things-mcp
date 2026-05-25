@@ -661,10 +661,22 @@ INDEX_HTML = """<!DOCTYPE html>
   .vt { border:0; background:transparent; color:var(--chip-fg); font:inherit; font-size:12.5px; padding:4px 12px; border-radius:6px; cursor:pointer; }
   .vt.on { background:var(--main-bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.08); font-weight:600; }
 
-  /* Quick search */
-  .search { margin-left:20px; width:240px; max-width:38vw; font:inherit; font-size:13px; padding:6px 11px;
-    border-radius:8px; border:1px solid var(--divider); background:var(--side-bg); color:var(--text); }
-  .search::placeholder { color:var(--muted); } .search:focus { outline:none; border-color:var(--accent); }
+  /* ⌘K command palette */
+  .cmdk-btn { margin-left:20px; display:flex; align-items:center; gap:8px; width:280px; max-width:40vw; font:inherit;
+    font-size:13px; padding:6px 11px; border-radius:8px; border:1px solid var(--divider); background:var(--side-bg); color:var(--muted); cursor:pointer; }
+  .cmdk-btn:hover { border-color:var(--pill-border); }
+  .cmdk-btn svg { width:14px; height:14px; flex:0 0 14px; }
+  .cmdk-btn .ck-ph { flex:1; text-align:left; }
+  .kbd { font-size:11px; border:1px solid var(--pill-border); border-radius:5px; padding:0 5px; color:var(--muted); }
+  .ck-panel { background:var(--main-bg); border-radius:12px; width:560px; max-width:92vw; box-shadow:0 18px 56px rgba(0,0,0,.4); overflow:hidden; }
+  #cmdk-input { width:100%; border:0; border-bottom:1px solid var(--divider); background:transparent; color:var(--text); font:15px/1.4 inherit; padding:15px 18px; outline:none; }
+  #cmdk-input::placeholder { color:var(--muted); }
+  .ck-list { max-height:60vh; overflow-y:auto; padding:6px; }
+  .ck-row { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; cursor:pointer; }
+  .ck-row.sel { background:var(--row-sel); }
+  .ck-ico { width:18px; flex:0 0 18px; display:flex; align-items:center; justify-content:center; } .ck-ico svg { width:16px; height:16px; }
+  .ck-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ck-hint { color:var(--muted); font-size:11.5px; white-space:nowrap; }
 
   /* Project cards (area view) */
   .projcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; max-width:760px; margin:2px 0 22px; }
@@ -805,7 +817,10 @@ INDEX_HTML = """<!DOCTYPE html>
 <body>
 <div class="topbar">
   <div class="brand">SUUR THINGS</div>
-  <input id="q" class="search" placeholder="Search tasks…" autocomplete="off" oninput="onSearch()">
+  <button id="cmdk-btn" class="cmdk-btn" onclick="openCmdk()" title="Search & commands (⌘K)">
+    <svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.1"/><path d="M9.9 9.9 14 14"/></g></svg>
+    <span class="ck-ph">Search &amp; commands</span><span class="kbd">⌘K</span>
+  </button>
   <span class="grow"></span>
   <button class="iconbtn" id="add-btn" title="Add to-do or project" onclick="openAdd()">＋</button>
   <button class="iconbtn" id="prefs-btn" title="Preferences" onclick="openPrefs()">⚙</button>
@@ -879,6 +894,13 @@ INDEX_HTML = """<!DOCTYPE html>
       <span class="spacer"></span>
       <button class="btn ghost" onclick="closeOverlay('organize-overlay')">Close</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="cmdk" style="align-items:flex-start; padding-top:84px">
+  <div class="ck-panel">
+    <input id="cmdk-input" placeholder="Search tasks or type a command…" autocomplete="off">
+    <div class="ck-list" id="cmdk-list"></div>
   </div>
 </div>
 
@@ -1030,25 +1052,65 @@ function route(){
 }
 window.addEventListener("hashchange", route);
 
-// --- quick search (things.search over the whole DB) ---
-let SEARCH_T=null;
-function onSearch(){ clearTimeout(SEARCH_T); SEARCH_T=setTimeout(runSearch,220); }
-async function runSearch(){
-  const q=$("#q").value.trim();
-  if(q.length<2){ if(MODE==="search") route(); return; }
-  MODE="search"; CUR_BOARD=null;
-  $("#viewtog").classList.remove("show"); $("#filterbar").classList.remove("show");
-  $(".main").classList.remove("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
-  document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.remove("active"));
-  $("#head-ico").innerHTML=SVG.search; $("#head-title").textContent="Search"; setHeadEditable(null);
-  const c=$("#content"); c.innerHTML=`<div class="empty">searching…</div>`;
-  const data=await (await fetch("/api/search?q="+encodeURIComponent(q))).json();
-  if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
-  LIST_ITEMS=data.items; LAST_ITEMS={}; data.items.forEach(it=>LAST_ITEMS[it.uuid]=it.title);
-  c.innerHTML="";
-  if(!data.items.length){ c.innerHTML=`<div class="empty">No matches for “${esc(q)}”.</div>`; return; }
-  data.items.forEach(it=>c.appendChild(rowEl(it)));
+// --- ⌘K command palette (replaces the search box: navigate + search + create + view) ---
+let CK_ITEMS=[], CK_SEL=0, CK_T=null;
+function fuzzy(q,s){ if(!q) return true; q=q.toLowerCase(); s=(s||"").toLowerCase(); let i=0; for(let j=0;j<s.length&&i<q.length;j++){ if(s[j]===q[i]) i++; } return i===q.length; }
+function ckCommands(){
+  const out=[];
+  ((SIDEBAR&&SIDEBAR.builtins)||[]).forEach(b=>out.push({label:b.title, hint:"Go", icon:SVG[b.id]||"", run:()=>go("#l/"+encodeURIComponent(b.id))}));
+  out.push({label:"Priority Matrix", hint:"Go", icon:SVG.priority, run:()=>go("#p")});
+  (CONFIG.boards||[]).forEach(b=>out.push({label:b.name, hint:"Board", icon:SVG.board, run:()=>go("#b/"+encodeURIComponent(b.id))}));
+  ((SIDEBAR&&SIDEBAR.areas)||[]).forEach(a=>a.projects.forEach(p=>out.push({label:p.title, hint:"Project", icon:"", run:()=>go("#l/"+encodeURIComponent(p.uuid))})));
+  ((SIDEBAR&&SIDEBAR.arealess)||[]).forEach(p=>out.push({label:p.title, hint:"Project", icon:"", run:()=>go("#l/"+encodeURIComponent(p.uuid))}));
+  out.push({label:"New to-do…", hint:"Create", icon:"", run:()=>{closeCmdk(); openAdd();}});
+  out.push({label:"New project…", hint:"Create", icon:"", run:()=>{closeCmdk(); openAdd(); setAddKind("project");}});
+  out.push({label:"New board", hint:"Create", icon:"", run:()=>{closeCmdk(); newBoard();}});
+  if(SEL && MODE!=="board" && MODE!=="about"){ [["list","List"],["matrix","Matrix"],["cards","Cards"],["timeline","Timeline"]].forEach(([v,l])=>out.push({label:"Switch to "+l+" view", hint:"View", icon:"", run:()=>{closeCmdk(); setListView(v);}})); }
+  out.push({label:"Toggle light / dark", hint:"App", icon:"", run:()=>{ $("#theme").click(); }});
+  out.push({label:"Preferences", hint:"App", icon:"", run:()=>{closeCmdk(); openPrefs();}});
+  out.push({label:"About · Credits", hint:"App", icon:SVG.info, run:()=>{closeCmdk(); go("#about");}});
+  return out;
 }
+function openCmdk(){ openOverlay("cmdk"); const i=$("#cmdk-input"); i.value=""; ckRender(""); setTimeout(()=>i.focus(),0); }
+function closeCmdk(){ closeOverlay("cmdk"); }
+function ckRender(q){
+  const all=ckCommands();
+  const base = q ? all.filter(c=>fuzzy(q,c.label)) : all.slice(0,9);
+  CK_ITEMS=base; CK_SEL=0; ckDraw();
+  if(q.length>=2){
+    clearTimeout(CK_T);
+    CK_T=setTimeout(async()=>{
+      if($("#cmdk-input").value.trim()!==q) return;
+      try{
+        const d=await (await fetch("/api/search?q="+encodeURIComponent(q))).json();
+        if(!d.ok || $("#cmdk-input").value.trim()!==q) return;
+        const tasks=(d.items||[]).slice(0,8).map(it=>({label:it.title||"(untitled)", hint:it.project_title?("Task · "+it.project_title):"Task", icon:"", run:()=>{closeCmdk(); openEdit(it.uuid);}}));
+        CK_ITEMS=base.concat(tasks); ckDraw();
+      }catch(e){}
+    },200);
+  }
+}
+function ckDraw(){
+  const box=$("#cmdk-list"); box.innerHTML="";
+  if(!CK_ITEMS.length){ box.innerHTML=`<div class="empty" style="padding:16px">No matches</div>`; return; }
+  CK_ITEMS.forEach((c,i)=>{
+    const row=document.createElement("div"); row.className="ck-row"+(i===CK_SEL?" sel":"");
+    row.innerHTML=`<span class="ck-ico">${c.icon||""}</span><span class="ck-label">${esc(c.label)}</span><span class="ck-hint">${esc(c.hint||"")}</span>`;
+    row.addEventListener("mousedown",e=>{ e.preventDefault(); c.run(); });
+    row.addEventListener("mouseenter",()=>{ CK_SEL=i; [...box.children].forEach((ch,j)=>ch.classList.toggle("sel",j===i)); });
+    box.appendChild(row);
+  });
+}
+function ckScroll(){ const box=$("#cmdk-list"), sel=box.children[CK_SEL]; if(sel) sel.scrollIntoView({block:"nearest"}); }
+(()=>{ const i=$("#cmdk-input"); if(!i) return;
+  i.addEventListener("input",e=>ckRender(e.target.value.trim()));
+  i.addEventListener("keydown",e=>{
+    if(e.key==="ArrowDown"){ e.preventDefault(); CK_SEL=Math.min(CK_SEL+1,CK_ITEMS.length-1); ckDraw(); ckScroll(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); CK_SEL=Math.max(CK_SEL-1,0); ckDraw(); ckScroll(); }
+    else if(e.key==="Enter"){ e.preventDefault(); const c=CK_ITEMS[CK_SEL]; if(c) c.run(); }
+  });
+  document.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){ e.preventDefault(); openCmdk(); } });
+})();
 
 // --- sidebar ---
 async function loadSidebar(){
