@@ -414,6 +414,7 @@ async def _organize_post(request: Request) -> JSONResponse:
 
     model = boardcfg.prefs().get("agent_model") or organizer.DEFAULT_MODEL
     job_id = _uuid.uuid4().hex[:8]
+    titles = {t["uuid"]: t.get("title") for t in tasks}   # so the review modal can name each task
     _ORGANIZE_JOBS[job_id] = {"status": "running", "folder_id": folder_id, "workflow": workflow,
                               "ts": time.time(), "suggestions": None, "error": None, "count": len(tasks)}
 
@@ -421,6 +422,8 @@ async def _organize_post(request: Request) -> JSONResponse:
         try:
             sug = organizer.organize(title, tasks, existing_tags, agent, model,
                                      workflow=workflow, projects=dest_names)
+            for s in sug:
+                s["title"] = titles.get(s["uuid"])
             _ORGANIZE_JOBS[job_id].update(status="done", suggestions=sug, ts=time.time())
         except Exception as exc:  # noqa: BLE001
             _ORGANIZE_JOBS[job_id].update(status="error", error=str(exc), ts=time.time())
@@ -547,7 +550,7 @@ INDEX_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SUUR Things</title>
+<title>SUUR Things</title>\n<link rel="icon" type="image/png" href="data:image/png;base64,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">
 <style>
   :root {
     --side-bg:#f3f4f6; --main-bg:#ffffff; --text:#1d1d20; --muted:#8a8f98;
@@ -763,7 +766,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .ec-link:hover { background:var(--row-hover); color:var(--text); }
 
   .org-row { border:1px solid var(--divider); border-radius:9px; padding:10px 12px; margin:8px 0; }
-  .org-cur { color:var(--muted); font-size:12px; text-decoration:line-through; margin-bottom:5px; }
+  .org-cur { color:var(--text); font-size:13px; font-weight:600; margin-bottom:6px; }
   .org-line { display:flex; gap:8px; align-items:flex-start; padding:3px 0; cursor:pointer; font-size:13px; }
   .org-line input { margin-top:3px; flex:0 0 auto; }
   .org-reason { color:var(--muted); font-size:11.5px; margin-top:4px; font-style:italic; }
@@ -898,7 +901,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
 <div class="overlay" id="organize-overlay">
   <div class="panel" style="width:640px">
-    <h2>✨ Organize folder</h2><div class="sub">Your agent suggests improvements. Nothing is written until you Apply.</div>
+    <h2 id="org-title">✨ Organize folder</h2><div class="sub" id="org-sub">Your agent suggests improvements. Nothing is written until you Apply.</div>
     <div id="org-body"></div>
     <div class="btnrow" id="org-actions" style="display:none">
       <button class="btn primary" onclick="applyOrganize()">Apply selected</button>
@@ -1099,7 +1102,13 @@ function closeCmdk(){ closeOverlay("cmdk"); }
 function ckRender(q){
   if(CK_MODE==="sub"){ CK_ITEMS = q ? CK_BASE.filter(c=>c._back||fuzzy(q,c.label)) : CK_BASE.slice(); CK_SEL=0; ckDraw(); return; }
   const all=ckCommands();
-  const base = q ? all.filter(c=>fuzzy(q,c.label)) : all.slice(0,9);
+  let base;
+  if(q){ base = all.filter(c=>fuzzy(q,c.label)); }
+  else {  // curated default so the useful commands (incl. the agent ones) are discoverable
+    const want=["Calm my Today ✨","Triage Inbox ✨","Organize this list ✨","New to-do…","New project…","Today","Inbox","Priority Matrix","About · Credits"];
+    const by={}; all.forEach(c=>{ if(!(c.label in by)) by[c.label]=c; });
+    base = want.map(l=>by[l]).filter(Boolean);
+  }
   CK_ITEMS=base; CK_SEL=0; ckDraw();
   if(q.length>=2){
     clearTimeout(CK_T);
@@ -1719,6 +1728,10 @@ async function startOrganize(folderId, workflow){
   const r=await (await fetch("/api/organize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({folder_id:folderId, workflow})})).json();
   if(!r.ok){ alert("Organize: "+(r.error||"failed")); return; }
   openOverlay("organize-overlay");
+  const meta=({organize:["✨ Organize folder","Cleaner titles, notes, and tags — review before anything is written."],
+               triage:["📥 Triage Inbox","Proposed home, tags, and date per item — review before anything is written."],
+               calm:["🧘 Calm Today","Keep the vital few as Today; defer the rest — review before anything is written."]})[workflow]||["✨ Organize","Review before anything is written."];
+  $("#org-title").textContent=meta[0]; $("#org-sub").textContent=meta[1];
   $("#org-actions").style.display="none";
   $("#org-body").innerHTML=`<div class="empty">Running ${esc(r.agent||"agent")} on ${r.count} task(s)… (up to ~2 min, costs a little on your agent account)</div>`;
   pollOrganize(r.job_id, 0);
@@ -1738,7 +1751,7 @@ function renderSuggestions(){
   if(!changed.length){ body.innerHTML=`<div class="empty">No suggestions — looks tidy. 🎉</div>`; $("#org-actions").style.display="none"; return; }
   for(const s of changed){
     const row=document.createElement("div"); row.className="org-row"; row.dataset.uuid=s.uuid;
-    let h=`<div class="org-cur">${esc(LAST_ITEMS[s.uuid]||"")}</div>`;
+    let h=`<div class="org-cur">${esc(s.title || LAST_ITEMS[s.uuid] || "(task)")}</div>`;
     if(s.suggested_title) h+=`<label class="org-line"><input type="checkbox" class="acc-title" checked data-val="${esc(s.suggested_title)}"> ✏️ ${esc(s.suggested_title)}</label>`;
     if(s.dest) h+=`<label class="org-line"><input type="checkbox" class="acc-dest" checked data-val="${esc(s.dest)}"> 📁 → ${esc(s.dest)}</label>`;
     if(s.when) h+=`<label class="org-line"><input type="checkbox" class="acc-when" checked data-val="${esc(s.when)}"> 📅 ${esc(s.when)}</label>`;
