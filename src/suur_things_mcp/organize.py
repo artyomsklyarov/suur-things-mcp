@@ -164,8 +164,14 @@ def organize(folder_title: str, tasks: list[dict], existing_tags: list[str],
     if not cmd:
         raise RuntimeError(f"agent '{agent}' not found — install Claude Code or Codex")
     prompt = build_prompt(folder_title, tasks[:MAX_TASKS], existing_tags, workflow=workflow, projects=projects)
+    # The agent only needs to transform text — it has no business seeing the Things
+    # write token. Strip it from the child env so prompt-injected task content can't
+    # coax the CLI into reading/exfiltrating it. Agent auth (Claude/Codex) is
+    # file-based (~/.claude, ~/.codex), so this doesn't break their login.
+    child_env = {k: v for k, v in os.environ.items() if k != "THINGS_AUTH_TOKEN"}
     try:
-        result = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                                timeout=timeout, env=child_env)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"{agent} timed out after {timeout}s")
     if result.returncode != 0:
