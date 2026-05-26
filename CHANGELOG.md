@@ -4,6 +4,25 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.4.2] - 2026-05-26
+
+From early dashboard feedback.
+
+### Fixed
+
+- **Organize** no longer reports "no agent CLI found" when the dashboard is
+  launched outside a shell (GUI/launchd/Things URL). It now resolves
+  `claude`/`codex` via the login-shell PATH and runs them with that PATH.
+- **Anytime/Someday** no longer render projects as (checkbox-less) task rows —
+  built-in lists show to-dos only; projects stay in the sidebar.
+- Tasks can now be **completed directly from the Matrix / Priority view**.
+
+### Added
+
+- ⌘K surfaces **New to-do / New project** as the first quick actions.
+- Natural-language quick-add understands **relative dates** — "in 4 weeks",
+  "in 3 days", "next week/month/year".
+
 ## [0.4.1] - 2026-05-25
 
 ### Security
@@ -41,6 +60,7 @@ If you installed 0.4.0 or 0.3.0, upgrade with `uv tool upgrade suur-things-mcp`
 
 - First public release.
 
+[0.4.2]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.2
 [0.4.1]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.1
 [0.4.0]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.0
 [0.3.0]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.3.0
