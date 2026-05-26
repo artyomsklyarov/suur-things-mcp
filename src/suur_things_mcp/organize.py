@@ -9,6 +9,7 @@ applying happens through the normal URL-Scheme write path.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -20,14 +21,42 @@ MAX_TASKS = 25
 TIMEOUT_S = 180
 
 
+@functools.lru_cache(maxsize=1)
+def _login_path() -> str:
+    """PATH as the user's interactive login shell sees it.
+
+    The dashboard is frequently launched outside a shell (Things URL Scheme,
+    launchd, the macOS GUI), where the inherited PATH is minimal and lacks
+    /opt/homebrew/bin, nvm, etc. That made `shutil.which("codex")` return None
+    even when the user clearly has codex on their interactive PATH — the
+    "no agent CLI found" bug. Ask their login shell once and cache it.
+    """
+    shell = os.environ.get("SHELL") or "/bin/zsh"
+    try:
+        r = subprocess.run(
+            [shell, "-lic", "printf %s \"$PATH\""],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except Exception:  # noqa: BLE001 — fall back to the process PATH
+        pass
+    return os.environ.get("PATH", "")
+
+
+def _resolve(cmd: str) -> str | None:
+    """Absolute path to an executable, falling back to the login-shell PATH."""
+    return shutil.which(cmd) or shutil.which(cmd, path=_login_path())
+
+
 def pick_agent(prefs: dict | None = None) -> str | None:
     prefs = prefs or {}
     chosen = prefs.get("agent") or os.environ.get("SUUR_THINGS_AGENT")
     if chosen:
-        return chosen if shutil.which(chosen) else None
-    if shutil.which("claude"):
+        return chosen if _resolve(chosen) else None
+    if _resolve("claude"):
         return "claude"
-    if shutil.which("codex"):
+    if _resolve("codex"):
         return "codex"
     return None
 
@@ -96,18 +125,23 @@ def build_prompt(folder_title: str, tasks: list[dict], existing_tags: list[str],
 
 
 def _command(agent: str, model: str) -> list[str] | None:
-    if agent == "claude" and shutil.which("claude"):
-        # NOTE: no --bare — it forces ANTHROPIC_API_KEY auth and ignores the user's
-        # OAuth login. --strict-mcp-config + empty --mcp-config + empty --allowedTools
-        # give us a no-tools, no-MCP transform that still uses their Claude Code auth.
-        return [
-            "claude", "-p", "--output-format", "json",
-            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
-            "--allowedTools", "", "--model", model,
-        ]
-    if agent == "codex" and shutil.which("codex"):
-        # Best-effort: read-only sandbox so it cannot act; prompt via stdin.
-        return ["codex", "exec", "--sandbox", "read-only", "-"]
+    if agent == "claude":
+        path = _resolve("claude")
+        if path:
+            # NOTE: no --bare — it forces ANTHROPIC_API_KEY auth and ignores the user's
+            # OAuth login. --strict-mcp-config + empty --mcp-config + empty --allowedTools
+            # give us a no-tools, no-MCP transform that still uses their Claude Code auth.
+            # Absolute path (not bare "claude") so it runs under a minimal GUI PATH too.
+            return [
+                path, "-p", "--output-format", "json",
+                "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+                "--allowedTools", "", "--model", model,
+            ]
+    if agent == "codex":
+        path = _resolve("codex")
+        if path:
+            # Best-effort: read-only sandbox so it cannot act; prompt via stdin.
+            return [path, "exec", "--sandbox", "read-only", "-"]
     return None
 
 
@@ -169,6 +203,7 @@ def organize(folder_title: str, tasks: list[dict], existing_tags: list[str],
     # coax the CLI into reading/exfiltrating it. Agent auth (Claude/Codex) is
     # file-based (~/.claude, ~/.codex), so this doesn't break their login.
     child_env = {k: v for k, v in os.environ.items() if k != "THINGS_AUTH_TOKEN"}
+    child_env["PATH"] = _login_path()  # so the agent CLI's own node/etc. resolve under a GUI launch
     try:
         result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
                                 timeout=timeout, env=child_env)

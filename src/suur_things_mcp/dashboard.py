@@ -1126,7 +1126,7 @@ function ckRender(q){
   let base;
   if(q){ base = all.filter(c=>fuzzy(q,c.label)); }
   else {  // curated default so the useful commands (incl. the agent ones) are discoverable
-    const want=["Calm my Today ✨","Triage Inbox ✨","Organize this list ✨","New to-do…","New project…","Today","Inbox","Priority Matrix","About · Credits"];
+    const want=["New to-do…","New project…","Calm my Today ✨","Triage Inbox ✨","Organize this list ✨","Today","Inbox","Priority Matrix","About · Credits"];
     const by={}; all.forEach(c=>{ if(!(c.label in by)) by[c.label]=c; });
     base = want.map(l=>by[l]).filter(Boolean);
   }
@@ -1507,7 +1507,12 @@ function priCardEl(t){
   el.onclick=t._proj?()=>go("#l/"+encodeURIComponent(t.uuid)):()=>openEdit(t.uuid);
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",t.uuid); el.classList.add("dragging"); });
   el.addEventListener("dragend",()=>el.classList.remove("dragging"));
-  el.innerHTML=`<div class="pt">${esc(t.title||"(untitled)")}</div>`+(t._proj?`<div class="psub">Project</div>`:(t.project_title?`<div class="psub">${esc(t.project_title)}</div>`:""));
+  // Projects open on click and have no checkbox; to-dos get a complete box like the list rows.
+  const box=t._proj?"":`<span class="box" title="Complete" style="cursor:pointer"></span>`;
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:8px">${box}<div class="pt">${esc(t.title||"(untitled)")}</div></div>`+
+    (t._proj?`<div class="psub">Project</div>`:(t.project_title?`<div class="psub">${esc(t.project_title)}</div>`:""));
+  if(!t._proj){ const b=el.querySelector(".box");
+    b.onclick=(e)=>{ e.stopPropagation(); applyStatus(t.uuid,"completed").then(ok=>{ if(ok) el.remove(); }); }; }
   return el;
 }
 function dropZone(elm,quad,items){
@@ -1829,6 +1834,28 @@ function weekdayDate(s){
   return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");
 }
 // strict trailing-token parse: #tags + one when-keyword/weekday/yyyy-mm-dd; the rest stays literal
+function relDate(nRaw, unit){
+  const n=(nRaw==="a"||nRaw==="an")?1:parseInt(nRaw,10);
+  if(!isFinite(n)) return null;
+  const d=new Date();
+  if(/^day/.test(unit)) d.setDate(d.getDate()+n);
+  else if(/^week/.test(unit)) d.setDate(d.getDate()+7*n);
+  else if(/^month/.test(unit)) d.setMonth(d.getMonth()+n);
+  else if(/^year/.test(unit)) d.setFullYear(d.getFullYear()+n);
+  else return null;
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+// Trailing relative phrase → {when, n} where n tokens are consumed from the end.
+// Handles "in 4 weeks", "in a month", "next week/month/year".
+function relWhen(words){
+  const tail=k=>words.slice(words.length-k).join(" ").toLowerCase();
+  let m;
+  if(words.length>=3 && (m=tail(3).match(/^in (\\d+|a|an) (day|days|week|weeks|month|months|year|years)$/)))
+    { const w=relDate(m[1],m[2]); if(w) return {when:w, n:3}; }
+  if(words.length>=2 && (m=tail(2).match(/^next (week|month|year)$/)))
+    { const w=relDate("1",m[1]); if(w) return {when:w, n:2}; }
+  return null;
+}
 function parseNL(raw){
   const WHEN=new Set(["today","tomorrow","evening","anytime","someday"]);
   let words=raw.trim().split(/\\s+/); let when=null; const tags=[]; let changed=true;
@@ -1836,6 +1863,8 @@ function parseNL(raw){
     changed=false; const last=words[words.length-1], lc=last.toLowerCase();
     if(last.startsWith("#")&&last.length>1){ tags.unshift(last.slice(1)); words.pop(); changed=true; continue; }
     if(!when){
+      const rel=relWhen(words);
+      if(rel){ when=rel.when; words.splice(words.length-rel.n, rel.n); changed=true; continue; }
       if(WHEN.has(lc)){ when=lc; words.pop(); changed=true; continue; }
       else if(/^\\d{4}-\\d{2}-\\d{2}$/.test(last)){ when=last; words.pop(); changed=true; continue; }
       else { const wd=weekdayDate(lc); if(wd){ when=wd; words.pop(); changed=true; continue; } }
