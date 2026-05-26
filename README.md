@@ -152,7 +152,7 @@ Nuclear option (clear the cache): `uv cache clean suur-things-mcp`. From `main`,
 
 ---
 
-## Tools (30)
+## Tools (31)
 
 ### Read — no token required
 
@@ -180,6 +180,7 @@ Nuclear option (clear the cache): `uv cache clean suur-things-mcp`. From `main`,
 | `show` (navigate Things to a list/item) | no |
 | `open_dashboard` (open the local board) | no |
 | `link_repo`, `unlink_repo` | no (config only) |
+| `attach_image` (attach an image to an item) | no to store; **yes** to also add a notes reference |
 | `batch` (bulk create/update via the `json` command) | only if it contains updates |
 | `update_todo`, `update_project` | **yes** |
 | `complete_todo`, `cancel_todo`, `schedule_todo` | **yes** |
@@ -243,13 +244,14 @@ Three tiers — important if you switch machines:
 
 1. **Real task data → Things' own database.** Anything you change that's a Things field (title, notes, when, deadline, tags, complete/cancel, move) is written via the URL Scheme into Things, and syncs across your devices through Things Cloud like normal. This server never stores your tasks.
 2. **Dashboard config → one local JSON file.**
-   - `~/.config/suur-things-mcp/board.json` — your boards, Priority-Matrix assignments, repo links, and prefs (keyed by stable Things UUIDs).
+   - `~/.config/suur-things-mcp/board.json` — your boards, Priority-Matrix assignments, repo links, prefs, and image-attachment metadata (keyed by stable Things UUIDs).
+   - `~/.config/suur-things-mcp/attachments/` — image files you attach to tasks (Things can't store images; the dashboard shows them and writes a `file://` reference into the task's notes).
    - `~/.config/suur-things-mcp/token` — your Things auth token (chmod 600).
 
    Not in the browser, not in Things. (`$XDG_CONFIG_HOME` is honored if set.)
 3. **Browser localStorage** — only cosmetic state (light/dark, which areas are collapsed). Nothing you'd miss.
 
-**Backup / move machines:** copy or symlink `~/.config/suur-things-mcp/` (e.g. into Dropbox). Two caveats: the **token is a secret** (fine in personal storage, never in a public repo), and **repo links store absolute paths** that are machine-specific — the UUID-keyed boards/priorities port cleanly, the paths may need repointing.
+**Backup / move machines:** copy or symlink `~/.config/suur-things-mcp/` (e.g. into Dropbox). Caveats: the **token is a secret** (fine in personal storage, never in a public repo); **repo links store absolute paths** that are machine-specific — the UUID-keyed boards/priorities port cleanly, the paths may need repointing; and **attached images are not in Things Cloud** — they only appear where this folder syncs (not on your iPhone's Things), though the `file://` note reference travels with the task.
 
 ## Configuration
 

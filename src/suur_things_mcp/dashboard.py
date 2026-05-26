@@ -20,6 +20,7 @@ Run:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -36,7 +37,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 import time
@@ -375,6 +376,79 @@ async def _open(request: Request) -> JSONResponse:
     return JSONResponse({"ok": False, "error": "bad target"})
 
 
+_MAX_ATTACH_BYTES = 12 * 1024 * 1024  # 12 MB per image
+
+
+async def _attach(request: Request) -> JSONResponse:
+    """Attach an image to a task. Image bytes are sent as base64 (or a data: URL);
+    they're written to disk and recorded in the browser-side overlay (no Things
+    token needed to store). If a token IS set, a file:// reference is appended to
+    the task's notes so the Things app shows it too."""
+    body = await request.json()
+    item_uuid = str(body.get("uuid") or "").strip()
+    if not item_uuid:
+        return JSONResponse({"ok": False, "error": "missing uuid"})
+    raw = body.get("data") or ""
+    mime = (body.get("mime") or "").strip().lower()
+    if isinstance(raw, str) and raw.startswith("data:"):  # data:image/png;base64,XXXX
+        head, _, b64 = raw.partition(",")
+        if not mime and ";" in head:
+            mime = head[5:head.index(";")].strip().lower()
+        raw = b64
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except (ValueError, TypeError):
+        return JSONResponse({"ok": False, "error": "invalid base64 image data"})
+    if not data:
+        return JSONResponse({"ok": False, "error": "empty image"})
+    if len(data) > _MAX_ATTACH_BYTES:
+        return JSONResponse({"ok": False, "error": f"image too large (max {_MAX_ATTACH_BYTES // (1024*1024)}MB)"})
+    try:
+        meta = boardcfg.save_attachment(item_uuid, data, mime,
+                                        body.get("name") or "image", body.get("caption"))
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+    note_updated = False
+    token = _auth_token()
+    if token:
+        try:
+            path = str(boardcfg.attachment_path(item_uuid, meta))
+            execute("update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], path)},
+                    auth_token=token)
+            note_updated = True
+        except ThingsURLError:
+            pass  # storing succeeded; the note reference is best-effort
+    return JSONResponse({"ok": True, "attachment": meta, "note_updated": note_updated})
+
+
+async def _attachment(request: Request) -> FileResponse | JSONResponse:
+    """Serve an attachment's bytes. Only files recorded in the overlay are served,
+    and the path is rebuilt server-side from the stored metadata — the request never
+    supplies a path, so this can't be turned into an arbitrary-file read."""
+    item_uuid = str(request.query_params.get("uuid") or "")
+    att_id = str(request.query_params.get("id") or "")
+    meta = boardcfg.attachment_meta(item_uuid, att_id)  # None unless both are known + valid
+    if not meta:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    path = boardcfg.attachment_path(item_uuid, meta)
+    base = boardcfg._attach_dir().resolve()
+    try:
+        rp = path.resolve()
+        rp.relative_to(base)  # defense in depth: must stay under the attachments dir
+    except (ValueError, OSError):
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    if not rp.is_file():
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    return FileResponse(rp, media_type=meta["mime"], headers={"Cache-Control": "private, max-age=3600"})
+
+
+async def _detach(request: Request) -> JSONResponse:
+    body = await request.json()
+    removed = boardcfg.remove_attachment(str(body.get("uuid") or ""), str(body.get("id") or ""))
+    return JSONResponse({"ok": removed})
+
+
 def _evict_jobs() -> None:
     now = time.time()
     for jid in [k for k, v in _ORGANIZE_JOBS.items()
@@ -476,6 +550,9 @@ def create_app(port: int = DEFAULT_PORT) -> Starlette:
             Route("/api/rename", _rename, methods=["POST"]),
             Route("/api/add", _add, methods=["POST"]),
             Route("/api/open", _open, methods=["POST"]),
+            Route("/api/attachment", _attachment),
+            Route("/api/attach", _attach, methods=["POST"]),
+            Route("/api/detach", _detach, methods=["POST"]),
         ],
         middleware=[
             # TrustedHost first (outermost): reject foreign Host headers before any
@@ -765,6 +842,15 @@ INDEX_HTML = """<!DOCTYPE html>
     padding:0; margin:8px 0 4px; min-height:22px; resize:none; overflow:hidden; }
   .ec-notes::placeholder, .ec-title::placeholder { color:var(--muted); }
   .ec-pills { display:flex; flex-wrap:wrap; gap:7px; margin:9px 0 2px; }
+  .ec-attach { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }
+  .ec-attach:empty { display:none; }
+  .att { position:relative; width:88px; }
+  .att img { width:88px; height:88px; object-fit:cover; border-radius:8px; border:1px solid var(--divider); cursor:zoom-in; display:block; }
+  .att .att-x { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--main-bg);
+    border:1px solid var(--divider); color:var(--muted); font-size:11px; line-height:16px; text-align:center; cursor:pointer; }
+  .att .att-x:hover { color:var(--red); }
+  .att .att-cap { font-size:10.5px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ec-drop { outline:2px dashed var(--accent); outline-offset:3px; }
   .ec-pills:empty { display:none; }
   .ec-pill { font-size:12.5px; padding:3px 10px; border-radius:13px; background:var(--chip-bg); color:var(--chip-fg);
     display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap; }
@@ -897,6 +983,8 @@ INDEX_HTML = """<!DOCTYPE html>
     <textarea class="ec-notes" id="f-notes" placeholder="Notes" oninput="autoGrow(this)"></textarea>
     <div class="ec-pills" id="ec-pills"></div>
     <div id="f-checklist"></div>
+    <div id="ec-attach" class="ec-attach"></div>
+    <input type="file" id="att-input" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif" multiple style="display:none" onchange="onAttachPick(event)">
     <div class="ec-editor" id="ed-when">
       <div class="qchips" id="when-chips"></div>
       <input id="f-when" placeholder="today · evening · tomorrow · anytime · someday · yyyy-mm-dd" oninput="buildWhenChips();updatePills()">
@@ -913,6 +1001,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <button class="ec-tool" id="tool-deadline" title="Deadline" onclick="toggleEditor('ed-deadline',this)">⚑</button>
       <button class="ec-tool" title="Checklist (edit in Things)" onclick="openInThings()">☰</button>
       <button class="ec-tool" id="tool-tags" title="Tags" onclick="toggleEditor('ed-tags',this)">🏷</button>
+      <button class="ec-tool" id="tool-attach" title="Attach image (Things can't store images — shown here; a file link is added to notes)" onclick="$('#att-input').click()">📎</button>
       <span class="spacer"></span>
       <button class="ec-link" onclick="cancelTask()">Cancel task</button>
       <button class="ec-link" onclick="openInThings()">Open in Things ↗</button>
@@ -1703,7 +1792,41 @@ async function openEdit(uuid){
   ["f-title","f-notes","f-when","f-deadline","f-tags"].forEach(id=>$("#"+id).disabled=ro);
   $("#ec-box").style.pointerEvents=ro?"none":"";
   EDIT_ORIG={title:it.title||"", notes:it.notes||"", deadline:it.deadline||"", tags:(it.tags||[]).join(",")};
+  renderAttachments(uuid);
   updatePills(); openOverlay("edit-overlay"); setTimeout(()=>{ autoGrow($("#f-title")); autoGrow($("#f-notes")); },0);
+}
+// --- Image attachments (Things has no images; stored as a browser overlay) ---
+function renderAttachments(uuid){
+  const box=$("#ec-attach"); if(!box) return; box.innerHTML="";
+  const list=(CONFIG.attachments||{})[uuid]||[];
+  for(const a of list){
+    const url="/api/attachment?uuid="+encodeURIComponent(uuid)+"&id="+encodeURIComponent(a.id);
+    const d=document.createElement("div"); d.className="att";
+    d.innerHTML=`<img src="${url}" alt="${esc(a.name||"image")}" onclick="window.open('${url}','_blank')">`+
+      `<span class="att-x" title="Remove" onclick="detachAttachment('${uuid}','${a.id}')">✕</span>`+
+      (a.caption?`<div class="att-cap" title="${esc(a.caption)}">${esc(a.caption)}</div>`:``);
+    box.appendChild(d);
+  }
+}
+function onAttachPick(ev){ const fs=ev.target.files; if(fs) for(const f of fs) uploadAttachment(EDIT_ID,f); ev.target.value=""; }
+function uploadAttachment(uuid, file){
+  if(!uuid || !file || !/^image\\//.test(file.type)){ if(file&&!/^image\\//.test(file.type)) alert("Only images can be attached."); return; }
+  const reader=new FileReader();
+  reader.onload=async()=>{
+    const r=await (await fetch("/api/attach",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({uuid, name:file.name||"image", mime:file.type, data:String(reader.result)})})).json();
+    if(!r.ok){ alert("Attach failed: "+(r.error||"")); return; }
+    (CONFIG.attachments=CONFIG.attachments||{})[uuid]=((CONFIG.attachments||{})[uuid]||[]).concat([r.attachment]);
+    renderAttachments(uuid);
+  };
+  reader.readAsDataURL(file);
+}
+async function detachAttachment(uuid, id){
+  const r=await (await fetch("/api/detach",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({uuid, id})})).json();
+  if(!r.ok){ alert("Remove failed."); return; }
+  if(CONFIG.attachments&&CONFIG.attachments[uuid]) CONFIG.attachments[uuid]=CONFIG.attachments[uuid].filter(a=>a.id!==id);
+  renderAttachments(uuid);
 }
 function editDirty(){
   if(!EDIT_ORIG) return false;
@@ -1889,6 +2012,16 @@ function openOverlay(id){ $("#"+id).classList.add("show"); }
 function closeOverlay(id){ $("#"+id).classList.remove("show"); }
 document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{ if(e.target===o){ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); } }));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.querySelectorAll(".overlay.show").forEach(o=>{ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); }); });
+// Drag-drop + paste an image straight onto the open edit card.
+(function(){ const card=document.querySelector("#edit-overlay .editcard"); if(!card) return;
+  const editOpen=()=>$("#edit-overlay").classList.contains("show") && EDIT_ID;
+  card.addEventListener("dragover",e=>{ if(!editOpen())return; e.preventDefault(); card.classList.add("ec-drop"); });
+  card.addEventListener("dragleave",e=>{ if(e.target===card) card.classList.remove("ec-drop"); });
+  card.addEventListener("drop",e=>{ if(!editOpen())return; e.preventDefault(); card.classList.remove("ec-drop");
+    for(const f of (e.dataTransfer.files||[])) if(/^image\\//.test(f.type)) uploadAttachment(EDIT_ID,f); });
+  document.addEventListener("paste",e=>{ if(!editOpen())return;
+    for(const it of (e.clipboardData&&e.clipboardData.items||[])){ if(it.type&&/^image\\//.test(it.type)){ const f=it.getAsFile(); if(f) uploadAttachment(EDIT_ID,f); } } });
+})();
 
 // --- inline header rename (boards + projects; areas can't — no URL-scheme area update) ---
 function setHeadEditable(type, id){

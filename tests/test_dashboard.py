@@ -337,6 +337,56 @@ def test_update_supports_additive_writes(monkeypatch):
     assert r["ok"] is False  # token gate, not a crash
 
 
+# 1x1 transparent PNG
+_PNG_1x1 = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+
+
+def test_attachments_config_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    cfg.set_link("X", "project", str(tmp_path))  # an unrelated section
+    meta = cfg.save_attachment("T", b"\x89PNG\r\n fake", "image/png", "shot.png", caption="hi")
+    # bytes on disk, metadata recorded, other sections untouched
+    assert cfg.attachment_path("T", meta).exists()
+    assert cfg.attachment_meta("T", meta["id"])["mime"] == "image/png"
+    assert "X" in cfg.load()["links"]
+    # a non-image mime is refused
+    with pytest.raises(ValueError):
+        cfg.save_attachment("T", b"x", "application/pdf", "x.pdf")
+    # remove deletes both
+    assert cfg.remove_attachment("T", meta["id"]) is True
+    assert not cfg.attachment_path("T", meta).exists()
+    assert cfg.attachments().get("T") is None
+
+
+def test_attach_serve_detach_endpoints(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("SUUR_THINGS_TOKEN_FILE", str(tmp_path / "no-token"))
+    r = client.post("/api/attach", json={"uuid": "TASK1", "name": "shot.png",
+                                         "mime": "image/png", "data": _PNG_1x1}).json()
+    assert r["ok"] is True and r["note_updated"] is False  # no token -> overlay only
+    aid = r["attachment"]["id"]
+    g = client.get(f"/api/attachment?uuid=TASK1&id={aid}")
+    assert g.status_code == 200 and g.headers["content-type"].startswith("image/png")
+    assert g.content[:8] == b"\x89PNG\r\n\x1a\n"
+    # only known ids serve; unknown id and a traversal-shaped request both 404
+    assert client.get("/api/attachment?uuid=TASK1&id=nope").status_code == 404
+    assert client.get("/api/attachment?uuid=../../etc&id=passwd").status_code == 404
+    assert client.post("/api/detach", json={"uuid": "TASK1", "id": aid}).json()["ok"] is True
+    assert client.get(f"/api/attachment?uuid=TASK1&id={aid}").status_code == 404
+
+
+def test_attach_rejects_non_image(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    r = client.post("/api/attach", json={"uuid": "T", "mime": "application/pdf",
+                                         "data": _PNG_1x1}).json()
+    assert r["ok"] is False
+
+
 def test_origin_guard_blocks_cross_site():
     cross = client.post("/api/config", headers={"sec-fetch-site": "cross-site"}, json={"boards": []})
     assert cross.status_code == 403

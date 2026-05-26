@@ -4,6 +4,24 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.5.0] - 2026-05-26
+
+### Added
+
+- **Image attachments** — Things can't store images, so attach them here instead.
+  Drag, paste, or pick an image in a task's edit card and it shows inline in the
+  dashboard. Bytes live on disk under `~/.config/suur-things-mcp/attachments/`;
+  only metadata goes in `board.json`. With `THINGS_AUTH_TOKEN` set, a clickable
+  `file://` reference is appended to the task's notes so the Things app shows it too.
+  - New `attach_image(item_uuid, source_path, caption)` MCP tool so an agent can
+    attach a chart/screenshot it generated; `get_item` now reports `attachments`.
+  - Endpoints `POST /api/attach`, `GET /api/attachment`, `POST /api/detach` —
+    the serve endpoint only returns files recorded in the overlay and rebuilds the
+    path server-side, so it can't be used to read arbitrary files.
+
+> Note: attached images are local to this machine (plus wherever the config folder
+> syncs). They are not in Things Cloud and won't appear on iOS.
+
 ## [0.4.2] - 2026-05-26
 
 From early dashboard feedback.
@@ -60,6 +78,7 @@ If you installed 0.4.0 or 0.3.0, upgrade with `uv tool upgrade suur-things-mcp`
 
 - First public release.
 
+[0.5.0]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.5.0
 [0.4.2]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.2
 [0.4.1]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.1
 [0.4.0]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.0
