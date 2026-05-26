@@ -286,6 +286,37 @@ def test_organize_parser_drops_blank_titles_and_caps():
     assert len(out[0]["tags"]) == 5  # capped
 
 
+def test_resolve_falls_back_to_login_path(monkeypatch):
+    # The dashboard often launches with a minimal PATH (GUI/launchd), so a bare
+    # `which` misses codex; _resolve must retry against the login-shell PATH.
+    from suur_things_mcp import organize as org
+    calls = []
+
+    def fake_which(cmd, path=None):
+        calls.append(path)
+        return None if path is None else f"/fake/bin/{cmd}"
+
+    monkeypatch.setattr(org.shutil, "which", fake_which)
+    monkeypatch.setattr(org, "_login_path", lambda: "/fake/bin")
+    assert org._resolve("codex") == "/fake/bin/codex"
+    assert calls == [None, "/fake/bin"]  # bare attempt first, then login PATH
+
+
+def test_pick_agent_uses_resolve(monkeypatch):
+    from suur_things_mcp import organize as org
+    monkeypatch.delenv("SUUR_THINGS_AGENT", raising=False)
+    monkeypatch.setattr(org, "_resolve", lambda c: f"/x/{c}" if c == "codex" else None)
+    assert org.pick_agent({}) == "codex"  # claude unresolved, codex found
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_builtin_lists_exclude_projects():
+    # Bug #4: Anytime/Someday include projects; the list view must show to-dos only.
+    for lid in ("anytime", "someday", "today"):
+        items = reads.list_items(lid)["items"]
+        assert all(i.get("type") == "to-do" for i in items), f"{lid} leaked a project"
+
+
 def test_organize_needs_token(monkeypatch, tmp_path):
     monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
     monkeypatch.setenv("SUUR_THINGS_TOKEN_FILE", str(tmp_path / "no-token"))

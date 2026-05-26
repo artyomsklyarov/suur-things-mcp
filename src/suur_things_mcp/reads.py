@@ -296,10 +296,16 @@ def list_items(list_id: str, completed_limit: int = 50) -> dict:
     `kind` tells the UI how to group: built-in lists group by project, a project
     groups by heading, an area is flat.
     """
+    # Things' built-in lists (esp. Anytime/Someday) include *projects*, not just
+    # to-dos. The dashboard renders a builtin list as task rows, so a project would
+    # show up as a (checkbox-less, oddly grouped) "task". Keep these lists to-do-only;
+    # projects remain reachable from the sidebar.
     if list_id == "logbook":
-        return {"id": list_id, "kind": "builtin", "items": [_card(i) for i in logbook(limit=completed_limit)]}
+        return {"id": list_id, "kind": "builtin",
+                "items": [_card(i) for i in logbook(limit=completed_limit) if i.get("type") == "to-do"]}
     if list_id in _BUILTIN_FNS:
-        return {"id": list_id, "kind": "builtin", "items": [_card(i) for i in _BUILTIN_FNS[list_id]()]}
+        return {"id": list_id, "kind": "builtin",
+                "items": [_card(i) for i in _BUILTIN_FNS[list_id]() if i.get("type") == "to-do"]}
 
     obj = get(list_id)
     notes = (obj.get("notes") or "").strip() if obj else ""
