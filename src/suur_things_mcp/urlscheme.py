@@ -103,9 +103,18 @@ def execute(
         params["auth-token"] = auth_token
 
     url = build_url(command, params)
-    run_url(url)
 
-    # Redact the token before returning to the model.
-    if auth_token:
-        url = url.replace(_encode(auth_token), "***").replace(auth_token, "***")
-    return url
+    def _redact(text: str) -> str:
+        if not auth_token:
+            return text
+        return text.replace(_encode(auth_token), "***").replace(auth_token, "***")
+
+    try:
+        run_url(url)
+    except ThingsURLError as exc:
+        # run_url embeds the full URL (with auth-token) in timeout/non-zero errors.
+        # Scrub it before the message propagates back to the model or dashboard.
+        raise ThingsURLError(_redact(str(exc))) from None
+
+    # Redact the token before returning the confirmation URL to the model.
+    return _redact(url)

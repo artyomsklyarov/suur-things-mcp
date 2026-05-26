@@ -29,12 +29,12 @@ import subprocess
 import threading
 from typing import Any
 import urllib.request
-from urllib.parse import urlparse
 
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route
@@ -56,17 +56,27 @@ _GITHUB_SLUG_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
 
 
 class _OriginGuard(BaseHTTPMiddleware):
-    """Reject cross-site POSTs. 127.0.0.1 binding alone doesn't stop a webpage in
-    your browser from POSTing to localhost (CSRF/DNS-rebind), and our POSTs can
-    write config and launch local apps. Same-origin fetches from our own page pass.
+    """Reject cross-origin POSTs. 127.0.0.1 binding + TrustedHostMiddleware stop
+    DNS-rebinding, but a page served from a *different localhost port* is a distinct
+    origin yet the same host — so a hostname-only check would wave it through and let
+    it write config or launch local apps. We compare the FULL origin (scheme+host+
+    port) against this server's own. ``sec-fetch-site`` is checked too: browsers
+    always send it and an attacker page cannot forge it, so anything but
+    ``same-origin`` (including same-site cross-port) is rejected. Both headers absent
+    means a non-browser local client, which already has local execution — allowed.
     """
+
+    def __init__(self, app, allowed_origins: set[str]):
+        super().__init__(app)
+        self._allowed = allowed_origins
 
     async def dispatch(self, request: Request, call_next):
         if request.method == "POST":
-            if request.headers.get("sec-fetch-site") == "cross-site":
-                return JSONResponse({"ok": False, "error": "cross-site blocked"}, status_code=403)
+            sfs = request.headers.get("sec-fetch-site")
+            if sfs is not None and sfs != "same-origin":
+                return JSONResponse({"ok": False, "error": "cross-origin blocked"}, status_code=403)
             origin = request.headers.get("origin")
-            if origin and urlparse(origin).hostname not in _ALLOWED_HOSTS:
+            if origin is not None and origin not in self._allowed:
                 return JSONResponse({"ok": False, "error": "bad origin"}, status_code=403)
         return await call_next(request)
 
@@ -440,7 +450,13 @@ async def _organize_get(request: Request) -> JSONResponse:
                          "suggestions": job.get("suggestions"), "error": job.get("error")})
 
 
-def create_app() -> Starlette:
+def _allowed_origins(port: int) -> set[str]:
+    """The dashboard's own origins. The browser is opened at 127.0.0.1; a user may
+    also type localhost. Both resolve to the IPv4 bind, so both are legitimate."""
+    return {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+
+
+def create_app(port: int = DEFAULT_PORT) -> Starlette:
     return Starlette(
         routes=[
             Route("/", _index),
@@ -461,7 +477,12 @@ def create_app() -> Starlette:
             Route("/api/add", _add, methods=["POST"]),
             Route("/api/open", _open, methods=["POST"]),
         ],
-        middleware=[Middleware(_OriginGuard)],
+        middleware=[
+            # TrustedHost first (outermost): reject foreign Host headers before any
+            # handler runs — closes DNS-rebinding for the read endpoints too.
+            Middleware(TrustedHostMiddleware, allowed_hosts=list(_ALLOWED_HOSTS), www_redirect=False),
+            Middleware(_OriginGuard, allowed_origins=_allowed_origins(port)),
+        ],
     )
 
 
@@ -506,7 +527,7 @@ def ensure_running(open_browser: bool = True) -> str:
                 pass
         return url
     port = _pick_port()
-    config = uvicorn.Config(create_app(), host="127.0.0.1", port=port, log_level="warning")
+    config = uvicorn.Config(create_app(port), host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True, name="things-dashboard")
     thread.start()
@@ -540,7 +561,7 @@ def serve_foreground(port: int = DEFAULT_PORT, open_browser: bool = True) -> Non
             subprocess.run(["open", url], check=False, timeout=5)
         except Exception:  # noqa: BLE001
             pass
-    uvicorn.run(create_app(), host="127.0.0.1", port=chosen, log_level="warning")
+    uvicorn.run(create_app(chosen), host="127.0.0.1", port=chosen, log_level="warning")
 
 
 # --- Frontend (self-contained, no external deps) --------------------------
@@ -1810,13 +1831,13 @@ function weekdayDate(s){
 // strict trailing-token parse: #tags + one when-keyword/weekday/yyyy-mm-dd; the rest stays literal
 function parseNL(raw){
   const WHEN=new Set(["today","tomorrow","evening","anytime","someday"]);
-  let words=raw.trim().split(/\s+/); let when=null; const tags=[]; let changed=true;
+  let words=raw.trim().split(/\\s+/); let when=null; const tags=[]; let changed=true;
   while(words.length>1 && changed){
     changed=false; const last=words[words.length-1], lc=last.toLowerCase();
     if(last.startsWith("#")&&last.length>1){ tags.unshift(last.slice(1)); words.pop(); changed=true; continue; }
     if(!when){
       if(WHEN.has(lc)){ when=lc; words.pop(); changed=true; continue; }
-      else if(/^\d{4}-\d{2}-\d{2}$/.test(last)){ when=last; words.pop(); changed=true; continue; }
+      else if(/^\\d{4}-\\d{2}-\\d{2}$/.test(last)){ when=last; words.pop(); changed=true; continue; }
       else { const wd=weekdayDate(lc); if(wd){ when=wd; words.pop(); changed=true; continue; } }
     }
   }

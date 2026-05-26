@@ -8,9 +8,6 @@ dist/
 .venv/
 venv/
 
-# uv
-uv.lock
-
 # Tooling
 .pytest_cache/
 .mypy_cache/

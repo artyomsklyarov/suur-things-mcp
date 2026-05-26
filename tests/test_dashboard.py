@@ -10,9 +10,12 @@ import pytest
 from starlette.testclient import TestClient
 
 from suur_things_mcp import reads
-from suur_things_mcp.dashboard import _pick_port, create_app
+from suur_things_mcp.dashboard import DEFAULT_PORT, _pick_port, create_app
 
-client = TestClient(create_app())
+# base_url sets the Host header to one TrustedHostMiddleware accepts (it strips the
+# port, leaving 127.0.0.1). Default TestClient Host is "testserver", which the host
+# allowlist would now (correctly) reject.
+client = TestClient(create_app(), base_url=f"http://127.0.0.1:{DEFAULT_PORT}")
 
 
 def _things_available() -> bool:
@@ -308,6 +311,37 @@ def test_origin_guard_blocks_cross_site():
     assert cross.status_code == 403
     bad = client.post("/api/config", headers={"origin": "http://evil.example"}, json={"boards": []})
     assert bad.status_code == 403
+
+
+def test_origin_guard_blocks_same_site_cross_port():
+    # A page on another localhost PORT is same-site but a different origin. The old
+    # hostname-only check let this through; full-origin matching must reject it.
+    r1 = client.post("/api/config", headers={"sec-fetch-site": "same-site"}, json={"boards": []})
+    assert r1.status_code == 403
+    r2 = client.post("/api/config", headers={"origin": f"http://127.0.0.1:{DEFAULT_PORT + 1}"}, json={"boards": []})
+    assert r2.status_code == 403
+
+
+def test_origin_guard_allows_same_origin(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    ok = client.post(
+        "/api/config",
+        headers={"sec-fetch-site": "same-origin", "origin": f"http://127.0.0.1:{DEFAULT_PORT}"},
+        json={"boards": []},
+    )
+    assert ok.status_code == 200 and ok.json()["ok"] is True
+
+
+def test_trusted_host_rejects_foreign_host():
+    # DNS-rebinding sends the attacker's hostname as Host; reject it on reads too.
+    r = client.get("/api/state", headers={"host": "evil.example"})
+    assert r.status_code == 400
+
+
+def test_trusted_host_allows_localhost():
+    for h in ("127.0.0.1", "localhost", f"127.0.0.1:{DEFAULT_PORT}"):
+        r = client.get("/api/state", headers={"host": h})
+        assert r.status_code == 200
 
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")

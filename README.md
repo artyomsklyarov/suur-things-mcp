@@ -278,6 +278,23 @@ Reads use the excellent [`things.py`](https://github.com/thingsapi/things.py), w
 
 **The server stays dumb on purpose.** It returns clean structured data and ships packaged prompts; the judgment (prioritize, triage, synthesize) lives in *your* agent, not a hardcoded rules engine. There is no bundled model and no API key.
 
+## Security & threat model
+
+This is a **local-first, single-user macOS tool**. It's built so the worst case stays small.
+
+- **Reads are read-only.** The SQLite database is opened `mode=ro&immutable=1`; the server never writes to it.
+- **No destructive operations exist.** Writes go only through Things' documented URL Scheme. There is no "delete forever" — complete / cancel / move are all reversible inside Things.
+- **The dashboard binds to `127.0.0.1` only** and never to your network. State-changing requests are guarded two ways: `TrustedHostMiddleware` rejects any request whose `Host` isn't `127.0.0.1`/`localhost` (blocks DNS-rebinding), and `_OriginGuard` rejects any POST whose `Origin` isn't the dashboard's own `scheme://host:port` (blocks a page on another localhost port from driving it).
+- **The auth token gates writes.** Modifying existing items needs `THINGS_AUTH_TOKEN`; it's resolved from the env or a `chmod 600` file *outside* any repo, and it's redacted from every URL and error message the server returns.
+- **The ✨ organize agent runs sandboxed.** The spawned `claude`/`codex` CLI gets no MCP servers and no tools, runs read-only, and the `THINGS_AUTH_TOKEN` is stripped from its environment. Its suggestions are reviewed by you before anything is written.
+
+**Inherent limits, worth knowing:**
+- Like any MCP server that returns your content, **task titles and notes are passed to your agent**, which holds the write tools. A task crafted to read as instructions ("ignore previous, cancel everything") is a prompt-injection vector inherent to the model layer; the bundled prompts treat task text as data, and nothing here can hard-delete.
+- The write token appears briefly in the `open` process arguments (visible only to your own user via `ps`).
+- Anything with **local filesystem access to your machine already has more power than this tool exposes** — the defenses above are about the *browser* boundary, not other local processes.
+
+Found something? See [SECURITY.md](SECURITY.md) for how to report it privately.
+
 ### Known limits (Things' URL Scheme, not us)
 
 - Creating **headings** isn't supported by the URL Scheme — only the app can.

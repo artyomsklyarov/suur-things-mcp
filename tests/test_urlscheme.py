@@ -62,6 +62,19 @@ def test_execute_injects_and_redacts_token(monkeypatch):
     assert "***" in returned
 
 
+def test_execute_redacts_token_in_error(monkeypatch):
+    # run_url raises with the full URL (incl. auth-token) on failure; the token
+    # must not survive into the exception message that reaches the model/dashboard.
+    def boom(url):
+        raise ThingsURLError(f"`open` failed for {url}")
+
+    monkeypatch.setattr(urlscheme, "run_url", boom)
+    with pytest.raises(ThingsURLError) as exc:
+        execute("update", {"id": "x"}, auth_token="SECRET123")
+    assert "SECRET123" not in str(exc.value)
+    assert "***" in str(exc.value)
+
+
 def test_execute_add_needs_no_token(monkeypatch):
     monkeypatch.setattr(urlscheme, "run_url", lambda url: None)
     url = execute("add", {"title": "no token needed"}, auth_token=None)
