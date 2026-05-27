@@ -290,11 +290,12 @@ _BUILTIN_FNS = {
 }
 
 
-def list_items(list_id: str, completed_limit: int = 50) -> dict:
+def list_items(list_id: str, completed_limit: int = 50, rollup: bool = True) -> dict:
     """To-dos for a sidebar selection: a built-in list, an area, or a project.
 
     `kind` tells the UI how to group: built-in lists group by project, a project
-    groups by heading, an area is flat.
+    groups by heading, an area is flat. `rollup` (areas only) folds in tasks from
+    the area's projects; set False to show only the area's loose to-dos.
     """
     # Things' built-in lists (esp. Anytime/Someday) include *projects*, not just
     # to-dos. The dashboard renders a builtin list as task rows, so a project would
@@ -310,8 +311,18 @@ def list_items(list_id: str, completed_limit: int = 50) -> dict:
     obj = get(list_id)
     notes = (obj.get("notes") or "").strip() if obj else ""
     if obj and obj.get("type") == "area":
-        # areas have no notes field in Things, but keep the shape uniform
-        return {"id": list_id, "kind": "area", "notes": notes, "items": [_card(i) for i in todos(area_uuid=list_id)]}
+        # Things shows an area as its *loose* to-dos only; tasks inside the area's
+        # projects don't surface. We roll those in so an area is a true overview:
+        # loose to-dos first, then each project's open tasks. The renderer groups
+        # by project_title, so in-project tasks land under their project heading.
+        # areas have no notes field in Things, but keep the shape uniform.
+        loose = [_card(i) for i in todos(area_uuid=list_id)]
+        in_project: list[dict] = []
+        if rollup:
+            proj_ids = {p["uuid"] for p in projects() if p.get("area") == list_id}
+            if proj_ids:
+                in_project = [_card(i) for i in todos(status="incomplete") if i.get("project") in proj_ids]
+        return {"id": list_id, "kind": "area", "notes": notes, "rollup": rollup, "items": loose + in_project}
     return {"id": list_id, "kind": "project", "notes": notes, "items": [_card(i) for i in todos(project_uuid=list_id)]}
 
 

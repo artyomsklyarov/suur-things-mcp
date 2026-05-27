@@ -23,6 +23,16 @@ from typing import Any
 DEFAULT_COLUMNS = ["Backlog", "In Progress", "On Hold", "Done"]
 QUADRANTS = {"do", "schedule", "delegate", "eliminate"}
 
+# Images Things itself can't hold. Stored as a browser-side overlay (like priority/
+# timeblocks): metadata in board.json, bytes on disk under the config dir. Image
+# mimes only; the id is a safe slug we generate (never derived from user input),
+# so it can't be turned into a path-traversal token by the serving endpoint.
+IMAGE_MIMES = {
+    "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif",
+    "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
+}
+_SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
 # Accept "owner/repo", an https github URL, or a git@github.com SSH url; capture "owner/repo".
 _GITHUB_RE = re.compile(r"^(?:https?://github\.com/|git@github\.com:)?([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 
@@ -136,6 +146,49 @@ def _clean_prefs(data: dict) -> dict[str, Any]:
     return {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
 
 
+def _clean_area_prefs(data: dict) -> dict[str, Any]:
+    """Per-area view prefs (browser overlay), keyed by area UUID. Currently just
+    ``rollup``: whether an area view folds in its projects' tasks (default true).
+    Only stores entries that differ from the default, so the file stays small."""
+    raw = data.get("area_prefs")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for uuid, v in raw.items():
+        if isinstance(v, dict) and "rollup" in v:
+            out[str(uuid)] = {"rollup": bool(v["rollup"])}
+    return out
+
+
+def _clean_priority_levels(data: dict) -> list[dict[str, Any]]:
+    """Priority Levels overlay: an ordered list of levels (P1 first), each mapped
+    to one or more *existing* Things tags. A task sits at the first level whose
+    tags it carries; ``tags[0]`` is the canonical tag written back to Things when
+    a task is dragged into that level. Unlike the Eisenhower ``priority`` overlay,
+    the source of truth here is real Things tags, not a per-uuid browser map."""
+    lst = data.get("priority_levels")
+    if not isinstance(lst, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for i, e in enumerate(lst):
+        if not isinstance(e, dict):
+            continue
+        label = (str(e.get("label")).strip()[:40] if e.get("label") else "") or f"P{i + 1}"
+        raw_tags = e.get("tags")
+        tags: list[str] = []
+        if isinstance(raw_tags, list):
+            for t in raw_tags:
+                if not isinstance(t, str):
+                    continue
+                t = t.strip()[:100]
+                if t and t not in tags:
+                    tags.append(t)
+        out.append({"label": label, "tags": tags})
+        if len(out) >= 8:  # sane cap; UI uses 4
+            break
+    return out
+
+
 def _clean_timeblocks(data: dict) -> dict[str, Any]:
     """Dashboard-only day-timeline placements: {uuid: {date, start "HH:MM", mins}}.
     Never written to Things — purely a browser overlay like `priority`."""
@@ -156,6 +209,39 @@ def _clean_timeblocks(data: dict) -> dict[str, Any]:
     return out
 
 
+def _clean_attachments(data: dict) -> dict[str, Any]:
+    """Image attachments overlay: {itemUuid: [{id, mime, name, caption, added}]}.
+
+    Never written to Things. Bytes live on disk; only metadata is kept here. Drops
+    entries with an unsafe id or a non-image mime."""
+    raw = data.get("attachments")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for uuid, lst in raw.items():
+        if not isinstance(lst, list):
+            continue
+        clean = []
+        for e in lst:
+            if not isinstance(e, dict):
+                continue
+            aid = str(e.get("id") or "").strip()
+            mime = str(e.get("mime") or "").strip().lower()
+            if not _SAFE_ID.match(aid) or mime not in IMAGE_MIMES:
+                continue
+            cap = e.get("caption")
+            clean.append({
+                "id": aid,
+                "mime": mime,
+                "name": (str(e.get("name")).strip()[:200] or "image") if e.get("name") else "image",
+                "caption": str(cap).strip()[:500] if cap and str(cap).strip() else None,
+                "added": str(e.get("added")).strip() if e.get("added") else None,
+            })
+        if clean:
+            out[str(uuid)] = clean
+    return out
+
+
 def _clean(data: dict) -> dict[str, Any]:
     priority = data.get("priority")
     priority = (
@@ -166,19 +252,32 @@ def _clean(data: dict) -> dict[str, Any]:
     link_table = _clean_links(data)
     prefs = _clean_prefs(data)
     tb = _clean_timeblocks(data)
+    att = _clean_attachments(data)
+    plevels = _clean_priority_levels(data)
+    aprefs = _clean_area_prefs(data)
+    common = {"priority": priority, "links": link_table, "prefs": prefs,
+              "timeblocks": tb, "attachments": att, "priority_levels": plevels,
+              "area_prefs": aprefs}
     # New shape: {"boards": [...]}.
     if isinstance(data.get("boards"), list) and data["boards"]:
         boards = [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]
-        return {"boards": boards, "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb}
+        return {"boards": boards, **common}
     # Legacy flat shape: {columns, include_areas, include_projects} → one board.
     if any(k in data for k in ("columns", "include_areas", "include_projects")):
         legacy = {**data, "id": data.get("id") or "default", "name": data.get("name") or "Project Board"}
-        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb}
-    return {"boards": [_default_board()], "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb}
+        return {"boards": [_clean_board(legacy)], **common}
+    return {"boards": [_default_board()], **common}
 
 
 def _fresh() -> dict[str, Any]:
-    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {}, "timeblocks": {}}
+    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {},
+            "timeblocks": {}, "attachments": {}, "priority_levels": [], "area_prefs": {}}
+
+
+def area_rollup(area_uuid: str) -> bool:
+    """Whether an area view folds in its projects' tasks. Default true."""
+    pref = load().get("area_prefs", {}).get(str(area_uuid))
+    return pref.get("rollup", True) if isinstance(pref, dict) else True
 
 
 def prefs() -> dict[str, Any]:
@@ -271,7 +370,8 @@ def merge(partial: dict) -> dict[str, Any]:
     can't wipe links written by another writer, and vice versa.
     """
     cfg = load()
-    for key in ("boards", "priority", "links", "prefs", "timeblocks"):
+    for key in ("boards", "priority", "links", "prefs", "timeblocks", "attachments",
+                "priority_levels", "area_prefs"):
         if key in partial:
             cfg[key] = partial[key]
     return save(cfg)
@@ -308,6 +408,90 @@ def _token_path() -> Path:
         return Path(override)
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(Path.home(), ".config")
     return Path(base) / "suur-things-mcp" / "token"
+
+
+# --- Image attachments (browser-side overlay; bytes on disk) --------------
+
+def _attach_dir() -> Path:
+    """Directory holding attachment bytes, alongside board.json (never in a repo)."""
+    return _path().parent / "attachments"
+
+
+def attachments() -> dict[str, Any]:
+    return load().get("attachments", {})
+
+
+def attachment_meta(item_uuid: str, att_id: str) -> dict[str, Any] | None:
+    for a in attachments().get(str(item_uuid), []):
+        if a.get("id") == att_id:
+            return a
+    return None
+
+
+def attachment_path(item_uuid: str, meta: dict) -> Path:
+    """On-disk path for an attachment. Built only from a stored metadata record and
+    validated ids/mimes — never from request input — so it cannot escape the dir."""
+    ext = IMAGE_MIMES.get(meta.get("mime", ""), "bin")
+    return _attach_dir() / str(item_uuid) / f"{meta['id']}.{ext}"
+
+
+def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
+                    caption: str | None = None) -> dict[str, Any]:
+    """Write image bytes to disk + record metadata. Returns the new metadata entry.
+
+    Raises ValueError on a non-image mime. The id is server-generated (uuid4), so
+    the serving path can never be attacker-controlled."""
+    mime = (mime or "").strip().lower()
+    if mime not in IMAGE_MIMES:
+        raise ValueError(f"unsupported image type: {mime!r}")
+    import datetime
+    meta = {
+        "id": uuid.uuid4().hex,
+        "mime": mime,
+        "name": (str(name).strip()[:200] or "image") if name else "image",
+        "caption": str(caption).strip()[:500] if caption and str(caption).strip() else None,
+        "added": datetime.date.today().isoformat(),
+    }
+    path = attachment_path(item_uuid, meta)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    cfg = load()
+    table = cfg.setdefault("attachments", {})
+    table.setdefault(str(item_uuid), []).append(meta)
+    save(cfg)
+    return meta
+
+
+def note_ref_url(path: str) -> str:
+    """The `file://` URL we drop into a task's notes for an attachment."""
+    from urllib.parse import quote
+    return f"file://{quote(path)}"
+
+
+def note_ref_line(name: str, path: str) -> str:
+    """Notes line appended for an attachment so the Things app shows there's an image
+    (Things can't render the image itself, but linkifies the file:// URL into a
+    tap-to-open reference). The leading marker makes the attachment obvious in Things."""
+    return f"🖼 Image attached: {name} — {note_ref_url(path)}"
+
+
+def remove_attachment(item_uuid: str, att_id: str) -> bool:
+    """Delete an attachment's bytes + metadata. Returns True if something was removed."""
+    meta = attachment_meta(item_uuid, att_id)
+    if not meta:
+        return False
+    try:
+        attachment_path(item_uuid, meta).unlink(missing_ok=True)
+    except OSError:
+        pass
+    cfg = load()
+    table = cfg.get("attachments", {})
+    if str(item_uuid) in table:
+        table[str(item_uuid)] = [a for a in table[str(item_uuid)] if a.get("id") != att_id]
+        if not table[str(item_uuid)]:
+            table.pop(str(item_uuid))
+        save(cfg)
+    return True
 
 
 def auth_token() -> str | None:

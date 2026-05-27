@@ -4,6 +4,63 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.7.0] - 2026-05-26
+
+### Added
+
+- **Priority Levels** — a 2×2 grid (P1–P4) that ranks tasks by your *existing*
+  Things tags, not a separate browser overlay. Available from the sidebar (over
+  Today) and as a **view toggle** on any list, area, or project. Map real tags to
+  each level (e.g. `🔴` → P1) in the ⚙ editor; a task lands at the first level
+  whose tags it carries. Drag a task between levels and the mapped tag is written
+  back to Things via the URL scheme (the old level tag is replaced in the same
+  write). Read-only when `THINGS_AUTH_TOKEN` isn't set — it still shows what's
+  already tagged. The tag→level map is stored in `board.json` (`priority_levels`),
+  never in Things.
+- **App-window mode** — `suur-things-mcp dashboard --app` (or the `open_dashboard`
+  tool with `app=true`) opens the dashboard in a frameless Chromium app window
+  (no tabs or address bar, its own Dock icon) instead of a browser tab. Prefers
+  Chrome → Brave → Edge → Chromium → Vivaldi → Arc; falls back to a normal tab.
+- **Drag a task onto a heading** — in a project, drop any task on a heading (e.g.
+  "iOS App") to move it under that heading, via the URL Scheme's `heading` param.
+  A "no heading" drop zone (it appears at the top only while you're dragging) pulls
+  a task back out to the top of the project.
+- **Linked repos on the project (and area) page** — open a project and its linked
+  repos show right under the notes, with the same chips (open in editor / terminal /
+  GitHub), a "🔗 repos" manager, and the git/GitHub pulse (commits/wk, last commit,
+  open PRs) you'd see on a Kanban card — so you get them even when the project isn't
+  on any board.
+- **Areas roll up their projects' tasks** — selecting an area now shows the tasks
+  living inside its projects, grouped by project, alongside the area's loose
+  to-dos. Things only shows an area's loose to-dos; this makes an area a real
+  overview of everything under it. A **"Project tasks"** pill in the header (next
+  to the view switcher, shown for areas in every view) turns the roll-up off (back
+  to project cards only); the choice is saved per area in `board.json`
+  (`area_prefs`).
+- **Image attachments** — Things can't store images, so attach them here instead.
+  Drag, paste, or pick an image in a task's edit card and it shows inline in the
+  dashboard. Bytes live on disk under `~/.config/suur-things-mcp/attachments/`;
+  only metadata goes in `board.json`. With `THINGS_AUTH_TOKEN` set, a clickable
+  `file://` reference is appended to the task's notes so the Things app shows it too.
+  - New `attach_image(item_uuid, source_path, caption)` MCP tool so an agent can
+    attach a chart/screenshot it generated; `get_item` now reports `attachments`.
+  - Endpoints `POST /api/attach`, `GET /api/attachment`, `POST /api/detach` —
+    the serve endpoint only returns files recorded in the overlay and rebuilds the
+    path server-side, so it can't be used to read arbitrary files.
+  - A task with an image shows an **image icon** next to the note icon in the list,
+    so attachments are visible at a glance.
+  - The Things note now reads **"🖼 Image attached: …"** (clearer that there's an
+    image), and the append is idempotent (re-attaching won't duplicate the line).
+  - **Creating a to-do now uses the same card as editing one** — the ＋ button opens
+    the full edit card in a "new" mode (To-Do/Project toggle, notes, when/deadline/
+    tags, and the 📎 attach tool). You can **attach an image while creating**: it's
+    staged in the browser, then linked once the to-do exists (its new ID is resolved
+    server-side, since the URL Scheme doesn't return it). Project notes also
+    **linkify bare domains** now (e.g. `hrv.suur.io`), not just `https://` URLs.
+
+> Note: attached images are local to this machine (plus wherever the config folder
+> syncs). They are not in Things Cloud and won't appear on iOS.
+
 ## [0.4.2] - 2026-05-26
 
 From early dashboard feedback.
@@ -60,6 +117,7 @@ If you installed 0.4.0 or 0.3.0, upgrade with `uv tool upgrade suur-things-mcp`
 
 - First public release.
 
+[0.5.0]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.5.0
 [0.4.2]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.2
 [0.4.1]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.1
 [0.4.0]: https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.4.0

@@ -20,6 +20,8 @@ Run:
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import json
 import os
 import re
@@ -36,7 +38,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.routing import Route
 
 import time
@@ -116,7 +118,10 @@ async def _sidebar(_request: Request) -> JSONResponse:
 async def _items(request: Request) -> JSONResponse:
     list_id = request.query_params.get("id", "today")
     try:
-        return JSONResponse({"ok": True, **reads.list_items(list_id)})
+        # An area folds in its projects' tasks unless the user turned roll-up off
+        # for that area (per-area browser pref). Ignored for non-area lists.
+        rollup = boardcfg.area_rollup(list_id)
+        return JSONResponse({"ok": True, **reads.list_items(list_id, rollup=rollup)})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc), "items": []})
 
@@ -244,6 +249,8 @@ async def _update(request: Request) -> JSONResponse:
         params["canceled"] = True
     if body.get("list_id"):
         params["list-id"] = body["list_id"]   # move a to-do to a project/area (⌘K "Move to project")
+    if body.get("heading") is not None:
+        params["heading"] = body["heading"]   # move a to-do under a heading within its project (drag onto a heading)
     try:
         execute("update", params, auth_token=token)
         return JSONResponse({"ok": True})
@@ -296,21 +303,42 @@ async def _add(request: Request) -> JSONResponse:
     if not title:
         return JSONResponse({"ok": False, "error": "missing title"})
     try:
+        notes = (body.get("notes") or "").strip()
+        # When the client staged an image, it needs the new item's UUID to attach it.
+        # The URL Scheme doesn't return it, so snapshot matching titles, create, then
+        # poll for the one that's new. Skipped unless `resolve` is set (avoids the poll).
+        resolve = bool(body.get("resolve"))
+        before = {t["uuid"] for t in reads.search(title) if t.get("title") == title} if resolve else set()
         if kind == "project":
             params: dict[str, Any] = {"title": title}
+            if notes:
+                params["notes"] = notes
             if body.get("area_id"):
                 params["area-id"] = body["area_id"]
             execute("add-project", params)
         else:
             params = {"title": title}
+            if notes:
+                params["notes"] = notes
             if body.get("when"):
                 params["when"] = body["when"]
+            if body.get("deadline"):
+                params["deadline"] = body["deadline"]
             if body.get("tags"):
                 params["tags"] = ",".join(body["tags"])
             if body.get("list_id"):
                 params["list-id"] = body["list_id"]
             execute("add", params)
-        return JSONResponse({"ok": True})
+        new_uuid = None
+        if resolve:
+            for _ in range(12):  # Things writes the DB asynchronously after the URL fires
+                await asyncio.sleep(0.15)
+                cands = [t for t in reads.search(title)
+                         if t.get("title") == title and t["uuid"] not in before]
+                if cands:
+                    new_uuid = max(cands, key=lambda t: t.get("created") or "")["uuid"]
+                    break
+        return JSONResponse({"ok": True, "uuid": new_uuid})
     except ThingsURLError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
 
@@ -373,6 +401,81 @@ async def _open(request: Request) -> JSONResponse:
         subprocess.run(["open", "-a", app, path], check=False, timeout=5)
         return JSONResponse({"ok": True})
     return JSONResponse({"ok": False, "error": "bad target"})
+
+
+_MAX_ATTACH_BYTES = 12 * 1024 * 1024  # 12 MB per image
+
+
+async def _attach(request: Request) -> JSONResponse:
+    """Attach an image to a task. Image bytes are sent as base64 (or a data: URL);
+    they're written to disk and recorded in the browser-side overlay (no Things
+    token needed to store). If a token IS set, a file:// reference is appended to
+    the task's notes so the Things app shows it too."""
+    body = await request.json()
+    item_uuid = str(body.get("uuid") or "").strip()
+    if not item_uuid:
+        return JSONResponse({"ok": False, "error": "missing uuid"})
+    raw = body.get("data") or ""
+    mime = (body.get("mime") or "").strip().lower()
+    if isinstance(raw, str) and raw.startswith("data:"):  # data:image/png;base64,XXXX
+        head, _, b64 = raw.partition(",")
+        if not mime and ";" in head:
+            mime = head[5:head.index(";")].strip().lower()
+        raw = b64
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except (ValueError, TypeError):
+        return JSONResponse({"ok": False, "error": "invalid base64 image data"})
+    if not data:
+        return JSONResponse({"ok": False, "error": "empty image"})
+    if len(data) > _MAX_ATTACH_BYTES:
+        return JSONResponse({"ok": False, "error": f"image too large (max {_MAX_ATTACH_BYTES // (1024*1024)}MB)"})
+    try:
+        meta = boardcfg.save_attachment(item_uuid, data, mime,
+                                        body.get("name") or "image", body.get("caption"))
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+    note_updated = False
+    token = _auth_token()
+    if token:
+        try:
+            path = str(boardcfg.attachment_path(item_uuid, meta))
+            existing = (reads.get(item_uuid) or {}).get("notes") or ""
+            if boardcfg.note_ref_url(path) not in existing:  # don't duplicate on re-attach
+                execute("update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], path)},
+                        auth_token=token)
+            note_updated = True
+        except ThingsURLError:
+            pass  # storing succeeded; the note reference is best-effort
+    return JSONResponse({"ok": True, "attachment": meta, "note_updated": note_updated})
+
+
+async def _attachment(request: Request) -> FileResponse | JSONResponse:
+    """Serve an attachment's bytes. Only files recorded in the overlay are served,
+    and the path is rebuilt server-side from the stored metadata — the request never
+    supplies a path, so this can't be turned into an arbitrary-file read."""
+    item_uuid = str(request.query_params.get("uuid") or "")
+    att_id = str(request.query_params.get("id") or "")
+    meta = boardcfg.attachment_meta(item_uuid, att_id)  # None unless both are known + valid
+    if not meta:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    path = boardcfg.attachment_path(item_uuid, meta)
+    base = boardcfg._attach_dir().resolve()
+    try:
+        rp = path.resolve()
+        rp.relative_to(base)  # defense in depth: must stay under the attachments dir
+    except (ValueError, OSError):
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    if not rp.is_file():
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
+    return FileResponse(rp, media_type=meta["mime"], headers={"Cache-Control": "private, max-age=3600"})
+
+
+async def _detach(request: Request) -> JSONResponse:
+    body = await request.json()
+    removed = boardcfg.remove_attachment(str(body.get("uuid") or ""), str(body.get("id") or ""))
+    return JSONResponse({"ok": removed})
 
 
 def _evict_jobs() -> None:
@@ -476,6 +579,9 @@ def create_app(port: int = DEFAULT_PORT) -> Starlette:
             Route("/api/rename", _rename, methods=["POST"]),
             Route("/api/add", _add, methods=["POST"]),
             Route("/api/open", _open, methods=["POST"]),
+            Route("/api/attachment", _attachment),
+            Route("/api/attach", _attach, methods=["POST"]),
+            Route("/api/detach", _detach, methods=["POST"]),
         ],
         middleware=[
             # TrustedHost first (outermost): reject foreign Host headers before any
@@ -487,6 +593,29 @@ def create_app(port: int = DEFAULT_PORT) -> Starlette:
 
 
 # --- Server lifecycle -----------------------------------------------------
+
+# Chromium "app mode" (`--app=URL`) gives the dashboard its own frameless window
+# (no tabs, no address bar) and a Dock icon while open — the closest thing to a
+# native app with zero extra deps. Try the installed Chromium browsers in order;
+# if none are present, or app mode fails, fall back to a normal browser tab.
+_APP_BROWSERS = ("Google Chrome", "Brave Browser", "Microsoft Edge", "Chromium", "Vivaldi", "Arc")
+
+
+def _open_url(url: str, app_mode: bool = False) -> None:
+    if app_mode:
+        for app in _APP_BROWSERS:
+            if os.path.isdir(f"/Applications/{app}.app"):
+                try:
+                    subprocess.run(["open", "-na", app, "--args", f"--app={url}"],
+                                   check=True, timeout=5)
+                    return
+                except Exception:  # noqa: BLE001
+                    break  # an app exists but launch failed — fall back to a normal open
+    try:
+        subprocess.run(["open", url], check=False, timeout=5)
+    except Exception:  # noqa: BLE001
+        pass
+
 
 def _dashboard_alive(port: int) -> bool:
     """True if *our* dashboard already answers on this port, so we reuse it instead
@@ -514,17 +643,16 @@ def _pick_port(preferred: int = DEFAULT_PORT) -> int:
         return s.getsockname()[1]
 
 
-def ensure_running(open_browser: bool = True) -> str:
+def ensure_running(open_browser: bool = True, app_mode: bool = False) -> str:
     if _running.get("url"):
+        if open_browser:
+            _open_url(_running["url"], app_mode)
         return _running["url"]
     if _dashboard_alive(DEFAULT_PORT):  # reuse an instance already on the stable port
         url = f"http://127.0.0.1:{DEFAULT_PORT}"
         _running.update(url=url, port=DEFAULT_PORT)
         if open_browser:
-            try:
-                subprocess.run(["open", url], check=False, timeout=5)
-            except Exception:  # noqa: BLE001
-                pass
+            _open_url(url, app_mode)
         return url
     port = _pick_port()
     config = uvicorn.Config(create_app(port), host="127.0.0.1", port=port, log_level="warning")
@@ -534,33 +662,24 @@ def ensure_running(open_browser: bool = True) -> str:
     url = f"http://127.0.0.1:{port}"
     _running.update(url=url, port=port, thread=thread, server=server)
     if open_browser:
-        try:
-            subprocess.run(["open", url], check=False, timeout=5)
-        except Exception:  # noqa: BLE001
-            pass
+        _open_url(url, app_mode)
     return url
 
 
-def serve_foreground(port: int = DEFAULT_PORT, open_browser: bool = True) -> None:
+def serve_foreground(port: int = DEFAULT_PORT, open_browser: bool = True, app_mode: bool = False) -> None:
     if _dashboard_alive(port):  # already running on the stable port — don't duplicate
         url = f"http://127.0.0.1:{port}"
         print(f"Things dashboard already running → {url}")
         if open_browser:
-            try:
-                subprocess.run(["open", url], check=False, timeout=5)
-            except Exception:  # noqa: BLE001
-                pass
+            _open_url(url, app_mode)
         return
     chosen = _pick_port(port)
     if chosen != port:
         print(f"Port {port} is busy (not our dashboard); using {chosen} instead.")
     url = f"http://127.0.0.1:{chosen}"
-    print(f"Things dashboard → {url}  (Ctrl-C to stop)")
+    print(f"Things dashboard → {url}  ({'app window' if app_mode else 'browser'}; Ctrl-C to stop)")
     if open_browser:
-        try:
-            subprocess.run(["open", url], check=False, timeout=5)
-        except Exception:  # noqa: BLE001
-            pass
+        _open_url(url, app_mode)
     uvicorn.run(create_app(chosen), host="127.0.0.1", port=chosen, log_level="warning")
 
 
@@ -660,6 +779,11 @@ INDEX_HTML = """<!DOCTYPE html>
 
   .grp-head { display:flex; align-items:center; gap:8px; font-weight:600; font-size:14.5px;
     padding:18px 0 7px; border-bottom:1px solid var(--header-rule); margin-bottom:4px; }
+  .grp-head.drop { outline:2px dashed var(--accent); outline-offset:3px; border-radius:6px; }
+  .heading-dropzone { display:none; color:var(--muted); font-size:12.5px; padding:9px 12px; margin:4px 0 6px; max-width:760px;
+    border:1px dashed var(--pill-border); border-radius:8px; text-align:center; }
+  body.dragging-task .heading-dropzone { display:block; }       /* only show while dragging a task */
+  .heading-dropzone.drop { border-color:var(--accent); color:var(--text); background:var(--row-hover); }
   .row { display:flex; align-items:center; gap:11px; padding:6px 8px; border-radius:7px; cursor:pointer; max-width:760px; }
   .row:hover { background:var(--row-hover); }
   .row.is-done .title { color:var(--muted); }
@@ -674,6 +798,8 @@ INDEX_HTML = """<!DOCTYPE html>
   .meta { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
   .pill { font-size:11px; padding:2px 8px; border:0; background:var(--chip-bg); color:var(--chip-fg); border-radius:11px; white-space:nowrap; }
   .note-ico { color:var(--muted); font-size:12px; }
+  .att-ico { color:var(--muted); display:inline-flex; align-items:center; }
+  .att-ico svg { width:13px; height:13px; }
   .due { display:inline-flex; align-items:center; gap:4px; color:var(--red); font-size:12px; white-space:nowrap; }
   .due .dot { width:9px; height:9px; border-radius:50%; background:var(--red); display:inline-block; }
   .empty, .err { color:var(--muted); padding:40px 4px; } .err { color:var(--red); }
@@ -765,6 +891,15 @@ INDEX_HTML = """<!DOCTYPE html>
     padding:0; margin:8px 0 4px; min-height:22px; resize:none; overflow:hidden; }
   .ec-notes::placeholder, .ec-title::placeholder { color:var(--muted); }
   .ec-pills { display:flex; flex-wrap:wrap; gap:7px; margin:9px 0 2px; }
+  .ec-attach { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }
+  .ec-attach:empty { display:none; }
+  .att { position:relative; width:88px; }
+  .att img { width:88px; height:88px; object-fit:cover; border-radius:8px; border:1px solid var(--divider); cursor:zoom-in; display:block; }
+  .att .att-x { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--main-bg);
+    border:1px solid var(--divider); color:var(--muted); font-size:11px; line-height:16px; text-align:center; cursor:pointer; }
+  .att .att-x:hover { color:var(--red); }
+  .att .att-cap { font-size:10.5px; color:var(--muted); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ec-drop { outline:2px dashed var(--accent); outline-offset:3px; }
   .ec-pills:empty { display:none; }
   .ec-pill { font-size:12.5px; padding:3px 10px; border-radius:13px; background:var(--chip-bg); color:var(--chip-fg);
     display:inline-flex; align-items:center; gap:5px; cursor:pointer; white-space:nowrap; }
@@ -785,6 +920,9 @@ INDEX_HTML = """<!DOCTYPE html>
   .ec-foot .spacer { flex:1; }
   .ec-link { border:0; background:transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:12.5px; padding:4px 8px; border-radius:7px; }
   .ec-link:hover { background:var(--row-hover); color:var(--text); }
+  .ec-kind { margin:0 30px 12px 0; }
+  .ec-where { color:var(--muted); font-size:12px; margin-right:8px; }
+  .ec-add { padding:6px 16px; font-size:13px; }
 
   .org-row { border:1px solid var(--divider); border-radius:9px; padding:10px 12px; margin:8px 0; }
   .org-cur { color:var(--text); font-size:13px; font-weight:600; margin-bottom:6px; }
@@ -804,12 +942,15 @@ INDEX_HTML = """<!DOCTYPE html>
   .card .cdesc { color:var(--muted); font-size:12px; margin-top:4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card .cfoot { margin-top:9px; display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
   .card .kind { font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; border:1px solid var(--pill-border); border-radius:9px; padding:0 6px; }
-  .card .crepos { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-  .card .cpulse { color:var(--muted); font-size:11px; margin-top:8px; }
-  .card .repo { font-size:11px; color:var(--muted); border:1px solid var(--pill-border); border-radius:8px; padding:1px 3px 1px 8px; display:inline-flex; align-items:center; gap:1px; }
-  .card .rb { border:0; background:transparent; cursor:pointer; color:var(--muted); font-size:12px; padding:0 4px; border-radius:5px; line-height:1.6; }
-  .card .rb:hover { background:var(--row-hover); color:var(--text); }
-  .card .rb.add { border:1px dashed var(--pill-border); border-radius:8px; padding:0 7px; }
+  .crepos { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .cpulse { color:var(--muted); font-size:11px; margin-top:8px; }
+  .crepos .repo { font-size:11px; color:var(--muted); border:1px solid var(--pill-border); border-radius:8px; padding:1px 3px 1px 8px; display:inline-flex; align-items:center; gap:1px; }
+  .crepos .rb { border:0; background:transparent; cursor:pointer; color:var(--muted); font-size:12px; padding:0 4px; border-radius:5px; line-height:1.6; }
+  .crepos .rb:hover { background:var(--row-hover); color:var(--text); }
+  .crepos .rb.add { border:1px dashed var(--pill-border); border-radius:8px; padding:0 7px; }
+  /* project/area list-view repo bar (same chips + pulse as a board card) */
+  .proj-repos { margin:-6px 0 18px; }
+  .proj-repos .cpulse { margin-top:6px; }
 
   .pri-wrap { display:flex; gap:16px; height:100%; }
   .pri-pool { width:300px; flex:0 0 300px; background:var(--col-bg); border-radius:12px; display:flex; flex-direction:column; }
@@ -825,6 +966,27 @@ INDEX_HTML = """<!DOCTYPE html>
   .pcard { background:var(--card-bg); border-radius:8px; padding:8px 11px; margin:6px 0; box-shadow:var(--card-shadow); cursor:pointer; }
   .pcard.dragging { opacity:.4; } .pcard .pt { font-weight:500; }
   .pcard .psub { color:var(--muted); font-size:12px; margin-top:2px; }
+
+  /* Priority Levels: a 2×2 grid (P1 P2 / P3 P4), tasks bucketed by Things tags */
+  .levels { flex:1; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:14px; min-width:0; }
+  .lvl { border:1px solid var(--divider); border-radius:12px; display:flex; flex-direction:column; min-height:0; border-left:4px solid var(--muted); }
+  .lvl-head { padding:9px 14px; border-bottom:1px solid var(--divider); display:flex; align-items:baseline; gap:8px; }
+  .lvl-head .lt { font-weight:700; } .lvl-head .ls { color:var(--muted); font-size:12px; } .lvl-head .lc { margin-left:auto; color:var(--muted); font-size:12px; }
+  .lvl .cards { padding:8px 10px; overflow-y:auto; flex:1; }
+  .lvl.drop, .levels .pri-pool.drop { outline:2px dashed var(--accent); outline-offset:-4px; }
+  .lvl-1 { border-left-color:#e0402b; } .lvl-1 .lt { color:#e0402b; }
+  .lvl-2 { border-left-color:#d98a1f; } .lvl-2 .lt { color:#d98a1f; }
+  .lvl-3 { border-left-color:#2e9e5b; } .lvl-3 .lt { color:#2e9e5b; }
+  .lvl-4 { border-left-color:#4c8dff; } .lvl-4 .lt { color:#4c8dff; }
+  .lvl-mapnote { color:var(--muted); font-size:12px; padding:14px; text-align:center; }
+  .lvl-tagrow { display:flex; gap:8px; align-items:center; margin:7px 0; }
+  .lvl-tagrow .lbl { flex:0 0 96px; font-weight:600; } .lvl-tagrow input { flex:1; }
+
+  /* Per-area header toggle: same muted segmented-control look as the view switcher.
+     A single segment that reads "pressed in" (white + shadow) when roll-up is on. */
+  .rollup-tog { margin-right:10px; }
+  .rollup-tog .vt::before { content:""; display:inline-block; width:13px; height:13px; margin-right:6px; vertical-align:-2px; border-radius:3px; border:1.5px solid var(--check-border); box-sizing:border-box; background:no-repeat center/9px; }
+  .rollup-tog .vt.on::before { border-color:var(--muted); background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M2.5 6.2 5 8.7l4.5-5' fill='none' stroke='%238a8f98' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); }
 
   .overlay { position:fixed; inset:0; background:var(--overlay); display:none; align-items:flex-start; justify-content:center; z-index:20; padding:60px 16px; }
   .overlay.show { display:flex; }
@@ -857,7 +1019,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <span class="ck-ph">Search &amp; commands</span><span class="kbd">⌘K</span>
   </button>
   <span class="grow"></span>
-  <button class="iconbtn" id="add-btn" title="Add to-do or project" onclick="openAdd()">＋</button>
+  <button class="iconbtn" id="add-btn" title="Add to-do or project" onclick="openCreate('todo')">＋</button>
   <button class="iconbtn" id="prefs-btn" title="Preferences" onclick="openPrefs()">⚙</button>
   <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
 </div>
@@ -873,14 +1035,19 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="main-head">
       <span class="ico" id="head-ico">⭐</span><h1 id="head-title">Today</h1>
       <span class="grow"></span>
+      <div class="viewtog rollup-tog" id="rollup-pill" style="display:none" title="Fold this area's project tasks into the view">
+        <button class="vt" id="rollup-vt" onclick="toggleRollupPill()">Project tasks</button>
+      </div>
       <div class="viewtog" id="viewtog">
         <button class="vt" id="vt-list" onclick="setListView('list')">List</button>
         <button class="vt" id="vt-matrix" onclick="setListView('matrix')">Matrix</button>
+        <button class="vt" id="vt-levels" onclick="setListView('levels')">Levels</button>
         <button class="vt" id="vt-cards" onclick="setListView('cards')">Cards</button>
         <button class="vt" id="vt-timeline" onclick="setListView('timeline')">Timeline</button>
       </div>
       <button class="iconbtn" id="organize-btn" title="Auto-organize this folder with your agent" style="display:none" onclick="startOrganize()">✨</button>
       <button class="iconbtn" id="board-gear" title="Board settings" style="display:none" onclick="openBoardSettings()">⚙</button>
+      <button class="iconbtn" id="levels-gear" title="Map Things tags to priority levels" style="display:none" onclick="openLevelMap()">⚙</button>
     </div>
     <div class="filterbar" id="filterbar"></div>
     <div id="content"></div>
@@ -890,6 +1057,10 @@ INDEX_HTML = """<!DOCTYPE html>
 <div class="overlay" id="edit-overlay">
   <div class="editcard">
     <span class="ec-x" title="Close (saves changes)" onclick="closeEdit()">✕</span>
+    <div class="viewtog ec-kind" id="ec-kind" style="display:none">
+      <button class="vt on" data-kind="todo" onclick="setEditKind('todo')">To-Do</button>
+      <button class="vt" data-kind="project" onclick="setEditKind('project')">Project</button>
+    </div>
     <div class="ec-top">
       <span class="ec-box" id="ec-box" title="Complete" onclick="completeTask()"></span>
       <textarea class="ec-title" id="f-title" rows="1" placeholder="New To-Do" oninput="autoGrow(this)"></textarea>
@@ -897,6 +1068,8 @@ INDEX_HTML = """<!DOCTYPE html>
     <textarea class="ec-notes" id="f-notes" placeholder="Notes" oninput="autoGrow(this)"></textarea>
     <div class="ec-pills" id="ec-pills"></div>
     <div id="f-checklist"></div>
+    <div id="ec-attach" class="ec-attach"></div>
+    <input type="file" id="att-input" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif" multiple style="display:none" onchange="onAttachPick(event)">
     <div class="ec-editor" id="ed-when">
       <div class="qchips" id="when-chips"></div>
       <input id="f-when" placeholder="today · evening · tomorrow · anytime · someday · yyyy-mm-dd" oninput="buildWhenChips();updatePills()">
@@ -913,9 +1086,12 @@ INDEX_HTML = """<!DOCTYPE html>
       <button class="ec-tool" id="tool-deadline" title="Deadline" onclick="toggleEditor('ed-deadline',this)">⚑</button>
       <button class="ec-tool" title="Checklist (edit in Things)" onclick="openInThings()">☰</button>
       <button class="ec-tool" id="tool-tags" title="Tags" onclick="toggleEditor('ed-tags',this)">🏷</button>
+      <button class="ec-tool" id="tool-attach" title="Attach image (Things can't store images — shown here; a file link is added to notes)" onclick="$('#att-input').click()">📎</button>
       <span class="spacer"></span>
+      <span class="ec-where" id="ec-where" style="display:none"></span>
       <button class="ec-link" onclick="cancelTask()">Cancel task</button>
       <button class="ec-link" onclick="openInThings()">Open in Things ↗</button>
+      <button class="btn primary ec-add" id="ec-add" style="display:none" onclick="createFromCard()">Add</button>
     </div>
   </div>
 </div>
@@ -939,18 +1115,6 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
 </div>
 
-<div class="overlay" id="add-overlay">
-  <div class="panel" style="width:440px">
-    <h2>Add</h2><div class="sub">Quick-add to Things. No token needed.</div>
-    <div class="viewtog show" id="add-kind" style="margin-bottom:12px">
-      <button class="vt on" data-kind="todo" onclick="setAddKind('todo')">To-Do</button>
-      <button class="vt" data-kind="project" onclick="setAddKind('project')">Project</button>
-    </div>
-    <div class="field"><input id="add-title" placeholder="e.g. buy milk tomorrow #errand" onkeydown="if(event.key==='Enter')submitAdd()"></div>
-    <div class="hint" id="add-where"></div>
-    <div class="btnrow"><button class="btn primary" onclick="submitAdd()">Add</button><span class="spacer"></span><button class="btn ghost" onclick="closeOverlay('add-overlay')">Cancel</button></div>
-  </div>
-</div>
 
 <div class="overlay" id="prefs-overlay">
   <div class="panel">
@@ -959,6 +1123,15 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="field"><label>Terminal app (e.g. Ghostty, iTerm, Terminal, Warp)</label><input id="pf-terminal" placeholder="Terminal"></div>
     <div class="hint">Blank = defaults (editor falls back to Finder; terminal to Terminal.app).</div>
     <div class="btnrow"><button class="btn primary" onclick="savePrefs()">Save</button><span class="spacer"></span><button class="btn ghost" onclick="closeOverlay('prefs-overlay')">Cancel</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="levelmap-overlay">
+  <div class="panel">
+    <h2>Priority levels</h2><div class="sub">Map your existing Things tags to four levels. A task lands at the first level whose tags it carries. The first tag in each row is written back to Things when you drag a task into that level.</div>
+    <div id="levelmap-rows"></div>
+    <div class="hint">Comma-separate tags. Leave a level blank to skip it. Your known tags: <span id="levelmap-known"></span></div>
+    <div class="btnrow"><button class="btn primary" onclick="saveLevelMap()">Save</button><span class="spacer"></span><button class="btn ghost" onclick="closeOverlay('levelmap-overlay')">Cancel</button></div>
   </div>
 </div>
 
@@ -994,7 +1167,7 @@ INDEX_HTML = """<!DOCTYPE html>
 
 <script>
 const $ = (s, r=document) => r.querySelector(s);
-let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{}};
+let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{},priority_levels:[],area_prefs:{}};
 let MODE="list", CUR_BOARD=null, SEL=null, EDIT_ID=null, CURRENT_ID="today", TODAY_CACHE=[];
 let LAST_ITEMS={}, ORG_SUG=[];
 let COLLAPSED=new Set(JSON.parse(localStorage.getItem("collapsed-areas")||"[]"));
@@ -1015,6 +1188,8 @@ const SVG={
   logbook:`<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.1" fill="#3fa34d"/><path d="M5.15 8.2 7 10.05l3.85-4" fill="none" stroke="#fff" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   trash:`<svg viewBox="0 0 16 16"><g fill="var(--muted)"><path d="M6.1 2.5h3.8a.8.8 0 0 1 .8.8V4H5.3v-.7a.8.8 0 0 1 .8-.8z"/><rect x="3.2" y="4.2" width="9.6" height="1.5" rx=".7"/><path d="M4.3 6.4h7.4l-.58 6.1a1.1 1.1 0 0 1-1.1 1H5.98a1.1 1.1 0 0 1-1.1-1z"/></g></svg>`,
   priority:`<svg viewBox="0 0 16 16"><g><rect x="2.4" y="2.4" width="4.8" height="4.8" rx="1.2" fill="#e0402b"/><rect x="8.8" y="2.4" width="4.8" height="4.8" rx="1.2" fill="var(--muted)"/><rect x="2.4" y="8.8" width="4.8" height="4.8" rx="1.2" fill="var(--muted)"/><rect x="8.8" y="8.8" width="4.8" height="4.8" rx="1.2" fill="var(--muted)"/></g></svg>`,
+  levels:`<svg viewBox="0 0 16 16"><g><rect x="2.4" y="2.6" width="11.2" height="2.3" rx="1.15" fill="#e0402b"/><rect x="2.4" y="6.85" width="8.4" height="2.3" rx="1.15" fill="#d98a1f"/><rect x="2.4" y="11.1" width="5.2" height="2.3" rx="1.15" fill="var(--muted)"/></g></svg>`,
+  image:`<svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><rect x="2.3" y="3.4" width="11.4" height="9.2" rx="1.6"/><circle cx="5.6" cy="6.6" r="1.05" fill="currentColor" stroke="none"/><path d="M2.9 11.6 6.1 8.7l2.1 1.9 2.4-2.7 2.5 2.7"/></g></svg>`,
   board:`<svg viewBox="0 0 16 16"><g fill="var(--muted)"><rect x="2.4" y="3" width="3.1" height="10" rx="1.2"/><rect x="6.45" y="3" width="3.1" height="7" rx="1.2"/><rect x="10.5" y="3" width="3.1" height="9" rx="1.2"/></g></svg>`,
   search:`<svg viewBox="0 0 16 16"><g fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.1"/><path d="M9.9 9.9 14 14"/></g></svg>`,
   info:`<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4" fill="none" stroke="var(--muted)" stroke-width="1.5"/><circle cx="8" cy="5" r="1" fill="var(--muted)"/><rect x="7.15" y="6.9" width="1.7" height="5" rx="0.85" fill="var(--muted)"/></svg>`,
@@ -1055,7 +1230,21 @@ function setHeadIcon(sel){
   el.textContent="";  // areas show their name large, no glyph (matches Things)
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-function linkify(s){ return esc(s).replace(/(https?:\\/\\/[^\\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+// Linkify full URLs (https://…) and bare domains (hrv.suur.io, www.x.com/path).
+// The bare-domain pass skips anything preceded by / @ . " ' > (already-linked URLs,
+// emails) and skips common file extensions so "config.py" isn't turned into a link.
+const _NOT_DOMAIN=new Set(["py","js","ts","tsx","jsx","md","json","txt","sh","css","html","png","jpg","jpeg","svg","gif","go","rs","rb","yml","yaml","toml","lock"]);
+function _anchor(href,text){ return '<a href="'+href+'" target="_blank" rel="noopener">'+text+'</a>'; }
+function linkify(s){
+  // Protect full URLs as placeholders first, so the bare-domain pass below can't
+  // re-match the domain inside an href we just emitted. Restore them at the end.
+  const urls=[];
+  let h=esc(s).replace(/(https?:\\/\\/[^\\s<]+)/g, u=>{ urls.push(u); return "\\u0001"+(urls.length-1)+"\\u0001"; });
+  h=h.replace(/(^|[^\\/@."'\\u0001])((?:www\\.)?(?:[a-z0-9-]+\\.)+[a-z]{2,})((?:\\/[^\\s<]*)?)(?=[\\s<).,!?]|$)/gi,
+    (m,pre,host,path)=>{ if(_NOT_DOMAIN.has(host.split(".").pop().toLowerCase())) return m;
+      return pre+_anchor("https://"+host+path, host+path); });
+  return h.replace(/\\u0001(\\d+)\\u0001/g, (m,i)=>_anchor(urls[+i], urls[+i]));
+}
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
 function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#theme").textContent=t==="dark"?"☀":"☾"; localStorage.setItem("things-theme",t); }
@@ -1084,11 +1273,15 @@ async function saveItemRepos(itemId, kind, repos){
 function go(h){ if(location.hash===h) route(); else location.hash=h; }
 function route(){
   const h=location.hash;
+  $("#levels-gear").style.display="none";   // only the Priority Levels view shows it
+  $("#rollup-pill").style.display="none";    // only area list views show it (renderList re-shows)
   if(h==="#about") return renderAbout();
+  if(h==="#pl") return renderLevels();
   if(h==="#p") return renderPriority();
   if(h.startsWith("#b/")){ const id=decodeURIComponent(h.slice(3)); if(CONFIG.boards.find(b=>b.id===id)) return renderBoard(id); }
   if(h.startsWith("#l/")){ let rest=h.slice(3); let view="list";
     if(rest.endsWith("/m")){ view="matrix"; rest=rest.slice(0,-2); }
+    else if(rest.endsWith("/p")){ view="levels"; rest=rest.slice(0,-2); }
     else if(rest.endsWith("/c")){ view="cards"; rest=rest.slice(0,-2); }
     else if(rest.endsWith("/t")){ view="timeline"; rest=rest.slice(0,-2); }
     const sel=resolveList(decodeURIComponent(rest)); if(sel) return renderList(sel, view); }
@@ -1103,16 +1296,17 @@ function ckCommands(){
   const out=[];
   ((SIDEBAR&&SIDEBAR.builtins)||[]).forEach(b=>out.push({label:b.title, hint:"Go", icon:SVG[b.id]||"", run:()=>go("#l/"+encodeURIComponent(b.id))}));
   out.push({label:"Priority Matrix", hint:"Go", icon:SVG.priority, run:()=>go("#p")});
+  out.push({label:"Priority Levels", hint:"Go", icon:SVG.levels, run:()=>go("#pl")});
   (CONFIG.boards||[]).forEach(b=>out.push({label:b.name, hint:"Board", icon:SVG.board, run:()=>go("#b/"+encodeURIComponent(b.id))}));
   ((SIDEBAR&&SIDEBAR.areas)||[]).forEach(a=>a.projects.forEach(p=>out.push({label:p.title, hint:"Project", icon:"", run:()=>go("#l/"+encodeURIComponent(p.uuid))})));
   ((SIDEBAR&&SIDEBAR.arealess)||[]).forEach(p=>out.push({label:p.title, hint:"Project", icon:"", run:()=>go("#l/"+encodeURIComponent(p.uuid))}));
-  out.push({label:"New to-do…", hint:"Create", icon:"", run:()=>{closeCmdk(); openAdd();}});
-  out.push({label:"New project…", hint:"Create", icon:"", run:()=>{closeCmdk(); openAdd(); setAddKind("project");}});
+  out.push({label:"New to-do…", hint:"Create", icon:"", run:()=>{closeCmdk(); openCreate("todo");}});
+  out.push({label:"New project…", hint:"Create", icon:"", run:()=>{closeCmdk(); openCreate("project");}});
   out.push({label:"New board", hint:"Create", icon:"", run:()=>{closeCmdk(); newBoard();}});
   out.push({label:"Organize this list ✨", hint:"Agent", icon:"", run:()=>{ if(SEL){ closeCmdk(); startOrganize(SEL.id,"organize"); } else alert("Open a list first."); }});
   out.push({label:"Triage Inbox ✨", hint:"Agent", icon:"", run:()=>{ closeCmdk(); startOrganize("inbox","triage"); }});
   out.push({label:"Calm my Today ✨", hint:"Agent", icon:"", run:()=>{ closeCmdk(); startOrganize("today","calm"); }});
-  if(SEL && MODE!=="board" && MODE!=="about"){ [["list","List"],["matrix","Matrix"],["cards","Cards"],["timeline","Timeline"]].forEach(([v,l])=>out.push({label:"Switch to "+l+" view", hint:"View", icon:"", run:()=>{closeCmdk(); setListView(v);}})); }
+  if(SEL && MODE!=="board" && MODE!=="about"){ [["list","List"],["matrix","Matrix"],["levels","Levels"],["cards","Cards"],["timeline","Timeline"]].forEach(([v,l])=>out.push({label:"Switch to "+l+" view", hint:"View", icon:"", run:()=>{closeCmdk(); setListView(v);}})); }
   out.push({label:"Toggle light / dark", hint:"App", icon:"", run:()=>{ $("#theme").click(); }});
   out.push({label:"Preferences", hint:"App", icon:"", run:()=>{closeCmdk(); openPrefs();}});
   out.push({label:"About · Credits", hint:"App", icon:SVG.info, run:()=>{closeCmdk(); go("#about");}});
@@ -1210,6 +1404,9 @@ function renderSidebar(){
   const pri=document.createElement("div"); pri.className="nav-item"; pri.dataset.id="priority";
   pri.innerHTML=`<span class="ico">${SVG.priority}</span><span class="label">Priority Matrix</span>`; pri.onclick=()=>go("#p");
   el.appendChild(pri);
+  const lvl=document.createElement("div"); lvl.className="nav-item"; lvl.dataset.id="levels";
+  lvl.innerHTML=`<span class="ico">${SVG.levels}</span><span class="label">Priority Levels</span>`; lvl.onclick=()=>go("#pl");
+  el.appendChild(lvl);
   const gh=document.createElement("div"); gh.className="group-head";
   gh.innerHTML=`<span>Boards</span><span class="add" title="New board">＋</span>`;
   gh.querySelector(".add").onclick=(e)=>{e.stopPropagation(); newBoard();};
@@ -1268,32 +1465,46 @@ function resolveList(id){
 }
 
 // --- list view ---
-let LIST_ITEMS=[], LIST_KIND="", LIST_NOTES=null, CUR_FILTER=null;
+let LIST_ITEMS=[], LIST_KIND="", LIST_NOTES=null, CUR_FILTER=null, LIST_ROLLUP=true;
 async function renderList(sel, view="list"){
-  const matrix=view==="matrix", cards=view==="cards", timeline=view==="timeline";
+  const matrix=view==="matrix", levels=view==="levels", cards=view==="cards", timeline=view==="timeline";
   MODE=view; CUR_BOARD=null; SEL=sel;
-  $("#board-gear").style.display="none"; setActive(sel.id);
+  $("#board-gear").style.display="none"; $("#levels-gear").style.display=levels?"flex":"none"; setActive(sel.id);
+  $("#rollup-pill").style.display=(sel.kind==="area")?"inline-flex":"none";  // areas only, every view
   setHeadIcon(sel); $("#head-title").textContent=sel.title;
   setHeadEditable(sel.kind==="project"?"project":null, sel.id);
   $("#viewtog").classList.add("show");
-  $("#vt-list").classList.toggle("on",view==="list"); $("#vt-matrix").classList.toggle("on",matrix); $("#vt-cards").classList.toggle("on",cards); $("#vt-timeline").classList.toggle("on",timeline);
-  $(".main").classList.toggle("fill", matrix||timeline);
+  $("#vt-list").classList.toggle("on",view==="list"); $("#vt-matrix").classList.toggle("on",matrix); $("#vt-levels").classList.toggle("on",levels); $("#vt-cards").classList.toggle("on",cards); $("#vt-timeline").classList.toggle("on",timeline);
+  $(".main").classList.toggle("fill", matrix||levels||timeline);
   const c=$("#content"); $("#filterbar").classList.remove("show"); c.innerHTML=`<div class="empty">loading…</div>`;
   const data=await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
-  LIST_ITEMS=data.items; LIST_KIND=data.kind; LIST_NOTES=data.notes||null; CUR_FILTER=null;
+  LIST_ITEMS=data.items; LIST_KIND=data.kind; LIST_NOTES=data.notes||null; CUR_FILTER=null; LIST_ROLLUP=data.rollup!==false;
+  $("#rollup-vt").classList.toggle("on", LIST_KIND==="area" && LIST_ROLLUP);
   LAST_ITEMS={}; LIST_ITEMS.forEach(it=>{ LAST_ITEMS[it.uuid]=it.title; });
   $("#organize-btn").style.display=(view==="list"&&(LIST_KIND==="project"||LIST_KIND==="area"||sel.id==="inbox"))?"flex":"none";
   if(matrix){
     let items=LIST_ITEMS.slice();
     if(LIST_KIND==="area") items=areaProjects(sel.id).map(p=>({uuid:p.uuid,title:p.title,progress:p.progress,_proj:true})).concat(items);
     renderMatrix(items);
-  } else if(cards){ renderCards(LIST_ITEMS); }
+  } else if(levels){ renderLevelBands(); }
+  else if(cards){ renderCards(LIST_ITEMS); }
   else if(timeline){ renderTimeline(LIST_ITEMS); }
   else { buildFilterBar(); renderRows(); }
 }
-function setListView(v){ if(SEL) go("#l/"+encodeURIComponent(SEL.id)+(v==="matrix"?"/m":v==="cards"?"/c":v==="timeline"?"/t":"")); }
+function setListView(v){ if(SEL) go("#l/"+encodeURIComponent(SEL.id)+(v==="matrix"?"/m":v==="levels"?"/p":v==="cards"?"/c":v==="timeline"?"/t":"")); }
 function areaProjects(areaId){ const a=((SIDEBAR&&SIDEBAR.areas)||[]).find(x=>x.uuid===areaId); return a?a.projects:[]; }
+// Per-area header pill: fold in the area's project tasks, or show only its loose
+// to-dos. Saved to the area_prefs config section; the server then decides what to
+// return. Re-renders the *current* view (works on List/Matrix/Levels/Cards/Timeline).
+function toggleRollupPill(){ setAreaRollup(!LIST_ROLLUP); }
+async function setAreaRollup(on){
+  if(!SEL) return;
+  CONFIG.area_prefs=CONFIG.area_prefs||{}; CONFIG.area_prefs[SEL.id]={rollup:on};
+  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({area_prefs:CONFIG.area_prefs})})).json();
+  if(r.ok) CONFIG=r.config;
+  renderList(SEL, MODE);   // keep the current view; server includes/excludes tasks per the pref
+}
 function projCardEl(p){
   const el=document.createElement("div"); el.className="projcard";
   el.innerHTML=`${ring(p.progress||0)}<span class="pt">${esc(p.title)}</span>`;
@@ -1338,6 +1549,15 @@ function chipEl(label, tag){
 function renderRows(){
   const c=$("#content"); c.innerHTML="";
   if(LIST_NOTES){ const n=document.createElement("div"); n.className="proj-notes"; n.innerHTML=linkify(LIST_NOTES); c.appendChild(n); }
+  // Linked repos + git/GitHub pulse, same as a board card — so a project/area shows
+  // its repos even when it's not on any Kanban board.
+  if((LIST_KIND==="project"||LIST_KIND==="area") && !CUR_FILTER){
+    const repos=((CONFIG.links||{})[SEL.id]||{}).repos||[];
+    const bar=document.createElement("div"); bar.className="proj-repos crepos";
+    bar.innerHTML=repoChipsHtml(SEL.id, LIST_KIND, SEL.title, repos);
+    c.appendChild(bar);
+    if(repos.length) fetchPulse(SEL.id, bar);
+  }
   const projs=(LIST_KIND==="area"&&!CUR_FILTER)?areaProjects(SEL.id):[];
   if(projs.length){ const g=document.createElement("div"); g.className="projcards"; projs.forEach(p=>g.appendChild(projCardEl(p))); c.appendChild(g); }
   let items=LIST_ITEMS;
@@ -1345,11 +1565,34 @@ function renderRows(){
   if(!items.length){ if(!projs.length){ const e=document.createElement("div"); e.className="empty"; e.textContent="Nothing here."; c.appendChild(e); } return; }
   const key=LIST_KIND==="project"?"heading_title":"project_title";
   const groups=groupBy(items,key).sort((a,b)=>(a.key?1:0)-(b.key?1:0));
-  for(const g of groups){ if(g.key){ const h=document.createElement("div"); h.className="grp-head"; h.textContent=g.key; c.appendChild(h);} for(const it of g.items) c.appendChild(rowEl(it)); }
+  // For a project with headings, a "no heading" drop zone (visible only while dragging)
+  // lets you pull a task back out to the top of the project.
+  if(LIST_KIND==="project" && groups.some(g=>g.key)){
+    const dz=document.createElement("div"); dz.className="heading-dropzone"; dz.textContent="Drop here for no heading (top of project)";
+    headingDrop(dz, ""); c.appendChild(dz);
+  }
+  for(const g of groups){ if(g.key){ const h=document.createElement("div"); h.className="grp-head"; h.textContent=g.key;
+    if(LIST_KIND==="project") headingDrop(h, g.key);   // drag a task onto a heading to move it there
+    c.appendChild(h);} for(const it of g.items) c.appendChild(rowEl(it)); }
 }
 function groupBy(items,key){ const g=[],idx={};
   for(const it of items){ const k=it[key]||"\\u0000"; if(!(k in idx)){idx[k]=g.length; g.push({key:it[key]||null,items:[]});} g[idx[k]].items.push(it);} return g; }
+// Drop a task row onto a project heading → move it under that heading (URL Scheme `heading`).
+function headingDrop(el, heading){
+  el.addEventListener("dragover",e=>{ e.preventDefault(); el.classList.add("drop"); });
+  el.addEventListener("dragleave",()=>el.classList.remove("drop"));
+  el.addEventListener("drop",e=>{ e.preventDefault(); el.classList.remove("drop");
+    const id=e.dataTransfer.getData("text/id"); if(id) moveToHeading(id, heading); });
+}
+async function moveToHeading(uuid, heading){
+  if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to move tasks under a heading."); return; }
+  const it=(LIST_ITEMS||[]).find(x=>x.uuid===uuid); if(it && (it.heading_title||"")===(heading||"")) return;  // already there (top == "")
+  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:uuid, heading})})).json();
+  if(!r.ok){ alert("Move failed: "+(r.error||"")); return; }
+  if(SEL) setTimeout(()=>renderList(SEL, MODE), 350);   // re-fetch so it shows under its new heading
+}
 function metaHtml(it){ let m="";
+  if(((CONFIG.attachments||{})[it.uuid]||[]).length) m+=`<span class="att-ico" title="Has an image attachment">${SVG.image}</span>`;
   if(it.has_notes) m+=`<span class="note-ico">📄</span>`;
   (it.tags||[]).forEach(t=>m+=`<span class="pill">${esc(t)}</span>`);
   if(it.deadline){ const od=it.deadline<new Date().toISOString().slice(0,10); m+=`<span class="due">${od?'<span class="dot"></span>':"⚑"} ${it.deadline}</span>`; }
@@ -1357,9 +1600,9 @@ function metaHtml(it){ let m="";
 function rowEl(it){
   const done=it.status==="completed",cancel=it.status==="canceled";
   const row=document.createElement("div"); row.className="row"+(done||cancel?" is-done":""); row.onclick=()=>openEdit(it.uuid);
-  row.draggable=true;  // drag onto a sidebar bucket (Today/Anytime/Someday) to reschedule
-  row.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",it.uuid); row.classList.add("dragging"); });
-  row.addEventListener("dragend",()=>row.classList.remove("dragging"));
+  row.draggable=true;  // drag onto a sidebar bucket (Today/Anytime/Someday) to reschedule, or a heading to move
+  row.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",it.uuid); row.classList.add("dragging"); document.body.classList.add("dragging-task"); });
+  row.addEventListener("dragend",()=>{ row.classList.remove("dragging"); document.body.classList.remove("dragging-task"); });
   const m=metaHtml(it);
   row.innerHTML=`<span class="box ${done?"done":cancel?"cancel":""}"></span><span class="title">${esc(it.title||"(untitled)")}</span>`+(m?`<span class="meta">${m}</span>`:"");
   if(!done&&!cancel){ const box=row.querySelector(".box"); box.title="Complete"; box.style.cursor="pointer";
@@ -1399,16 +1642,7 @@ function boardCardEl(card){
   el.onclick=()=>go("#l/"+encodeURIComponent(card.id));
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",card.id); el.classList.add("dragging"); });
   el.addEventListener("dragend",()=>el.classList.remove("dragging"));
-  let repoHtml="";
-  (card.repos||[]).forEach((r,i)=>{
-    const lbl = r.label || (r.github? r.github.split("/")[1] : "repo");
-    repoHtml += `<span class="repo">${esc(lbl)}`+
-      `<button class="rb" title="Open in editor" onclick="event.stopPropagation();openRepo('${card.id}',${i},'editor')">⌨</button>`+
-      `<button class="rb" title="Open in terminal" onclick="event.stopPropagation();openRepo('${card.id}',${i},'terminal')">❯</button>`+
-      (r.github?`<button class="rb" title="Open on GitHub" onclick="event.stopPropagation();openRepo('${card.id}',${i},'github')">↗</button>`:"")+
-      `</span>`;
-  });
-  repoHtml += `<button class="rb add" title="Manage repos" onclick="event.stopPropagation();openReposModal('${card.id}','${card.kind}','${encodeURIComponent(card.title)}')">🔗 repos</button>`;
+  const repoHtml=repoChipsHtml(card.id, card.kind, card.title, card.repos);
   el.innerHTML=`<div class="ct">${esc(card.title)}</div>`+
     (card.area_title?`<div class="csub">${esc(card.area_title)}</div>`:"")+
     (card.desc?`<div class="cdesc">${esc(card.desc)}</div>`:"")+
@@ -1416,6 +1650,19 @@ function boardCardEl(card){
     `<div class="crepos">${repoHtml}</div>`;
   if((card.repos||[]).length) fetchPulse(card.id, el);
   return el;
+}
+// Repo chips (open in editor/terminal/github) + a "🔗 repos" manage button.
+// Shared by board cards and the project/area list-view repo bar.
+function repoChipsHtml(id, kind, title, repos){
+  let h="";
+  (repos||[]).forEach((r,i)=>{ const lbl=r.label||(r.github?r.github.split("/")[1]:"repo");
+    h+=`<span class="repo">${esc(lbl)}`+
+      `<button class="rb" title="Open in editor" onclick="event.stopPropagation();openRepo('${id}',${i},'editor')">⌨</button>`+
+      `<button class="rb" title="Open in terminal" onclick="event.stopPropagation();openRepo('${id}',${i},'terminal')">❯</button>`+
+      (r.github?`<button class="rb" title="Open on GitHub" onclick="event.stopPropagation();openRepo('${id}',${i},'github')">↗</button>`:"")+
+      `</span>`; });
+  h+=`<button class="rb add" title="Manage repos" onclick="event.stopPropagation();openReposModal('${id}','${kind}','${encodeURIComponent(title)}')">🔗 repos</button>`;
+  return h;
 }
 async function fetchPulse(itemId, el){
   try{
@@ -1462,6 +1709,7 @@ async function persistRepos(){
   })).filter(r=>r.repo);
   await saveItemRepos(REPOS_ITEM.id, REPOS_ITEM.kind, repos);  // per-item, no clobber
   if(MODE==="board"&&CUR_BOARD) renderBoard(CUR_BOARD);
+  else if(MODE==="list"&&SEL&&SEL.id===REPOS_ITEM.id) renderRows();  // refresh the project-page repo bar
 }
 async function placeCard(boardId,itemId,column){
   const b=CONFIG.boards.find(x=>x.id===boardId); if(!b) return;
@@ -1523,6 +1771,93 @@ function dropZone(elm,quad,items){
     CONFIG.priority=CONFIG.priority||{}; if(quad) CONFIG.priority[id]=quad; else delete CONFIG.priority[id];
     saveConfig().then(()=>renderMatrix(items));
   });
+}
+
+// --- priority levels (P1–P4 over Today; a task's level = its Things tags) ---
+// Unlike the Eisenhower matrix (a per-uuid browser overlay you drag), a task's
+// level is DERIVED from its real Things tags via the configurable priority_levels
+// map. Dragging a card writes the level's canonical tag back to Things (token
+// required); without a token the view is read-only — it just shows what's tagged.
+function plevels(){
+  // Always render four bands. Fill label/tags from config; default labels P1..P4.
+  const cfg=(CONFIG.priority_levels||[]).slice(0,4);
+  const out=[];
+  for(let i=0;i<4;i++){ const e=cfg[i]||{}; out.push({label:(e.label||("P"+(i+1))), tags:(e.tags||[]).slice(), cls:"lvl-"+(i+1)}); }
+  return out;
+}
+function levelTagSet(){ const s=new Set(); for(const l of plevels()) for(const t of l.tags) s.add(t); return s; }
+function levelOf(item){ const tags=item.tags||[]; const L=plevels();
+  for(let i=0;i<L.length;i++){ if(L[i].tags.some(t=>tags.includes(t))) return i; } return -1; }
+async function renderLevels(){
+  MODE="levels"; CUR_BOARD=null; SEL=null; setActive("levels");
+  $(".main").classList.add("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
+  $("#levels-gear").style.display="flex";
+  $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
+  $("#head-ico").innerHTML=SVG.levels; $("#head-title").textContent="Priority Levels"; setHeadEditable(null);
+  const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
+  const data=await (await fetch("/api/items?id=today")).json();
+  LIST_ITEMS=data.ok?data.items:[]; LIST_KIND="builtin"; renderLevelBands();
+}
+function renderLevelBands(){
+  const c=$("#content"); c.innerHTML="";
+  const L=plevels(); const anyMapped=L.some(l=>l.tags.length);
+  const wrap=document.createElement("div"); wrap.className="pri-wrap";
+  const pool=document.createElement("div"); pool.className="pri-pool";
+  const unsorted=LIST_ITEMS.filter(t=>levelOf(t)<0);
+  pool.innerHTML=`<div class="col-head"><span>Unsorted</span><span>${unsorted.length}</span></div>`;
+  const pc=document.createElement("div"); pc.className="col-cards";
+  if(!anyMapped) pc.innerHTML=`<div class="lvl-mapnote">No tags mapped yet. Click ⚙ to map your Things tags to P1–P4.</div>`;
+  else if(!unsorted.length) pc.innerHTML=`<div class="empty" style="padding:16px 6px">All ranked 🎉</div>`;
+  unsorted.forEach(t=>pc.appendChild(priCardEl(t))); pool.appendChild(pc); levelDrop(pool,-1); wrap.appendChild(pool);
+  const bands=document.createElement("div"); bands.className="levels";
+  L.forEach((lv,i)=>{
+    const items=LIST_ITEMS.filter(t=>levelOf(t)===i);
+    const band=document.createElement("div"); band.className="lvl "+lv.cls;
+    const sub=lv.tags.length?lv.tags.map(esc).join(", "):"unmapped";
+    band.innerHTML=`<div class="lvl-head"><span class="lt">${esc(lv.label)}</span><span class="ls">${sub}</span><span class="lc">${items.length}</span></div>`;
+    const cards=document.createElement("div"); cards.className="cards";
+    items.forEach(t=>cards.appendChild(priCardEl(t)));
+    band.appendChild(cards); levelDrop(band,i); bands.appendChild(band);
+  });
+  wrap.appendChild(bands); c.appendChild(wrap);
+}
+function levelDrop(elm,levelIdx){
+  elm.addEventListener("dragover",e=>{ e.preventDefault(); elm.classList.add("drop"); });
+  elm.addEventListener("dragleave",()=>elm.classList.remove("drop"));
+  elm.addEventListener("drop",async e=>{ e.preventDefault(); elm.classList.remove("drop");
+    const id=e.dataTransfer.getData("text/id"); if(id) await assignLevel(id, levelIdx); });
+}
+// Re-tag in Things: strip every level tag the task carries, then add the target
+// level's canonical tag (tags[0]). We send the full replacement set so the old
+// level tag is removed in the same write. Token required; falls back to read-only.
+async function assignLevel(uuid, levelIdx){
+  if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to rank tasks (the view is read-only without it)."); return; }
+  const it=LIST_ITEMS.find(t=>t.uuid===uuid); if(!it) return;
+  const L=plevels(), levelTags=levelTagSet();
+  let tags=(it.tags||[]).filter(t=>!levelTags.has(t));
+  if(levelIdx>=0){ const canon=L[levelIdx].tags[0];
+    if(!canon){ alert("Map a tag to "+L[levelIdx].label+" first (⚙)."); return; }
+    tags.push(canon); }
+  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:uuid, tags})})).json();
+  if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
+  it.tags=tags; renderLevelBands(); loadSidebar();
+}
+function openLevelMap(){
+  const L=plevels(), rows=$("#levelmap-rows"); rows.innerHTML="";
+  L.forEach((lv,i)=>{ const r=document.createElement("div"); r.className="lvl-tagrow";
+    r.innerHTML=`<span class="lbl lvl-${i+1}">${esc(lv.label)}</span><input data-i="${i}" value="${esc(lv.tags.join(", "))}" placeholder="tag, tag">`;
+    rows.appendChild(r); });
+  const known=[...new Set((LIST_ITEMS||[]).flatMap(t=>t.tags||[]))];
+  $("#levelmap-known").textContent=known.length?known.join(", "):"(none seen in Today yet)";
+  openOverlay("levelmap-overlay");
+}
+async function saveLevelMap(){
+  const rows=[...document.querySelectorAll("#levelmap-rows input")];
+  const pl=rows.map((inp,i)=>({label:"P"+(i+1), tags:inp.value.split(",").map(s=>s.trim()).filter(Boolean)}));
+  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({priority_levels:pl})})).json();
+  if(r.ok) CONFIG=r.config;
+  closeOverlay("levelmap-overlay");
+  if(MODE==="levels") renderLevelBands();
 }
 
 // --- timeline (day) view; blocks are a dashboard-only overlay, never written to Things ---
@@ -1641,7 +1976,7 @@ async function deleteBoard(){
 }
 
 // --- edit dialog (Things-style card; saves on close only if changed) ---
-let EDIT_ORIG=null, WHEN_SEED=null;
+let EDIT_ORIG=null, WHEN_SEED=null, EDIT_NEW=false, EDIT_KIND="todo", PENDING_ATTACH=[];
 const WHEN_OPTS=[["today","Today"],["evening","This Evening"],["tomorrow","Tomorrow"],["anytime","Anytime"],["someday","Someday"]];
 function autoGrow(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; }
 function cachedItem(uuid){ return (LIST_ITEMS||[]).find(x=>x.uuid===uuid) || (TODAY_CACHE||[]).find(x=>x.uuid===uuid) || null; }
@@ -1686,8 +2021,64 @@ function toggleEditor(id, tool){
   if(show){ ed.classList.add("show"); if(tool) tool.classList.add("on");
     const inp=ed.querySelector("input"); if(inp&&!inp.disabled) setTimeout(()=>inp.focus(),0); }
 }
+// --- create mode: the edit card, reused for a brand-new to-do/project ---
+function openCreate(kind){
+  EDIT_NEW=true; EDIT_ID=null; EDIT_KIND=kind||"todo"; clearPending();
+  ["f-title","f-notes","f-when","f-deadline","f-tags"].forEach(id=>{ $("#"+id).value=""; $("#"+id).disabled=false; });
+  $("#f-checklist").innerHTML="";
+  $("#ec-box").style.display="none";                     // nothing to complete yet
+  $("#ec-kind").style.display="inline-flex"; setEditKind(EDIT_KIND);
+  document.querySelectorAll("#edit-overlay .ec-link").forEach(b=>b.style.display="none");  // hide Cancel-task / Open-in-Things
+  $("#ec-add").style.display="inline-block";
+  ["ed-when","ed-deadline","ed-tags"].forEach(id=>$("#"+id).classList.remove("show"));
+  ["tool-when","tool-deadline","tool-tags"].forEach(id=>$("#"+id).classList.remove("on"));
+  $("#edit-warn").style.display=AUTH?"none":"block";
+  WHEN_SEED=null; EDIT_ORIG=null; buildWhenChips(); renderPendingAttach(); updatePills();
+  autoGrow($("#f-title")); autoGrow($("#f-notes"));
+  openOverlay("edit-overlay"); setTimeout(()=>$("#f-title").focus(),0);
+}
+function setEditKind(k){
+  EDIT_KIND=k; document.querySelectorAll("#ec-kind .vt").forEach(b=>b.classList.toggle("on", b.dataset.kind===k));
+  let w;
+  if(k==="project") w=(SEL&&SEL.kind==="area")?("in area: "+SEL.title):"top level";
+  else w=(SEL&&(SEL.kind==="project"||SEL.kind==="area"))?("in: "+SEL.title):"to Inbox";
+  const e=$("#ec-where"); e.textContent="→ "+w; e.style.display="inline";
+}
+// Staged images live only in the browser until the item exists (it has no UUID yet).
+function stageAttach(file){
+  if(!file || !/^image\\//.test(file.type)){ if(file) alert("Only images can be attached."); return; }
+  PENDING_ATTACH.push({file, url:URL.createObjectURL(file), name:file.name||"image"}); renderPendingAttach();
+}
+function renderPendingAttach(){
+  const box=$("#ec-attach"); if(!box) return; box.innerHTML="";
+  PENDING_ATTACH.forEach((p,i)=>{ const d=document.createElement("div"); d.className="att";
+    d.innerHTML=`<img src="${p.url}" alt="${esc(p.name)}">`+
+      `<span class="att-x" title="Remove" onclick="unstageAttach(${i})">✕</span>`; box.appendChild(d); });
+}
+function unstageAttach(i){ const p=PENDING_ATTACH[i]; if(p) URL.revokeObjectURL(p.url); PENDING_ATTACH.splice(i,1); renderPendingAttach(); }
+function clearPending(){ PENDING_ATTACH.forEach(p=>URL.revokeObjectURL(p.url)); PENDING_ATTACH=[]; }
+async function createFromCard(){
+  let title=$("#f-title").value.trim(); if(!title){ $("#f-title").focus(); return; }
+  let when=$("#f-when").value.trim(); const deadline=$("#f-deadline").value.trim();
+  let tags=$("#f-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
+  if(EDIT_KIND==="todo"){ const p=parseNL(title); title=p.title; if(!when&&p.when) when=p.when; p.tags.forEach(t=>{ if(!tags.includes(t)) tags.push(t); }); }
+  const body={kind:EDIT_KIND, title}; const notes=$("#f-notes").value.trim(); if(notes) body.notes=notes;
+  if(PENDING_ATTACH.length) body.resolve=true;
+  if(EDIT_KIND==="project"){ if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
+  else { if(when) body.when=when; if(deadline) body.deadline=deadline; if(tags.length) body.tags=tags;
+         if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id; }
+  const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
+  if(PENDING_ATTACH.length){
+    if(r.uuid){ for(const p of PENDING_ATTACH) await uploadAttachmentTo(r.uuid, p.file); }
+    else alert("Created, but couldn't link the image automatically — open the task and attach it.");
+  }
+  clearPending(); closeOverlay("edit-overlay"); loadSidebar(); setTimeout(route,400);
+}
 async function openEdit(uuid){
-  EDIT_ID=uuid;
+  EDIT_ID=uuid; EDIT_NEW=false; clearPending();
+  $("#ec-kind").style.display="none"; $("#ec-box").style.display=""; $("#ec-add").style.display="none"; $("#ec-where").style.display="none";
+  document.querySelectorAll("#edit-overlay .ec-link").forEach(b=>b.style.display="");
   const data=await (await fetch("/api/item?id="+encodeURIComponent(uuid))).json();
   if(!data.ok){ alert("Could not load task."); return; }
   const it=data.item;
@@ -1703,7 +2094,45 @@ async function openEdit(uuid){
   ["f-title","f-notes","f-when","f-deadline","f-tags"].forEach(id=>$("#"+id).disabled=ro);
   $("#ec-box").style.pointerEvents=ro?"none":"";
   EDIT_ORIG={title:it.title||"", notes:it.notes||"", deadline:it.deadline||"", tags:(it.tags||[]).join(",")};
+  renderAttachments(uuid);
   updatePills(); openOverlay("edit-overlay"); setTimeout(()=>{ autoGrow($("#f-title")); autoGrow($("#f-notes")); },0);
+}
+// --- Image attachments (Things has no images; stored as a browser overlay) ---
+function renderAttachments(uuid){
+  const box=$("#ec-attach"); if(!box) return; box.innerHTML="";
+  const list=(CONFIG.attachments||{})[uuid]||[];
+  for(const a of list){
+    const url="/api/attachment?uuid="+encodeURIComponent(uuid)+"&id="+encodeURIComponent(a.id);
+    const d=document.createElement("div"); d.className="att";
+    d.innerHTML=`<img src="${url}" alt="${esc(a.name||"image")}" onclick="window.open('${url}','_blank')">`+
+      `<span class="att-x" title="Remove" onclick="detachAttachment('${uuid}','${a.id}')">✕</span>`+
+      (a.caption?`<div class="att-cap" title="${esc(a.caption)}">${esc(a.caption)}</div>`:``);
+    box.appendChild(d);
+  }
+}
+function onAttachPick(ev){ const fs=ev.target.files; if(fs) for(const f of fs){ EDIT_NEW?stageAttach(f):uploadAttachment(EDIT_ID,f); } ev.target.value=""; }
+function uploadAttachmentTo(uuid, file){   // returns Promise<bool>; keys the image to a known uuid
+  return new Promise(res=>{
+    if(!uuid || !file || !/^image\\//.test(file.type)){ if(file&&!/^image\\//.test(file.type)) alert("Only images can be attached."); res(false); return; }
+    const reader=new FileReader();
+    reader.onload=async()=>{
+      const r=await (await fetch("/api/attach",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({uuid, name:file.name||"image", mime:file.type, data:String(reader.result)})})).json();
+      if(!r.ok){ alert("Attach failed: "+(r.error||"")); res(false); return; }
+      (CONFIG.attachments=CONFIG.attachments||{})[uuid]=((CONFIG.attachments||{})[uuid]||[]).concat([r.attachment]); res(true);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function uploadAttachment(uuid, file){   // attach to the open existing task + refresh its row icon
+  uploadAttachmentTo(uuid, file).then(ok=>{ if(ok){ renderAttachments(uuid); rerenderCurrent(); } });
+}
+async function detachAttachment(uuid, id){
+  const r=await (await fetch("/api/detach",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({uuid, id})})).json();
+  if(!r.ok){ alert("Remove failed."); return; }
+  if(CONFIG.attachments&&CONFIG.attachments[uuid]) CONFIG.attachments[uuid]=CONFIG.attachments[uuid].filter(a=>a.id!==id);
+  renderAttachments(uuid); rerenderCurrent();   // refresh the row's image icon live
 }
 function editDirty(){
   if(!EDIT_ORIG) return false;
@@ -1712,6 +2141,7 @@ function editDirty(){
     || tags!==EDIT_ORIG.tags || $("#f-when").value.trim()!=="" || $("#f-deadline").value.trim()!==EDIT_ORIG.deadline;
 }
 async function closeEdit(){
+  if(EDIT_NEW){ clearPending(); closeOverlay("edit-overlay"); return; }  // ✕/Esc discards a new card (use Add to create)
   if(AUTH && editDirty()){ await saveEdit(); }   // saveEdit closes + re-renders
   else closeOverlay("edit-overlay");
 }
@@ -1732,6 +2162,7 @@ async function applyStatus(uuid, field){
   loadSidebar(); return true;   // refresh counts; the item stays in LIST_ITEMS until next full fetch
 }
 function rerenderCurrent(){
+  if(MODE==="levels") return renderLevelBands();
   if(MODE==="cards") return renderCards(LIST_ITEMS);
   if(MODE==="matrix"){ let items=LIST_ITEMS.slice();
     if(LIST_KIND==="area") items=areaProjects(SEL.id).map(p=>({uuid:p.uuid,title:p.title,progress:p.progress,_proj:true})).concat(items);
@@ -1816,16 +2247,7 @@ async function savePrefs(){
   closeOverlay("prefs-overlay");
 }
 
-// --- quick add (＋ in topbar): to-do or project (create-only, no token) ---
-let ADD_KIND="todo";
-function openAdd(){ ADD_KIND="todo"; setAddKind("todo"); $("#add-title").value=""; openOverlay("add-overlay"); setTimeout(()=>$("#add-title").focus(),0); }
-function setAddKind(k){ ADD_KIND=k; document.querySelectorAll("#add-kind .vt").forEach(b=>b.classList.toggle("on", b.dataset.kind===k)); updateAddWhere(); }
-function updateAddWhere(){
-  let w;
-  if(ADD_KIND==="project") w=(SEL&&SEL.kind==="area")?("in area: "+SEL.title):"top level (areas can't be created via the URL Scheme)";
-  else w=(SEL&&(SEL.kind==="project"||SEL.kind==="area"))?("in: "+SEL.title):"to Inbox";
-  $("#add-where").textContent="→ "+w;
-}
+// --- quick add: natural-language parse helpers (used by the create card) ---
 function weekdayDate(s){
   const map={sunday:0,sun:0,monday:1,mon:1,tuesday:2,tue:2,tues:2,wednesday:3,wed:3,thursday:4,thu:4,thurs:4,friday:5,fri:5,saturday:6,sat:6};
   if(!(s in map)) return null;
@@ -1872,23 +2294,21 @@ function parseNL(raw){
   }
   return {title:words.join(" ").trim()||raw.trim(), when, tags};
 }
-async function submitAdd(){
-  const raw=$("#add-title").value.trim(); if(!raw) return;
-  const body={kind:ADD_KIND};
-  if(ADD_KIND==="project"){ body.title=raw; if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
-  else {
-    const p=parseNL(raw); body.title=p.title; if(p.when) body.when=p.when; if(p.tags.length) body.tags=p.tags;
-    if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id;
-  }
-  const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
-  if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
-  closeOverlay("add-overlay"); loadSidebar(); setTimeout(route, 350);
-}
-
 function openOverlay(id){ $("#"+id).classList.add("show"); }
 function closeOverlay(id){ $("#"+id).classList.remove("show"); }
 document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{ if(e.target===o){ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); } }));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.querySelectorAll(".overlay.show").forEach(o=>{ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); }); });
+// Drag-drop + paste an image straight onto the open edit card.
+(function(){ const card=document.querySelector("#edit-overlay .editcard"); if(!card) return;
+  const editOpen=()=>$("#edit-overlay").classList.contains("show") && (EDIT_ID||EDIT_NEW);
+  const take=f=>{ if(!/^image\\//.test(f.type))return; EDIT_NEW?stageAttach(f):uploadAttachment(EDIT_ID,f); };
+  card.addEventListener("dragover",e=>{ if(!editOpen())return; e.preventDefault(); card.classList.add("ec-drop"); });
+  card.addEventListener("dragleave",e=>{ if(e.target===card) card.classList.remove("ec-drop"); });
+  card.addEventListener("drop",e=>{ if(!editOpen())return; e.preventDefault(); card.classList.remove("ec-drop");
+    for(const f of (e.dataTransfer.files||[])) take(f); });
+  document.addEventListener("paste",e=>{ if(!editOpen())return;
+    for(const it of (e.clipboardData&&e.clipboardData.items||[])){ if(it.type&&/^image\\//.test(it.type)){ const f=it.getAsFile(); if(f) take(f); } } });
+})();
 
 // --- inline header rename (boards + projects; areas can't — no URL-scheme area update) ---
 function setHeadEditable(type, id){

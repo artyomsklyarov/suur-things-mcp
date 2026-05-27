@@ -143,10 +143,16 @@ def get_tags(include_items: bool = False) -> list[dict]:
 
 @mcp.tool()
 def get_item(uuid: str) -> dict | None:
-    """Full detail for any item by UUID — notes, checklist items, dates, tags."""
+    """Full detail for any item by UUID — notes, checklist items, dates, tags.
+
+    Includes any image `attachments` (dashboard overlay; Things itself can't store images).
+    """
     item = reads.get(uuid)
     if item is None:
         return None
+    atts = boardcfg.attachments().get(uuid)
+    if atts:
+        item = {**item, "attachments": atts}
     return item
 
 
@@ -370,17 +376,20 @@ def show(
 
 
 @mcp.tool()
-def open_dashboard() -> dict[str, Any]:
+def open_dashboard(
+    app: Annotated[bool, Field(description="Open in a frameless Chromium app window (no tabs/address bar) instead of a normal browser tab.")] = False,
+) -> dict[str, Any]:
     """Open the local read-only Kanban board of your Things lists in the browser.
 
     Starts a tiny local web server (background, 127.0.0.1 only) and opens it.
     Idempotent: repeated calls return the same already-running URL. No data is
-    written; cards deep-link back into Things.
+    written; cards deep-link back into Things. Set app=true for a standalone
+    app-style window (Chrome/Brave/Arc/Edge `--app` mode, falls back to a tab).
     """
     from .dashboard import ensure_running
 
     try:
-        url = ensure_running(open_browser=True)
+        url = ensure_running(open_browser=True, app_mode=app)
         return {"ok": True, "url": url}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
@@ -475,6 +484,55 @@ def unlink_repo(
     """Remove a repo link (or all of an item's repo links)."""
     boardcfg.remove_link(item_uuid, repo_path)
     return {"ok": True}
+
+
+@mcp.tool()
+def attach_image(
+    item_uuid: Annotated[str, Field(description="UUID of the to-do or project to attach the image to.")],
+    source_path: Annotated[str, Field(description="Absolute path to a local image file (png/jpg/gif/webp/heic).")],
+    caption: Annotated[str | None, Field(description="Optional caption shown under the image in the dashboard.")] = None,
+) -> dict[str, Any]:
+    """Attach a local image to a Things item. Things has no image support, so the image
+    is stored in the dashboard overlay (copied into the server's config dir) and shown
+    inline there. If THINGS_AUTH_TOKEN is set, a clickable file:// reference is appended
+    to the item's notes so the Things app shows it too. Great for charts/screenshots an
+    agent generates. Returns the attachment metadata.
+    """
+    import mimetypes
+
+    path = os.path.expanduser(str(source_path).strip().strip("'\""))
+    if not os.path.isfile(path):
+        return {"ok": False, "error": "file not found"}
+    mime = (mimetypes.guess_type(path)[0] or "").lower()
+    if mime not in boardcfg.IMAGE_MIMES:
+        ext = os.path.splitext(path)[1].lower().lstrip(".")
+        ext = "jpg" if ext == "jpeg" else ext
+        mime = next((m for m, e in boardcfg.IMAGE_MIMES.items() if e == ext), "")
+    if mime not in boardcfg.IMAGE_MIMES:
+        return {"ok": False, "error": f"unsupported image type: {source_path}"}
+    if reads.get(item_uuid) is None:
+        return {"ok": False, "error": "no item with that uuid"}
+    try:
+        data = open(path, "rb").read()
+        if len(data) > 12 * 1024 * 1024:
+            return {"ok": False, "error": "image too large (max 12MB)"}
+        meta = boardcfg.save_attachment(item_uuid, data, mime, os.path.basename(path), caption)
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+    note_updated = False
+    token = _auth()
+    if token:
+        try:
+            apath = str(boardcfg.attachment_path(item_uuid, meta))
+            existing = (reads.get(item_uuid) or {}).get("notes") or ""
+            if boardcfg.note_ref_url(apath) not in existing:  # don't duplicate on re-attach
+                execute("update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], apath)},
+                        auth_token=token)
+            note_updated = True
+        except ThingsURLError:
+            pass
+    return {"ok": True, "attachment": meta, "note_updated": note_updated}
 
 
 @mcp.tool()
@@ -802,7 +860,10 @@ def main() -> None:
     if args and args[0] == "dashboard":
         from .dashboard import serve_foreground
 
-        serve_foreground()
+        # `--app` opens the dashboard in a frameless Chromium app window (no tabs
+        # or address bar) instead of a normal browser tab.
+        app_mode = "--app" in args[1:]
+        serve_foreground(app_mode=app_mode)
     else:
         mcp.run()
 
