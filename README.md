@@ -2,6 +2,7 @@
 
 **Give any AI agent safe, structured access to your [Things 3](https://culturedcode.com/things/) tasks — plus a local, Things-faithful web dashboard with Kanban boards, an Eisenhower matrix, repo-linking, and a YouTube-thumbnail card view.**
 
+[![PyPI](https://img.shields.io/pypi/v/suur-things-mcp.svg)](https://pypi.org/project/suur-things-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-%E2%89%A53.10-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
@@ -9,14 +10,14 @@
 
 An [MCP](https://modelcontextprotocol.io) server for **Things 3** (Cultured Code) on macOS. Let Claude Code, Claude Desktop, Codex, or any MCP-capable agent read and manage your tasks, projects, and areas — and get a local dashboard that looks like Things but adds the views Things doesn't have.
 
+**Install → connect your agent → ask "what should I work on?"**
+
 ```bash
-# 1. point your agent at it (Claude Code shown)
+# Connect it to Claude Code (Codex / Desktop below). uvx installs on first run.
 claude mcp add suurthings -- uvx suur-things-mcp
-# 2. (optional) open the dashboard
-uvx suur-things-mcp dashboard   # → http://127.0.0.1:8765
 ```
 
-That's it. Reads work immediately with no token. Add a token (below) when you want the agent to *modify* existing tasks.
+Now ask your agent **"What should I work on today?"** — it reads your real Things lists and answers. Reads work immediately, no token. (Optional: `uvx suur-things-mcp dashboard` opens a local board at http://127.0.0.1:8765.) Add a token — see below — only when you want the agent to *modify* existing tasks.
 
 ---
 
@@ -33,6 +34,10 @@ So an agent can't corrupt your database through this server even if it tries. Th
 
 > **Privacy:** an agent connected to this server can read your to-do and note content, which is then sent to whatever model you're using. Review your agent's privacy policy. Nothing here phones home; there's no telemetry and no bundled LLM.
 
+### Why not direct DB writes?
+
+Because Cultured Code says not to. Their [AI-integration guidance](https://culturedcode.com/things/support/articles/5510170/) states plainly that writing to the Things SQLite database directly is unsafe and can corrupt it, and they point automation at the URL Scheme instead. So this server reads the database read-only and routes every change through `things:///` URLs — the same path Things documents for Shortcuts and AppleScript. The upside for you: an agent connected here physically cannot corrupt your Things data, no matter what it does.
+
 ---
 
 ## ✨ Beyond Things — what the dashboard adds
@@ -41,12 +46,14 @@ So an agent can't corrupt your database through this server even if it tries. Th
 
 **Plan & focus**
 - 🟦 **Priority Matrix** — an Eisenhower matrix (Do First / Schedule / Delegate / Don't Do) as a one-click view on *any* list, project, or area. Drag tasks (and an area's projects) into quadrants.
+- 🏷️ **Priority Levels** — a 2×2 grid (P1–P4) over Today *or any list/area/project*, ranked from your *existing* Things tags. Map a tag to each level (e.g. `🔴` → P1); drag a task between levels and the tag is rewritten in Things. Unlike the Matrix, the source of truth is your real tags — read-only without a token, otherwise fully bidirectional.
+- 🗂️ **Area roll-up** — open an area and see the tasks inside its projects, grouped by project, not just the area's loose to-dos. A true overview of everything under the area.
 - 📅 **Daily planning / time-blocking** — a day **Timeline** view: drag today's tasks onto a 6am–11pm grid in 15/30/60-min blocks to plan the day. (Times are a private dashboard overlay.)
 - 🧘 **Calm Today** — one keystroke turns an overloaded Today into a single next action plus a short list and defers the rest. AI that *subtracts* noise instead of piling on features.
 - 🎯 **Calm by design** — faithful Things look, light/dark, focus-friendly; completed tasks linger checked-off until they log, like the app.
 
 **Build & ship (for devs)**
-- 🔗 **Git repo links on projects** — connect a Things project/area to one or more local repos. Cards get one-click **Open in editor (⌨) / terminal (❯) / GitHub (↗)**.
+- 🔗 **Git repo links on projects** — connect a Things project/area to one or more local repos. Cards **and the project/area page** get one-click **Open in editor (⌨) / terminal (❯) / GitHub (↗)**, plus the git/GitHub pulse — even when the project isn't on a board.
 - 📊 **Repo pulse** — board cards show recent commits + open-PR count for linked repos (via `git` + `gh`).
 - 🧭 **Project boards** — saved portfolio Kanbans where each card is a whole project/area (progress ring + open count), dragged across your own stage columns.
 
@@ -215,17 +222,20 @@ The GTD and code/GitHub prompts use only the existing tools (plus the agent's ow
 A local web UI that mirrors the Things look (real glyphs, typography, edit card) and adds the views Things lacks. Binds `127.0.0.1` only, reads the DB read-only, and **always runs on port 8765** (it reuses a live instance instead of spawning duplicates).
 
 ```bash
-uvx suur-things-mcp dashboard      # opens http://127.0.0.1:8765
+uvx suur-things-mcp dashboard        # opens http://127.0.0.1:8765 in your browser
+uvx suur-things-mcp dashboard --app  # opens it in a frameless app window (no tabs/toolbar)
 ```
 
-Or have the agent open it with the `open_dashboard` tool.
+`--app` launches a Chromium browser (Chrome / Brave / Edge / Chromium / Vivaldi / Arc) in app mode — a standalone window with its own Dock icon, no address bar — and falls back to a normal tab if none are installed. Or have the agent open it with the `open_dashboard` tool (pass `app=true` for the same window).
 
-**Sidebar** — Things' built-in lists (with their real colored icons), a **Priority Matrix** entry, your saved **project boards**, and areas with nested projects + progress rings. An area with only projects shows them as **project cards**. Tag **filter chips** sit under any list's title. A **search box** runs `things.search` over your whole database.
+**Sidebar** — Things' built-in lists (with their real colored icons), a **Priority Matrix** and **Priority Levels** entry, your saved **project boards**, and areas with nested projects + progress rings. Opening an **area** shows its loose to-dos *plus* the tasks inside its projects, grouped by project (project cards stay on top for quick nav). A **"Project tasks"** pill in the header (beside the view switcher) turns that roll-up off, per area. Tag **filter chips** sit under any list's title. A **search box** runs `things.search` over your whole database.
 
 **Three views, toggled per list (List / Matrix / Cards):**
 
 - **List** — the faithful Things grouped list (by project/heading), with the Things-style inline edit card (checkbox + title, Notes, When/deadline/tag pills, footer toolbar). Edits **save on close, only if you changed something.**
 - **Matrix** — an Eisenhower matrix over *that* list's tasks. Drag into **Do First / Schedule / Delegate / Don't Do**. On an area, its **projects** are draggable too. Priority is **global per task** (set it anywhere, see it everywhere). The sidebar **Priority Matrix** entry is the matrix over Today.
+
+The sidebar **Priority Levels** entry is a different ranking: four bands (P1–P4) filled from your **existing Things tags** via a tag→level map (⚙ to edit). A task sits at the first level whose tags it carries; drag it to another band and the mapped tag is rewritten in Things (old level tag replaced). Read-only without `THINGS_AUTH_TOKEN`.
 - **Cards** — task cards; anything with a **YouTube link renders as a thumbnail** (other links get a 🔗 tile). Great for a "watch later" project.
 
 **Project boards** — saved portfolio Kanbans. Each **card is a project or whole area** (progress ring + open count), dragged between **stage columns** (Backlog / In Progress / On Hold / Done). Add multiple named boards with the ＋ on the Boards group; configure name / columns / included areas+projects in the ⚙ panel (auto-saves).
@@ -244,7 +254,7 @@ Three tiers — important if you switch machines:
 
 1. **Real task data → Things' own database.** Anything you change that's a Things field (title, notes, when, deadline, tags, complete/cancel, move) is written via the URL Scheme into Things, and syncs across your devices through Things Cloud like normal. This server never stores your tasks.
 2. **Dashboard config → one local JSON file.**
-   - `~/.config/suur-things-mcp/board.json` — your boards, Priority-Matrix assignments, repo links, prefs, and image-attachment metadata (keyed by stable Things UUIDs).
+   - `~/.config/suur-things-mcp/board.json` — your boards, Priority-Matrix assignments, the Priority-Levels tag map, per-area roll-up prefs, repo links, prefs, and image-attachment metadata (keyed by stable Things UUIDs).
    - `~/.config/suur-things-mcp/attachments/` — image files you attach to tasks (Things can't store images; the dashboard shows them and writes a `file://` reference into the task's notes).
    - `~/.config/suur-things-mcp/token` — your Things auth token (chmod 600).
 

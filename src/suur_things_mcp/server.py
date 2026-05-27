@@ -376,17 +376,20 @@ def show(
 
 
 @mcp.tool()
-def open_dashboard() -> dict[str, Any]:
+def open_dashboard(
+    app: Annotated[bool, Field(description="Open in a frameless Chromium app window (no tabs/address bar) instead of a normal browser tab.")] = False,
+) -> dict[str, Any]:
     """Open the local read-only Kanban board of your Things lists in the browser.
 
     Starts a tiny local web server (background, 127.0.0.1 only) and opens it.
     Idempotent: repeated calls return the same already-running URL. No data is
-    written; cards deep-link back into Things.
+    written; cards deep-link back into Things. Set app=true for a standalone
+    app-style window (Chrome/Brave/Arc/Edge `--app` mode, falls back to a tab).
     """
     from .dashboard import ensure_running
 
     try:
-        url = ensure_running(open_browser=True)
+        url = ensure_running(open_browser=True, app_mode=app)
         return {"ok": True, "url": url}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
@@ -521,8 +524,11 @@ def attach_image(
     token = _auth()
     if token:
         try:
-            ref = boardcfg.note_ref_line(meta["name"], str(boardcfg.attachment_path(item_uuid, meta)))
-            execute("update", {"id": item_uuid, "append-notes": ref}, auth_token=token)
+            apath = str(boardcfg.attachment_path(item_uuid, meta))
+            existing = (reads.get(item_uuid) or {}).get("notes") or ""
+            if boardcfg.note_ref_url(apath) not in existing:  # don't duplicate on re-attach
+                execute("update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], apath)},
+                        auth_token=token)
             note_updated = True
         except ThingsURLError:
             pass
@@ -854,7 +860,10 @@ def main() -> None:
     if args and args[0] == "dashboard":
         from .dashboard import serve_foreground
 
-        serve_foreground()
+        # `--app` opens the dashboard in a frameless Chromium app window (no tabs
+        # or address bar) instead of a normal browser tab.
+        app_mode = "--app" in args[1:]
+        serve_foreground(app_mode=app_mode)
     else:
         mcp.run()
 

@@ -362,6 +362,15 @@ def test_attachments_config_roundtrip(tmp_path, monkeypatch):
     assert cfg.attachments().get("T") is None
 
 
+def test_note_ref_line_marks_image_and_links_file():
+    from suur_things_mcp import config as cfg
+    url = cfg.note_ref_url("/Users/me/.config/x y/img.png")
+    assert url == "file:///Users/me/.config/x%20y/img.png"  # path is URL-quoted
+    line = cfg.note_ref_line("chart.png", "/tmp/chart.png")
+    assert "Image attached" in line and "chart.png" in line  # clear indicator for Things
+    assert line.endswith(cfg.note_ref_url("/tmp/chart.png"))  # ends with the tappable file:// URL
+
+
 def test_attach_serve_detach_endpoints(tmp_path, monkeypatch):
     monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
     monkeypatch.delenv("THINGS_AUTH_TOKEN", raising=False)
@@ -443,6 +452,112 @@ def test_board_cards_are_projects_and_areas():
 def test_board_endpoint_unknown_id():
     b = client.get("/api/board?id=does-not-exist").json()
     assert b["ok"] is False
+
+
+def test_priority_levels_cleaning(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    saved = cfg.save({"priority_levels": [
+        {"label": "  P1  ", "tags": [" Urgent ", "P1", "P1", None, 3, ""]},  # trim, dedup, drop junk
+        {"tags": ["P2"]},                                                    # label defaults to P2
+        "not-a-dict",                                                        # skipped
+        {"label": "x" * 80, "tags": "notalist"},                            # label capped, tags->[]
+    ]})
+    pl = saved["priority_levels"]
+    assert len(pl) == 3  # the "not-a-dict" entry is dropped
+    assert pl[0] == {"label": "P1", "tags": ["Urgent", "P1"]}
+    assert pl[1]["label"] == "P2" and pl[1]["tags"] == ["P2"]  # blank label -> default P2
+    assert len(pl[2]["label"]) == 40 and pl[2]["tags"] == []   # label capped, non-list tags -> []
+
+
+def test_priority_levels_merge_isolated(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    cfg.set_link("ILTY", "project", str(tmp_path))
+    cfg.merge({"priority_levels": [{"label": "P1", "tags": ["Now"]}]})
+    # priority_levels save must not wipe links, and vice versa.
+    assert "ILTY" in cfg.load()["links"]
+    assert cfg.load()["priority_levels"][0]["tags"] == ["Now"]
+    cfg.merge({"boards": [{"id": "b", "name": "B", "columns": ["X"]}]})
+    assert cfg.load()["priority_levels"][0]["tags"] == ["Now"]  # boards save preserved levels
+
+
+def test_area_prefs_default_and_merge_isolated(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    assert cfg.area_rollup("any-uuid") is True  # default on, even when unset
+    cfg.set_link("ILTY", "project", str(tmp_path))
+    cfg.merge({"area_prefs": {"AREA1": {"rollup": False}, "bad": "x"}})
+    assert cfg.area_rollup("AREA1") is False  # explicit off respected
+    assert cfg.area_rollup("AREA2") is True   # untouched area still defaults on
+    assert "ILTY" in cfg.load()["links"]      # didn't clobber other sections
+    assert "bad" not in cfg.load()["area_prefs"]  # malformed entry dropped
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_area_rollup_off_shows_only_loose_todos():
+    # With rollup off, an area returns only its loose to-dos (no project_title),
+    # never tasks pulled from its projects.
+    from suur_things_mcp import reads as r
+    for a in r.areas():
+        on = r.list_items(a["uuid"], rollup=True)
+        if any(i.get("project_title") for i in on["items"]):
+            off = r.list_items(a["uuid"], rollup=False)
+            assert off["rollup"] is False
+            assert not any(i.get("project_title") for i in off["items"])
+            assert len(off["items"]) <= len(on["items"])
+            return
+    pytest.skip("no area with in-project tasks in this database")
+
+
+@pytest.mark.skipif(not _things_available(), reason="Things database not available")
+def test_area_view_rolls_up_in_project_tasks():
+    # An area should surface tasks living inside its projects, grouped by project,
+    # not just its loose to-dos. Find an area with at least one project task.
+    from suur_things_mcp import reads as r
+    sb = r.sidebar()
+    target = None
+    for a in sb["areas"]:
+        items = r.list_items(a["uuid"])["items"]
+        if any(i.get("project_title") for i in items):
+            target = (a, items)
+            break
+    if not target:
+        pytest.skip("no area with in-project tasks in this database")
+    _area, items = target
+    in_project = [i for i in items if i.get("project_title")]
+    assert in_project, "area view should include tasks from its projects"
+    # every rolled-up task carries a project_title so the renderer can group it
+    assert all(i.get("project_title") for i in in_project)
+
+
+def test_open_url_app_mode_prefers_chromium_then_falls_back(monkeypatch):
+    from suur_things_mcp import dashboard as d
+    calls = []
+    monkeypatch.setattr(d.subprocess, "run", lambda args, **kw: calls.append(args))
+    # A Chromium browser is installed -> launch it with --app=
+    monkeypatch.setattr(d.os.path, "isdir", lambda p: "Google Chrome" in p)
+    d._open_url("http://127.0.0.1:8765", app_mode=True)
+    assert calls[-1] == ["open", "-na", "Google Chrome", "--args", "--app=http://127.0.0.1:8765"]
+    # No Chromium browser -> plain open (normal tab)
+    calls.clear()
+    monkeypatch.setattr(d.os.path, "isdir", lambda p: False)
+    d._open_url("http://127.0.0.1:8765", app_mode=True)
+    assert calls[-1] == ["open", "http://127.0.0.1:8765"]
+    # app_mode off always uses a plain open even if Chromium exists
+    calls.clear()
+    monkeypatch.setattr(d.os.path, "isdir", lambda p: True)
+    d._open_url("http://127.0.0.1:8765", app_mode=False)
+    assert calls[-1] == ["open", "http://127.0.0.1:8765"]
 
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")

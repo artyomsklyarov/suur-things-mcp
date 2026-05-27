@@ -90,6 +90,22 @@ help of your own agent, reviewed before anything is written.
 - ✅ Stable dashboard port — reuses a live instance and rebinds 8765 through TIME_WAIT
   (`SO_REUSEADDR`); only falls back to a random port if a *foreign* process holds it.
 
+## Dashboard affordances ✅ (shipped)
+
+The "few modern affordances Things is missing," layered on as browser overlays:
+
+- ✅ **Image attachments** — drag/paste/pick an image on a task; bytes live on disk under
+  the config dir, only metadata in `board.json`. With a token, a `file://` reference is
+  appended to the task's notes so the Things app shows it too. `attach_image` MCP tool +
+  `/api/attach|attachment|detach` endpoints (serve is overlay-gated, no arbitrary reads).
+- ✅ **Priority Levels** — a 2×2 P1–P4 view ranked from your *existing* Things tags (not a
+  separate overlay). Map tags → levels in a ⚙ editor; drag a task between levels and the
+  mapped tag is rewritten in Things. Works over Today and as a per-list/area/project view.
+- ✅ **Area roll-up** — an area view folds in its projects' tasks, grouped by project. A
+  per-area header toggle turns it off; the choice persists in `board.json` (`area_prefs`).
+- ✅ **App-window mode** — `dashboard --app` (or `open_dashboard(app=true)`) opens the board
+  in a frameless Chromium window (no tabs/address bar), falling back to a normal tab.
+
 ---
 
 Full design rationale, premises, and open questions live in the office-hours design

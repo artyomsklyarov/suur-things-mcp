@@ -146,6 +146,49 @@ def _clean_prefs(data: dict) -> dict[str, Any]:
     return {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
 
 
+def _clean_area_prefs(data: dict) -> dict[str, Any]:
+    """Per-area view prefs (browser overlay), keyed by area UUID. Currently just
+    ``rollup``: whether an area view folds in its projects' tasks (default true).
+    Only stores entries that differ from the default, so the file stays small."""
+    raw = data.get("area_prefs")
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for uuid, v in raw.items():
+        if isinstance(v, dict) and "rollup" in v:
+            out[str(uuid)] = {"rollup": bool(v["rollup"])}
+    return out
+
+
+def _clean_priority_levels(data: dict) -> list[dict[str, Any]]:
+    """Priority Levels overlay: an ordered list of levels (P1 first), each mapped
+    to one or more *existing* Things tags. A task sits at the first level whose
+    tags it carries; ``tags[0]`` is the canonical tag written back to Things when
+    a task is dragged into that level. Unlike the Eisenhower ``priority`` overlay,
+    the source of truth here is real Things tags, not a per-uuid browser map."""
+    lst = data.get("priority_levels")
+    if not isinstance(lst, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for i, e in enumerate(lst):
+        if not isinstance(e, dict):
+            continue
+        label = (str(e.get("label")).strip()[:40] if e.get("label") else "") or f"P{i + 1}"
+        raw_tags = e.get("tags")
+        tags: list[str] = []
+        if isinstance(raw_tags, list):
+            for t in raw_tags:
+                if not isinstance(t, str):
+                    continue
+                t = t.strip()[:100]
+                if t and t not in tags:
+                    tags.append(t)
+        out.append({"label": label, "tags": tags})
+        if len(out) >= 8:  # sane cap; UI uses 4
+            break
+    return out
+
+
 def _clean_timeblocks(data: dict) -> dict[str, Any]:
     """Dashboard-only day-timeline placements: {uuid: {date, start "HH:MM", mins}}.
     Never written to Things — purely a browser overlay like `priority`."""
@@ -210,19 +253,31 @@ def _clean(data: dict) -> dict[str, Any]:
     prefs = _clean_prefs(data)
     tb = _clean_timeblocks(data)
     att = _clean_attachments(data)
+    plevels = _clean_priority_levels(data)
+    aprefs = _clean_area_prefs(data)
+    common = {"priority": priority, "links": link_table, "prefs": prefs,
+              "timeblocks": tb, "attachments": att, "priority_levels": plevels,
+              "area_prefs": aprefs}
     # New shape: {"boards": [...]}.
     if isinstance(data.get("boards"), list) and data["boards"]:
         boards = [_clean_board(b) for b in data["boards"] if isinstance(b, dict)]
-        return {"boards": boards, "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb, "attachments": att}
+        return {"boards": boards, **common}
     # Legacy flat shape: {columns, include_areas, include_projects} → one board.
     if any(k in data for k in ("columns", "include_areas", "include_projects")):
         legacy = {**data, "id": data.get("id") or "default", "name": data.get("name") or "Project Board"}
-        return {"boards": [_clean_board(legacy)], "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb, "attachments": att}
-    return {"boards": [_default_board()], "priority": priority, "links": link_table, "prefs": prefs, "timeblocks": tb, "attachments": att}
+        return {"boards": [_clean_board(legacy)], **common}
+    return {"boards": [_default_board()], **common}
 
 
 def _fresh() -> dict[str, Any]:
-    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {}, "timeblocks": {}, "attachments": {}}
+    return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {},
+            "timeblocks": {}, "attachments": {}, "priority_levels": [], "area_prefs": {}}
+
+
+def area_rollup(area_uuid: str) -> bool:
+    """Whether an area view folds in its projects' tasks. Default true."""
+    pref = load().get("area_prefs", {}).get(str(area_uuid))
+    return pref.get("rollup", True) if isinstance(pref, dict) else True
 
 
 def prefs() -> dict[str, Any]:
@@ -315,7 +370,8 @@ def merge(partial: dict) -> dict[str, Any]:
     can't wipe links written by another writer, and vice versa.
     """
     cfg = load()
-    for key in ("boards", "priority", "links", "prefs", "timeblocks", "attachments"):
+    for key in ("boards", "priority", "links", "prefs", "timeblocks", "attachments",
+                "priority_levels", "area_prefs"):
         if key in partial:
             cfg[key] = partial[key]
     return save(cfg)
@@ -406,11 +462,17 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     return meta
 
 
-def note_ref_line(name: str, path: str) -> str:
-    """Notes line appended for an attachment. Things linkifies file:// URLs, so this
-    becomes a tap-to-open reference in the app (which itself can't show the image)."""
+def note_ref_url(path: str) -> str:
+    """The `file://` URL we drop into a task's notes for an attachment."""
     from urllib.parse import quote
-    return f"📎 {name} — file://{quote(path)}"
+    return f"file://{quote(path)}"
+
+
+def note_ref_line(name: str, path: str) -> str:
+    """Notes line appended for an attachment so the Things app shows there's an image
+    (Things can't render the image itself, but linkifies the file:// URL into a
+    tap-to-open reference). The leading marker makes the attachment obvious in Things."""
+    return f"🖼 Image attached: {name} — {note_ref_url(path)}"
 
 
 def remove_attachment(item_uuid: str, att_id: str) -> bool:
