@@ -2057,23 +2057,35 @@ function renderPendingAttach(){
 }
 function unstageAttach(i){ const p=PENDING_ATTACH[i]; if(p) URL.revokeObjectURL(p.url); PENDING_ATTACH.splice(i,1); renderPendingAttach(); }
 function clearPending(){ PENDING_ATTACH.forEach(p=>URL.revokeObjectURL(p.url)); PENDING_ATTACH=[]; }
+let CREATING=false;   // re-entry guard: keying an image to its new task can take a few seconds
 async function createFromCard(){
+  if(CREATING) return;   // ignore the impatient second click that would create a duplicate
   let title=$("#f-title").value.trim(); if(!title){ $("#f-title").focus(); return; }
   let when=$("#f-when").value.trim(); const deadline=$("#f-deadline").value.trim();
   let tags=$("#f-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
   if(EDIT_KIND==="todo"){ const p=parseNL(title); title=p.title; if(!when&&p.when) when=p.when; p.tags.forEach(t=>{ if(!tags.includes(t)) tags.push(t); }); }
   const body={kind:EDIT_KIND, title}; const notes=$("#f-notes").value.trim(); if(notes) body.notes=notes;
-  if(PENDING_ATTACH.length) body.resolve=true;
+  if(PENDING_ATTACH.length) body.resolve=true;   // server must poll for the new UUID so we can attach
   if(EDIT_KIND==="project"){ if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
   else { if(when) body.when=when; if(deadline) body.deadline=deadline; if(tags.length) body.tags=tags;
          if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id; }
-  const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
-  if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
-  if(PENDING_ATTACH.length){
-    if(r.uuid){ for(const p of PENDING_ATTACH) await uploadAttachmentTo(r.uuid, p.file); }
-    else alert("Created, but couldn't link the image automatically — open the task and attach it.");
+  // Resolving + attaching an image can take a few seconds (Things commits the DB
+  // async). Show progress and lock the button so the wait doesn't look like a dead click.
+  const btn=$("#ec-add"); const label=btn.textContent;
+  CREATING=true; btn.disabled=true; btn.textContent=PENDING_ATTACH.length?"Adding image…":"Adding…";
+  try{
+    const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
+    if(PENDING_ATTACH.length){
+      if(r.uuid){ for(const p of PENDING_ATTACH) await uploadAttachmentTo(r.uuid, p.file); }
+      else alert("Created, but couldn't link the image automatically — open the task and attach it.");
+    }
+    clearPending(); closeOverlay("edit-overlay"); loadSidebar(); setTimeout(route,400);
+  }catch(e){
+    alert("Add failed: "+(e&&e.message||e));   // a thrown fetch used to fail silently → "nothing happens"
+  }finally{
+    CREATING=false; btn.disabled=false; btn.textContent=label;
   }
-  clearPending(); closeOverlay("edit-overlay"); loadSidebar(); setTimeout(route,400);
 }
 async function openEdit(uuid){
   EDIT_ID=uuid; EDIT_NEW=false; clearPending();

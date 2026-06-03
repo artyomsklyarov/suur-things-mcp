@@ -4,6 +4,25 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.7.1] - 2026-06-03
+
+### Fixed
+
+- **Quick-add "Add" button looked dead with an image attached.** When a new
+  to-do or project carries a staged image, the server has to discover the new
+  item's UUID by polling Things' database (the URL Scheme doesn't return it),
+  which can take several seconds on a large library. During that wait the button
+  stayed enabled with no feedback, so it read as a no-op — and a second impatient
+  click created a duplicate. The button now disables and shows "Adding…" /
+  "Adding image…" while the request is in flight, and a re-entry guard blocks
+  duplicate submits.
+- **Silent failures in quick-add.** `createFromCard()` had no error handling, so
+  a thrown `fetch` (or any exception) failed silently — the overlay just sat
+  there with no message. It now surfaces the error in an alert and always
+  restores the button state.
+- Realigned `__version__` in `__init__.py` (had drifted to `0.2.0`) with the
+  package version.
+
 ## [0.7.0] - 2026-05-26
 
 ### Added
