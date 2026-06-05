@@ -4,6 +4,28 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.7.2] - 2026-06-05
+
+### Fixed
+
+- **Add button could get stuck disabled forever.** The 0.7.1 fix disabled the
+  button while attaching, but `uploadAttachmentTo()` wrapped a `FileReader` in a
+  Promise that never settled if the file read errored or the `/api/attach` request
+  threw — so the `await` never returned, `CREATING` stayed `true`, and the button
+  stayed disabled until a page reload. It now has a `reader.onerror` handler and a
+  `try/catch` around the upload, so the Promise always resolves and the button is
+  always restored.
+- **Staged image could change mid-submit.** `createFromCard()` read `PENDING_ATTACH`
+  *after* the `/api/add` round-trip, so pasting, removing, or dropping an image
+  during the (async) wait could attach the wrong image or none. The staged set is
+  now snapshotted at submit time.
+
+### Tests
+
+- Added regression tests asserting the quick-add guards (re-entry lock, button
+  disable/restore, in-flight label) and the attach Promise's always-settle paths
+  (`reader.onerror`, `try/catch`, submit-time snapshot) are present in the served UI.
+
 ## [0.7.1] - 2026-06-03
 
 ### Fixed

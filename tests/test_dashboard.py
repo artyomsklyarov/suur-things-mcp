@@ -32,6 +32,29 @@ def test_index_route_is_static():
     assert 'id="sidebar"' in r.text and "/api/sidebar" in r.text
 
 
+def test_quick_add_has_feedback_and_guards():
+    """The quick-add submit path must keep its no-silent-failure guards: a
+    re-entry lock, a button-disable/restore, and a try/catch around the request.
+    These are embedded JS, so guard against accidental deletion at the source."""
+    html = client.get("/").text
+    assert "let CREATING=false" in html              # double-submit guard
+    assert "if(CREATING) return" in html
+    assert 'btn.disabled=true' in html and "btn.disabled=false" in html  # lock + restore
+    assert "Adding image…" in html and "Adding…" in html                 # in-flight feedback
+
+
+def test_attach_promise_always_settles():
+    """uploadAttachmentTo() must never hang: a never-settling Promise would leave
+    CREATING=true and the Add button stuck disabled. Both failure paths (file-read
+    error, thrown fetch) must resolve(false), so the onerror handler and the
+    try/catch in onload are load-bearing."""
+    html = client.get("/").text
+    assert "reader.onerror=" in html                 # failed read resolves instead of hanging
+    # the fetch in reader.onload is wrapped so a thrown request also resolves(false)
+    assert "}catch(e){ alert(\"Attach failed: " in html
+    assert "const staged=PENDING_ATTACH.slice()" in html  # snapshot at submit time
+
+
 def test_pick_port_returns_free_port():
     port = _pick_port()
     assert isinstance(port, int) and 1 <= port <= 65535
