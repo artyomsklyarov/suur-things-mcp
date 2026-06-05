@@ -60,6 +60,34 @@ def test_pick_port_returns_free_port():
     assert isinstance(port, int) and 1 <= port <= 65535
 
 
+def test_dashboard_no_open_flag_suppresses_browser(monkeypatch):
+    """`dashboard --no-open` runs as a quiet service (no browser). A login agent
+    relies on this; without it, KeepAlive respawns pop a tab on every restart."""
+    import sys
+
+    import suur_things_mcp.dashboard as dash
+    from suur_things_mcp import server
+
+    captured = {}
+    monkeypatch.setattr(dash, "serve_foreground", lambda **kw: captured.update(kw))
+    monkeypatch.setattr(sys, "argv", ["suur-things-mcp", "dashboard", "--no-open"])
+    server.main()
+    assert captured == {"app_mode": False, "open_browser": False}
+
+
+def test_dashboard_default_opens_browser(monkeypatch):
+    import sys
+
+    import suur_things_mcp.dashboard as dash
+    from suur_things_mcp import server
+
+    captured = {}
+    monkeypatch.setattr(dash, "serve_foreground", lambda **kw: captured.update(kw))
+    monkeypatch.setattr(sys, "argv", ["suur-things-mcp", "dashboard"])
+    server.main()
+    assert captured["open_browser"] is True and captured["app_mode"] is False
+
+
 def test_state_endpoint_never_500s():
     # Even with no Things DB, the endpoint returns a JSON envelope, not a 500.
     r = client.get("/api/state")

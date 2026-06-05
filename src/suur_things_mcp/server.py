@@ -863,7 +863,12 @@ def main() -> None:
         # `--app` opens the dashboard in a frameless Chromium app window (no tabs
         # or address bar) instead of a normal browser tab.
         app_mode = "--app" in args[1:]
-        serve_foreground(app_mode=app_mode)
+        # `--no-open` runs the dashboard as a quiet background service: bind the
+        # port and serve, but never open a browser. Intended for a login agent
+        # (launchd/systemd) that keeps the dashboard alive without popping a tab
+        # on every (re)start.
+        open_browser = "--no-open" not in args[1:]
+        serve_foreground(app_mode=app_mode, open_browser=open_browser)
     else:
         mcp.run()
 
