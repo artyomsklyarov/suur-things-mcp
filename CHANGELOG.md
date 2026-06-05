@@ -4,6 +4,17 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.7.3] - 2026-06-05
+
+### Added
+
+- **`dashboard --no-open`** — run the dashboard as a quiet background service:
+  bind the port and serve, but never open a browser. Intended for a login agent
+  (launchd/systemd) that keeps the dashboard alive across restarts without popping
+  a tab every time. Without it, a `KeepAlive` agent that loses the port (e.g. a
+  second instance grabbed it) relaunches in a loop, opening a browser on each
+  restart.
+
 ## [0.7.2] - 2026-06-05
 
 ### Fixed
