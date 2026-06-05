@@ -290,7 +290,19 @@ def load() -> dict[str, Any]:
         return _fresh()
     try:
         return _clean(json.loads(path.read_text()))
-    except (json.JSONDecodeError, OSError):
+    except json.JSONDecodeError:
+        # A corrupt board.json (e.g. an interrupted write) used to be silently
+        # replaced with empty defaults — and the next save() overwrote it, so the
+        # user's boards/links/overlays were lost for good. Preserve the bad file
+        # so it's recoverable instead of vanishing.
+        try:
+            import datetime
+            backup = path.with_name(f"{path.name}.corrupt-{datetime.datetime.now():%Y%m%d-%H%M%S}")
+            path.replace(backup)
+        except OSError:
+            pass
+        return _fresh()
+    except OSError:
         return _fresh()
 
 
@@ -298,7 +310,18 @@ def save(data: dict) -> dict[str, Any]:
     cfg = _clean(data or {})
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cfg, indent=2))
+    # Atomic write: a crash or concurrent writer can't leave a truncated/torn
+    # board.json (which load() would then treat as corrupt). Write a sibling temp
+    # file and os.replace() it into place (atomic on the same filesystem).
+    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    try:
+        tmp.write_text(json.dumps(cfg, indent=2))
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
     return cfg
 
 
@@ -439,8 +462,14 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
                     caption: str | None = None) -> dict[str, Any]:
     """Write image bytes to disk + record metadata. Returns the new metadata entry.
 
-    Raises ValueError on a non-image mime. The id is server-generated (uuid4), so
-    the serving path can never be attacker-controlled."""
+    Raises ValueError on a non-image mime or an unsafe item id. The id is
+    server-generated (uuid4) and the item_uuid is validated to be a safe path
+    component, so the on-disk path can never escape the attachments dir."""
+    item_uuid = str(item_uuid)
+    # item_uuid becomes a directory name below. Without this, a uuid like
+    # "../../foo" would walk mkdir/write_bytes outside the attachments dir.
+    if not _SAFE_ID.match(item_uuid):
+        raise ValueError("invalid item id")
     mime = (mime or "").strip().lower()
     if mime not in IMAGE_MIMES:
         raise ValueError(f"unsupported image type: {mime!r}")
@@ -453,6 +482,11 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
         "added": datetime.date.today().isoformat(),
     }
     path = attachment_path(item_uuid, meta)
+    # Defence in depth: never write outside the attachments dir even if the
+    # checks above are ever loosened.
+    base = _attach_dir().resolve()
+    if not str(path.resolve().parent).startswith(str(base)):
+        raise ValueError("invalid attachment path")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     cfg = load()

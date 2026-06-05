@@ -4,6 +4,46 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.0] - 2026-06-05
+
+Security + robustness hardening pass, from a full-codebase review (eng review +
+Codex audit). No behavior change for normal use.
+
+### Security
+
+- **Stored XSS in the dashboard fixed.** A project/area title was interpolated
+  into an inline `onclick` JS string via `encodeURIComponent`, which doesn't
+  escape `'` — a crafted title could execute script in the dashboard origin (which
+  can drive same-origin APIs incl. opening local files/apps). Now escaped with a
+  `jsarg()` helper that closes the `'` hole.
+- **Path traversal on attachment upload fixed.** The `/api/attach` endpoint used
+  the request's `uuid` directly as a directory name; a `../`-shaped value could
+  write outside the attachments dir. `save_attachment` now validates the id and
+  verifies the resolved path stays under the attachments dir.
+- **Organizer agent hardened.** The spawned `claude`/`codex` CLI now runs in an
+  empty temp directory with secret-shaped env vars stripped (tokens, API keys,
+  cloud creds — the agent's own auth is preserved), so a prompt-injected task
+  can't read+exfiltrate credentials. The docstring no longer overstates the Codex
+  sandbox's guarantees.
+
+### Fixed
+
+- **Config can no longer be silently lost or corrupted.** `board.json` is now
+  written atomically (temp file + `os.replace`), so an interrupted or concurrent
+  write can't leave a truncated file. A genuinely corrupt config is backed up to
+  `board.json.corrupt-<timestamp>` instead of being silently replaced with empty
+  defaults (which the next save used to make permanent).
+- **Dashboard no longer freezes during writes/pulse.** Blocking work — the Things
+  URL-scheme `open`, `git`/`gh` subprocesses, and SQLite searches — now runs off
+  the event loop (`run_in_threadpool`), so one slow request can't stall the whole
+  dashboard.
+- **POST endpoints validate input.** Malformed JSON or wrong-typed fields (e.g.
+  `tags: "abc"`) return a structured 400/error instead of a 500.
+- `batch` now caps operation count (250) and serialized size (~100KB) before
+  building the URL, instead of risking an oversized `open` argv.
+- Dashboard search routes through `reads.search`, so the `THINGS_DB` override is
+  honored (and the query runs off the event loop).
+
 ## [0.7.3] - 2026-06-05
 
 ### Added
