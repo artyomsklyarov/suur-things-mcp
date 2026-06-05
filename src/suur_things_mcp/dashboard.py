@@ -2065,19 +2065,22 @@ async function createFromCard(){
   let tags=$("#f-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
   if(EDIT_KIND==="todo"){ const p=parseNL(title); title=p.title; if(!when&&p.when) when=p.when; p.tags.forEach(t=>{ if(!tags.includes(t)) tags.push(t); }); }
   const body={kind:EDIT_KIND, title}; const notes=$("#f-notes").value.trim(); if(notes) body.notes=notes;
-  if(PENDING_ATTACH.length) body.resolve=true;   // server must poll for the new UUID so we can attach
+  // Snapshot the staged images at submit time: the /api/add wait is async, and a
+  // paste/remove/drop mid-flight would otherwise change what we attach.
+  const staged=PENDING_ATTACH.slice();
+  if(staged.length) body.resolve=true;   // server must poll for the new UUID so we can attach
   if(EDIT_KIND==="project"){ if(SEL&&SEL.kind==="area") body.area_id=SEL.id; }
   else { if(when) body.when=when; if(deadline) body.deadline=deadline; if(tags.length) body.tags=tags;
          if(SEL&&(SEL.kind==="project"||SEL.kind==="area")) body.list_id=SEL.id; }
   // Resolving + attaching an image can take a few seconds (Things commits the DB
   // async). Show progress and lock the button so the wait doesn't look like a dead click.
   const btn=$("#ec-add"); const label=btn.textContent;
-  CREATING=true; btn.disabled=true; btn.textContent=PENDING_ATTACH.length?"Adding image…":"Adding…";
+  CREATING=true; btn.disabled=true; btn.textContent=staged.length?"Adding image…":"Adding…";
   try{
     const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
     if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
-    if(PENDING_ATTACH.length){
-      if(r.uuid){ for(const p of PENDING_ATTACH) await uploadAttachmentTo(r.uuid, p.file); }
+    if(staged.length){
+      if(r.uuid){ for(const p of staged) await uploadAttachmentTo(r.uuid, p.file); }
       else alert("Created, but couldn't link the image automatically — open the task and attach it.");
     }
     clearPending(); closeOverlay("edit-overlay"); loadSidebar(); setTimeout(route,400);
@@ -2124,14 +2127,19 @@ function renderAttachments(uuid){
 }
 function onAttachPick(ev){ const fs=ev.target.files; if(fs) for(const f of fs){ EDIT_NEW?stageAttach(f):uploadAttachment(EDIT_ID,f); } ev.target.value=""; }
 function uploadAttachmentTo(uuid, file){   // returns Promise<bool>; keys the image to a known uuid
+  // MUST always resolve: createFromCard awaits this, and a never-settling Promise
+  // would leave CREATING=true and the Add button stuck disabled until a reload.
   return new Promise(res=>{
     if(!uuid || !file || !/^image\\//.test(file.type)){ if(file&&!/^image\\//.test(file.type)) alert("Only images can be attached."); res(false); return; }
     const reader=new FileReader();
+    reader.onerror=()=>{ alert("Couldn't read the image file."); res(false); };   // failed read no longer hangs
     reader.onload=async()=>{
-      const r=await (await fetch("/api/attach",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({uuid, name:file.name||"image", mime:file.type, data:String(reader.result)})})).json();
-      if(!r.ok){ alert("Attach failed: "+(r.error||"")); res(false); return; }
-      (CONFIG.attachments=CONFIG.attachments||{})[uuid]=((CONFIG.attachments||{})[uuid]||[]).concat([r.attachment]); res(true);
+      try{
+        const r=await (await fetch("/api/attach",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({uuid, name:file.name||"image", mime:file.type, data:String(reader.result)})})).json();
+        if(!r.ok){ alert("Attach failed: "+(r.error||"")); res(false); return; }
+        (CONFIG.attachments=CONFIG.attachments||{})[uuid]=((CONFIG.attachments||{})[uuid]||[]).concat([r.attachment]); res(true);
+      }catch(e){ alert("Attach failed: "+(e&&e.message||e)); res(false); }   // a thrown fetch used to hang the Promise
     };
     reader.readAsDataURL(file);
   });
