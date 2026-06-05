@@ -34,6 +34,7 @@ import urllib.request
 
 import uvicorn
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -90,6 +91,29 @@ def _auth_token() -> str | None:
     return boardcfg.auth_token()
 
 
+async def _json_body(request: Request) -> dict | None:
+    """Parse a JSON request body, returning a dict or None. Endpoints turn None
+    into a 400 instead of letting malformed JSON / a non-object body raise a 500."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — malformed body, wrong content-type, etc.
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _strlist(value: Any) -> list[str]:
+    """Coerce an arbitrary JSON value into a list of non-empty strings.
+    Tolerates a bare string, None, numbers, or junk so endpoints never 500 on
+    e.g. ``tags: "abc"`` or ``tags: [1]``."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [s for s in (str(v).strip() for v in value) if s]
+
+
 # --- Read endpoints -------------------------------------------------------
 
 async def _index(_request: Request) -> HTMLResponse:
@@ -136,10 +160,10 @@ async def _search(request: Request) -> JSONResponse:
     if len(q) < 2:
         return JSONResponse({"ok": True, "items": []})
     try:
-        import things
-
-        res = things.search(q) or []
-        items = [reads._card(t) for t in res if t.get("type") == "to-do"][:60]
+        # Go through reads.search (not things.search directly) so the THINGS_DB
+        # override is honored and the SQLite read runs off the event loop.
+        res = await run_in_threadpool(reads.search, q)
+        items = [reads._card(t) for t in (res or []) if t.get("type") == "to-do"][:60]
         return JSONResponse({"ok": True, "items": items})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc), "items": []})
@@ -217,7 +241,7 @@ async def _link_post(request: Request) -> JSONResponse:
             if isinstance(r, dict) and r.get("repo") and not r.get("github"):
                 path = boardcfg._normalize_repo(r["repo"])
                 if path and os.path.isdir(path):
-                    r["github"] = _detect_github(path)
+                    r["github"] = await run_in_threadpool(_detect_github, path)
         cfg = boardcfg.set_item_repos(item_id, body.get("kind", "project"), repos)
         return JSONResponse({"ok": True, "config": cfg})
     except Exception as exc:  # noqa: BLE001
@@ -230,19 +254,21 @@ async def _update(request: Request) -> JSONResponse:
     token = _auth_token()
     if not token:
         return JSONResponse({"ok": False, "error": "THINGS_AUTH_TOKEN not set"})
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     if not body.get("id"):
         return JSONResponse({"ok": False, "error": "missing id"})
-    params: dict[str, Any] = {"id": body["id"]}
+    params: dict[str, Any] = {"id": str(body["id"])}
     for key in ("title", "notes", "when", "deadline"):
         if body.get(key) is not None:
-            params[key] = body[key]
+            params[key] = str(body[key])
     if body.get("tags") is not None:
-        params["tags"] = ",".join(body["tags"])
+        params["tags"] = ",".join(_strlist(body["tags"]))
     if body.get("append_notes"):
-        params["append-notes"] = body["append_notes"]
+        params["append-notes"] = str(body["append_notes"])
     if body.get("add_tags"):
-        params["add-tags"] = ",".join(body["add_tags"])
+        params["add-tags"] = ",".join(_strlist(body["add_tags"]))
     if body.get("completed"):
         params["completed"] = True
     if body.get("canceled"):
@@ -252,7 +278,7 @@ async def _update(request: Request) -> JSONResponse:
     if body.get("heading") is not None:
         params["heading"] = body["heading"]   # move a to-do under a heading within its project (drag onto a heading)
     try:
-        execute("update", params, auth_token=token)
+        await run_in_threadpool(lambda: execute("update", params, auth_token=token))
         return JSONResponse({"ok": True})
     except ThingsURLError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
@@ -265,6 +291,13 @@ async def _pulse(request: Request) -> JSONResponse:
     item = boardcfg.links().get(str(request.query_params.get("item_id", "")))
     if not item:
         return JSONResponse({"ok": False, "repos": []})
+    # The git/gh shell-outs (up to ~8s each, several repos) would block the single
+    # event loop and freeze every other dashboard request — run them off-thread.
+    out = await run_in_threadpool(_pulse_repos, item)
+    return JSONResponse({"ok": True, "repos": out})
+
+
+def _pulse_repos(item: dict) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for entry in item.get("repos", []):
         gh = entry.get("github") or ""
@@ -291,13 +324,15 @@ async def _pulse(request: Request) -> JSONResponse:
             except Exception:  # noqa: BLE001
                 pass
         out.append(info)
-    return JSONResponse({"ok": True, "repos": out})
+    return out
 
 
 async def _add(request: Request) -> JSONResponse:
     """Quick-add a to-do or project from the dashboard. Create-only → no token needed.
     (Areas can't be created — the URL Scheme has no add-area command.)"""
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     kind = body.get("kind", "todo")
     title = (body.get("title") or "").strip()
     if not title:
@@ -308,14 +343,19 @@ async def _add(request: Request) -> JSONResponse:
         # The URL Scheme doesn't return it, so snapshot matching titles, create, then
         # poll for the one that's new. Skipped unless `resolve` is set (avoids the poll).
         resolve = bool(body.get("resolve"))
-        before = {t["uuid"] for t in reads.search(title) if t.get("title") == title} if resolve else set()
+        # reads.search + execute() are blocking (SQLite scan, `open` subprocess);
+        # keep them off the single event loop so the dashboard stays responsive.
+        before = (
+            {t["uuid"] for t in await run_in_threadpool(reads.search, title) if t.get("title") == title}
+            if resolve else set()
+        )
         if kind == "project":
             params: dict[str, Any] = {"title": title}
             if notes:
                 params["notes"] = notes
             if body.get("area_id"):
                 params["area-id"] = body["area_id"]
-            execute("add-project", params)
+            await run_in_threadpool(lambda: execute("add-project", params))
         else:
             params = {"title": title}
             if notes:
@@ -324,17 +364,17 @@ async def _add(request: Request) -> JSONResponse:
                 params["when"] = body["when"]
             if body.get("deadline"):
                 params["deadline"] = body["deadline"]
-            if body.get("tags"):
-                params["tags"] = ",".join(body["tags"])
+            if _strlist(body.get("tags")):
+                params["tags"] = ",".join(_strlist(body.get("tags")))
             if body.get("list_id"):
                 params["list-id"] = body["list_id"]
-            execute("add", params)
+            await run_in_threadpool(lambda: execute("add", params))
         new_uuid = None
         if resolve:
             for _ in range(12):  # Things writes the DB asynchronously after the URL fires
                 await asyncio.sleep(0.15)
-                cands = [t for t in reads.search(title)
-                         if t.get("title") == title and t["uuid"] not in before]
+                matches = await run_in_threadpool(reads.search, title)
+                cands = [t for t in matches if t.get("title") == title and t["uuid"] not in before]
                 if cands:
                     new_uuid = max(cands, key=lambda t: t.get("created") or "")["uuid"]
                     break
@@ -346,7 +386,9 @@ async def _add(request: Request) -> JSONResponse:
 async def _rename(request: Request) -> JSONResponse:
     """Rename a project inline from the dashboard header. (Board renames are client-side
     config; areas can't be renamed — the Things URL Scheme has no area-update command.)"""
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     item_id = str(body.get("id") or "")
     title = (body.get("title") or "").strip()
     kind = body.get("kind")
@@ -359,7 +401,7 @@ async def _rename(request: Request) -> JSONResponse:
     if not _auth_token():
         return JSONResponse({"ok": False, "error": "THINGS_AUTH_TOKEN not set"})
     try:
-        execute("update-project", {"id": item_id, "title": title}, auth_token=_auth_token())
+        await run_in_threadpool(lambda: execute("update-project", {"id": item_id, "title": title}, auth_token=_auth_token()))
         return JSONResponse({"ok": True})
     except ThingsURLError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
@@ -371,7 +413,9 @@ async def _open(request: Request) -> JSONResponse:
     Takes only an item_id + repo index + target; the path/url is looked up and
     validated server-side (never trusted from the request).
     """
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     item = boardcfg.links().get(str(body.get("item_id")))
     if not item:
         return JSONResponse({"ok": False, "error": "not linked"})
@@ -386,7 +430,7 @@ async def _open(request: Request) -> JSONResponse:
         gh = entry.get("github")
         if not gh or not _GITHUB_SLUG_RE.match(gh):
             return JSONResponse({"ok": False, "error": "no valid github for this repo"})
-        subprocess.run(["open", f"https://github.com/{gh}"], check=False, timeout=5)
+        await run_in_threadpool(lambda: subprocess.run(["open", f"https://github.com/{gh}"], check=False, timeout=5))
         return JSONResponse({"ok": True})
     path = entry.get("repo")
     if not path or not os.path.isdir(path):
@@ -394,11 +438,11 @@ async def _open(request: Request) -> JSONResponse:
     if target == "editor":
         editor = prefs.get("editor") or os.environ.get("SUUR_THINGS_EDITOR")
         cmd = [editor, path] if editor and shutil.which(editor) else ["open", path]
-        subprocess.run(cmd, check=False, timeout=5)
+        await run_in_threadpool(lambda: subprocess.run(cmd, check=False, timeout=5))
         return JSONResponse({"ok": True})
     if target == "terminal":
         app = prefs.get("terminal") or os.environ.get("SUUR_THINGS_TERMINAL") or "Terminal"
-        subprocess.run(["open", "-a", app, path], check=False, timeout=5)
+        await run_in_threadpool(lambda: subprocess.run(["open", "-a", app, path], check=False, timeout=5))
         return JSONResponse({"ok": True})
     return JSONResponse({"ok": False, "error": "bad target"})
 
@@ -411,7 +455,9 @@ async def _attach(request: Request) -> JSONResponse:
     they're written to disk and recorded in the browser-side overlay (no Things
     token needed to store). If a token IS set, a file:// reference is appended to
     the task's notes so the Things app shows it too."""
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     item_uuid = str(body.get("uuid") or "").strip()
     if not item_uuid:
         return JSONResponse({"ok": False, "error": "missing uuid"})
@@ -441,10 +487,11 @@ async def _attach(request: Request) -> JSONResponse:
     if token:
         try:
             path = str(boardcfg.attachment_path(item_uuid, meta))
-            existing = (reads.get(item_uuid) or {}).get("notes") or ""
+            existing = (await run_in_threadpool(reads.get, item_uuid) or {}).get("notes") or ""
             if boardcfg.note_ref_url(path) not in existing:  # don't duplicate on re-attach
-                execute("update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], path)},
-                        auth_token=token)
+                await run_in_threadpool(lambda: execute(
+                    "update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], path)},
+                    auth_token=token))
             note_updated = True
         except ThingsURLError:
             pass  # storing succeeded; the note reference is best-effort
@@ -473,7 +520,9 @@ async def _attachment(request: Request) -> FileResponse | JSONResponse:
 
 
 async def _detach(request: Request) -> JSONResponse:
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     removed = boardcfg.remove_attachment(str(body.get("uuid") or ""), str(body.get("id") or ""))
     return JSONResponse({"ok": removed})
 
@@ -489,7 +538,9 @@ async def _organize_post(request: Request) -> JSONResponse:
     """Start a background 'organize folder' agent run. Returns a job_id to poll."""
     if not _auth_token():
         return JSONResponse({"ok": False, "error": "THINGS_AUTH_TOKEN not set (needed to apply changes)"})
-    body = await request.json()
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
     folder_id = str(body.get("folder_id") or "")
     workflow = str(body.get("workflow") or "organize")   # organize | triage | calm
     if not folder_id:
@@ -1230,6 +1281,11 @@ function setHeadIcon(sel){
   el.textContent="";  // areas show their name large, no glyph (matches Things)
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// Safe to drop into a single-quoted JS string inside an inline on*="" handler.
+// encodeURIComponent escapes <>&" and most metachars but NOT the apostrophe, which
+// is exactly the string delimiter — so a title like  '+code+'  would break out and
+// execute. Escaping ' to %27 closes that hole; the receiver decodeURIComponent's it back.
+function jsarg(s){ return encodeURIComponent(String(s)).replace(/'/g,"%27"); }
 // Linkify full URLs (https://…) and bare domains (hrv.suur.io, www.x.com/path).
 // The bare-domain pass skips anything preceded by / @ . " ' > (already-linked URLs,
 // emails) and skips common file extensions so "config.py" isn't turned into a link.
@@ -1661,7 +1717,7 @@ function repoChipsHtml(id, kind, title, repos){
       `<button class="rb" title="Open in terminal" onclick="event.stopPropagation();openRepo('${id}',${i},'terminal')">❯</button>`+
       (r.github?`<button class="rb" title="Open on GitHub" onclick="event.stopPropagation();openRepo('${id}',${i},'github')">↗</button>`:"")+
       `</span>`; });
-  h+=`<button class="rb add" title="Manage repos" onclick="event.stopPropagation();openReposModal('${id}','${kind}','${encodeURIComponent(title)}')">🔗 repos</button>`;
+  h+=`<button class="rb add" title="Manage repos" onclick="event.stopPropagation();openReposModal('${id}','${kind}','${jsarg(title)}')">🔗 repos</button>`;
   return h;
 }
 async function fetchPulse(itemId, el){

@@ -431,10 +431,17 @@ def batch(
                 {"type": "to-do", "attributes": {"title": "Publish", "when": "tomorrow"}}
             ]}}]
     """
+    # The whole batch rides in a single `things:///json?data=...` URL handed to
+    # `open`; an oversized payload exceeds the OS argv limit (or hangs Things), so
+    # cap both the count and the serialized size before we build the URL.
+    if len(operations) > 250:
+        return {"ok": False, "command": "json", "error": "too many operations (max 250) — split into smaller batches"}
     requires_auth = any(
         isinstance(op, dict) and op.get("operation") == "update" for op in operations
     )
     data = json.dumps(operations, ensure_ascii=False)
+    if len(data) > 100_000:
+        return {"ok": False, "command": "json", "error": "batch too large (max ~100KB) — split into smaller batches"}
     try:
         execute(
             "json",

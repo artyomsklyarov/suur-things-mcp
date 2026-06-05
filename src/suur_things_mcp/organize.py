@@ -1,10 +1,18 @@
 """Headless-agent folder organizer (the dashboard "Organize" button).
 
 The server does NOT reason — it shells the user's installed agent CLI (claude /
-codex) purely as a text transform: tasks in, JSON suggestions out. The agent is
-spawned with NO MCP servers and NO tools, so it physically cannot write to Things
-or be prompt-injected into acting. Suggestions are reviewed in the dashboard;
-applying happens through the normal URL-Scheme write path.
+codex) purely as a text transform: tasks in, JSON suggestions out. Hardening so a
+prompt-injected task title can't turn the agent into a foothold:
+  - Claude runs with NO MCP servers and NO tools (`--strict-mcp-config`, empty
+    `--mcp-config`/`--allowedTools`), so it has nothing to act with.
+  - Codex runs in a read-only sandbox (`--sandbox read-only`): it can READ files
+    but cannot write or act. (This is weaker than Claude's no-tools mode — it can
+    still read the filesystem — so we also constrain the environment below.)
+  - The child env has the Things token AND any secret-shaped vars (TOKEN/KEY/
+    SECRET/PASSWORD/cloud creds) stripped, and runs in an empty temp directory,
+    so even a read can't trivially reach credentials or the user's repos.
+Suggestions are reviewed in the dashboard; applying happens through the normal
+URL-Scheme write path.
 """
 
 from __future__ import annotations
@@ -15,6 +23,25 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+
+# Env var names whose VALUES are likely secrets — stripped from the agent's env so
+# a prompt-injected read can't exfiltrate them (e.g. via Codex's network).
+_SENSITIVE_ENV = re.compile(
+    r"(TOKEN|SECRET|PASSWORD|PASSWD|API[_-]?KEY|_KEY$|CREDENTIAL|AWS_|GCP_|AZURE_)",
+    re.IGNORECASE,
+)
+# The agent's OWN auth, kept so env-key (non-OAuth) users don't lose login.
+# Exposing the agent its own key is not a new leak — it already uses it.
+_KEEP_ENV = {
+    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+    "OPENAI_API_KEY", "OPENAI_BASE_URL", "CODEX_API_KEY",
+}
+
+
+def _strip_env() -> dict[str, str]:
+    return {k: v for k, v in os.environ.items()
+            if k != "THINGS_AUTH_TOKEN" and (k in _KEEP_ENV or not _SENSITIVE_ENV.search(k))}
 
 DEFAULT_MODEL = "sonnet"
 MAX_TASKS = 25
@@ -199,14 +226,18 @@ def organize(folder_title: str, tasks: list[dict], existing_tags: list[str],
         raise RuntimeError(f"agent '{agent}' not found — install Claude Code or Codex")
     prompt = build_prompt(folder_title, tasks[:MAX_TASKS], existing_tags, workflow=workflow, projects=projects)
     # The agent only needs to transform text — it has no business seeing the Things
-    # write token. Strip it from the child env so prompt-injected task content can't
-    # coax the CLI into reading/exfiltrating it. Agent auth (Claude/Codex) is
-    # file-based (~/.claude, ~/.codex), so this doesn't break their login.
-    child_env = {k: v for k, v in os.environ.items() if k != "THINGS_AUTH_TOKEN"}
+    # write token or any other secret. Strip the token plus secret-shaped vars so
+    # prompt-injected task content can't coax the CLI into reading/exfiltrating them.
+    # Agent auth (Claude/Codex) is file-based (~/.claude, ~/.codex), so this doesn't
+    # break their login.
+    child_env = _strip_env()
     child_env["PATH"] = _login_path()  # so the agent CLI's own node/etc. resolve under a GUI launch
     try:
-        result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
-                                timeout=timeout, env=child_env)
+        # Run in an empty temp dir, not the server's cwd (often a real repo), so a
+        # read-only agent can't enumerate the user's project files by default.
+        with tempfile.TemporaryDirectory(prefix="suur-organize-") as cwd:
+            result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
+                                    timeout=timeout, env=child_env, cwd=cwd)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"{agent} timed out after {timeout}s")
     if result.returncode != 0:

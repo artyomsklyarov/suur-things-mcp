@@ -447,6 +447,83 @@ def test_attach_rejects_non_image(tmp_path, monkeypatch):
     assert r["ok"] is False
 
 
+def test_attach_rejects_traversal_uuid(tmp_path, monkeypatch):
+    """A `uuid` like ../../x must not let the upload write outside the attachments
+    dir. The serve path was already guarded; the write path is the one this covers."""
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    sentinel = tmp_path / "escaped.png"
+    r = client.post("/api/attach", json={"uuid": f"../../../{sentinel.stem}", "mime": "image/png",
+                                         "data": _PNG_1x1}).json()
+    assert r["ok"] is False                      # rejected, not written
+    assert not sentinel.exists()                 # nothing escaped the attachments dir
+    # the config-layer guard also raises directly
+    with pytest.raises(ValueError):
+        cfg.save_attachment("../../evil", b"x", "image/png", "x.png")
+
+
+def test_config_atomic_write_and_corrupt_backup(tmp_path, monkeypatch):
+    """A corrupt board.json is preserved (not silently reset to defaults), and a
+    normal save leaves no stray temp file."""
+    cfgfile = tmp_path / "board.json"
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(cfgfile))
+    import importlib
+
+    from suur_things_mcp import config as cfg
+    importlib.reload(cfg)
+    cfgfile.write_text("{ this is not valid json")
+    loaded = cfg.load()                          # corrupt -> fresh defaults
+    assert loaded["boards"]                       # usable default, not a crash
+    backups = list(tmp_path.glob("board.json.corrupt-*"))
+    assert backups, "corrupt config must be backed up, not lost"
+    cfg.save({"boards": []})                      # atomic write
+    assert cfgfile.exists()
+    assert not list(tmp_path.glob("board.json.tmp-*")), "temp file must be cleaned up"
+
+
+def test_update_input_coercion_no_500(monkeypatch):
+    """Malformed / wrong-typed POST bodies return structured errors, never a 500."""
+    from suur_things_mcp.dashboard import _strlist
+    assert _strlist("abc") == ["abc"]            # bare string -> single-item list
+    assert _strlist([1, 2]) == ["1", "2"]        # non-strings coerced
+    assert _strlist(None) == [] and _strlist(5) == []
+    # a non-JSON body to a write endpoint is a clean 400, not an exception
+    r = client.post("/api/update", content=b"not json",
+                    headers={"content-type": "application/json"})
+    assert r.status_code in (400, 200) and r.json()["ok"] is False
+
+
+def test_batch_caps_size():
+    from suur_things_mcp import server
+    big = [{"type": "to-do", "attributes": {"title": f"t{i}"}} for i in range(251)]
+    r = server.batch(big)
+    assert r["ok"] is False and "many operations" in r["error"]
+
+
+def test_organizer_strips_secret_env(monkeypatch):
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "x")
+    monkeypatch.setenv("GITHUB_TOKEN", "y")
+    monkeypatch.setenv("THINGS_AUTH_TOKEN", "z")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "keep")
+    from suur_things_mcp import organize
+    env = organize._strip_env()
+    assert "AWS_SECRET_ACCESS_KEY" not in env and "GITHUB_TOKEN" not in env
+    assert "THINGS_AUTH_TOKEN" not in env        # never handed to the agent
+    assert env.get("ANTHROPIC_API_KEY") == "keep"  # agent's own auth survives
+
+
+def test_quickadd_title_not_raw_xss():
+    """The repo-chip button must escape the untrusted title for an inline JS string
+    (jsarg), not the old encodeURIComponent that leaves the ' delimiter unescaped."""
+    html = client.get("/").text
+    assert "function jsarg(" in html
+    assert "jsarg(title)" in html
+    assert "encodeURIComponent(title)" not in html  # the vulnerable pattern is gone
+
+
 def test_origin_guard_blocks_cross_site():
     cross = client.post("/api/config", headers={"sec-fetch-site": "cross-site"}, json={"boards": []})
     assert cross.status_code == 403
