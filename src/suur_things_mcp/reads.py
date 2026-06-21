@@ -81,13 +81,19 @@ def find_by_exact_title(title: str) -> list[dict]:
     title+notes+area joins, which the create flow polled up to a dozen times.
     Read-only and NOT ``immutable`` (we must see Things' fresh async write)."""
     # mode=ro (no immutable) on a fresh connection so each poll sees newly
-    # committed rows.
-    con = sqlite3.connect(_db_uri(immutable=False), uri=True)
+    # committed rows. Degrade to [] if the DB is missing/locked (matches
+    # things.py's tolerant behaviour) rather than raising into the caller.
+    try:
+        con = sqlite3.connect(_db_uri(immutable=False), uri=True)
+    except sqlite3.Error:
+        return []
     try:
         rows = con.execute(
             "SELECT uuid, creationDate FROM TMTask WHERE title = ? AND trashed = 0",
             (title,),
         ).fetchall()
+    except sqlite3.Error:
+        return []
     finally:
         con.close()
     return [{"uuid": u, "created": c or 0} for (u, c) in rows]
