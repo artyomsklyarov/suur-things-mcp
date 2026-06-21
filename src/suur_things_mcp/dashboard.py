@@ -53,6 +53,9 @@ from .urlscheme import ThingsURLError, execute
 # In-memory organize jobs (single uvicorn worker). job_id -> dict.
 _ORGANIZE_JOBS: dict[str, dict] = {}
 _ORGANIZE_TTL = 1800  # evict finished jobs after 30 min
+# Guards the dedupe / global-cap / insert check-then-act, which runs in a
+# threadpool worker and races against the background _work() thread's updates.
+_ORGANIZE_LOCK = threading.Lock()
 
 _ALLOWED_HOSTS = {"127.0.0.1", "localhost"}
 _GITHUB_SLUG_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
@@ -343,10 +346,12 @@ async def _add(request: Request) -> JSONResponse:
         # The URL Scheme doesn't return it, so snapshot matching titles, create, then
         # poll for the one that's new. Skipped unless `resolve` is set (avoids the poll).
         resolve = bool(body.get("resolve"))
-        # reads.search + execute() are blocking (SQLite scan, `open` subprocess);
-        # keep them off the single event loop so the dashboard stays responsive.
+        # find_by_exact_title + execute() are blocking (SQLite read, `open`
+        # subprocess); keep them off the single event loop. find_by_exact_title is
+        # an exact-match read on one column — much cheaper than search()'s LIKE join,
+        # which the poll below used to run up to a dozen times (~5s on a big library).
         before = (
-            {t["uuid"] for t in await run_in_threadpool(reads.search, title) if t.get("title") == title}
+            {t["uuid"] for t in await run_in_threadpool(reads.find_by_exact_title, title)}
             if resolve else set()
         )
         if kind == "project":
@@ -373,10 +378,10 @@ async def _add(request: Request) -> JSONResponse:
         if resolve:
             for _ in range(12):  # Things writes the DB asynchronously after the URL fires
                 await asyncio.sleep(0.15)
-                matches = await run_in_threadpool(reads.search, title)
-                cands = [t for t in matches if t.get("title") == title and t["uuid"] not in before]
+                matches = await run_in_threadpool(reads.find_by_exact_title, title)
+                cands = [t for t in matches if t["uuid"] not in before]
                 if cands:
-                    new_uuid = max(cands, key=lambda t: t.get("created") or "")["uuid"]
+                    new_uuid = max(cands, key=lambda t: t.get("created") or 0)["uuid"]
                     break
         return JSONResponse({"ok": True, "uuid": new_uuid})
     except ThingsURLError as exc:
@@ -549,12 +554,19 @@ async def _organize_post(request: Request) -> JSONResponse:
     if not agent:
         return JSONResponse({"ok": False, "error": "no agent CLI found — install Claude Code or Codex"})
 
-    _evict_jobs()
-    for jid, job in _ORGANIZE_JOBS.items():  # dedupe: same folder+workflow already running
-        if job.get("status") == "running" and job.get("folder_id") == folder_id and job.get("workflow") == workflow:
-            return JSONResponse({"ok": True, "job_id": jid})
-    if any(j.get("status") == "running" for j in _ORGANIZE_JOBS.values()):  # global cap of 1
-        return JSONResponse({"ok": False, "error": "another organize job is already running"})
+    # Reserve the single job slot atomically: dedupe + global-cap + insert under
+    # one lock, so two concurrent POSTs can't both pass the cap and spawn jobs.
+    # The slow I/O below runs OUTSIDE the lock; on failure we release the slot.
+    job_id = _uuid.uuid4().hex[:8]
+    with _ORGANIZE_LOCK:
+        _evict_jobs()
+        for jid, job in _ORGANIZE_JOBS.items():  # dedupe: same folder+workflow already running
+            if job.get("status") == "running" and job.get("folder_id") == folder_id and job.get("workflow") == workflow:
+                return JSONResponse({"ok": True, "job_id": jid})
+        if any(j.get("status") == "running" for j in _ORGANIZE_JOBS.values()):  # global cap of 1
+            return JSONResponse({"ok": False, "error": "another organize job is already running"})
+        _ORGANIZE_JOBS[job_id] = {"status": "running", "folder_id": folder_id, "workflow": workflow,
+                                  "ts": time.time(), "suggestions": None, "error": None, "count": 0}
 
     try:
         cards = reads.list_items(folder_id).get("items", [])[: organizer.MAX_TASKS]
@@ -564,6 +576,7 @@ async def _organize_post(request: Request) -> JSONResponse:
             tasks.append({"uuid": c["uuid"], "title": c.get("title"),
                           "notes": full.get("notes"), "tags": full.get("tags") or c.get("tags")})
         if not tasks:
+            _ORGANIZE_JOBS.pop(job_id, None)  # release the reserved slot
             return JSONResponse({"ok": False, "error": "no open tasks in this folder"})
         obj = reads.get(folder_id)
         title = (obj.get("title") if obj else None) or folder_id
@@ -574,13 +587,12 @@ async def _organize_post(request: Request) -> JSONResponse:
                           if p.get("status") == "incomplete" and p.get("title")] \
                          + [a["title"] for a in reads.areas() if a.get("title")]
     except Exception as exc:  # noqa: BLE001
+        _ORGANIZE_JOBS.pop(job_id, None)  # release the reserved slot
         return JSONResponse({"ok": False, "error": str(exc)})
 
     model = boardcfg.prefs().get("agent_model") or organizer.DEFAULT_MODEL
-    job_id = _uuid.uuid4().hex[:8]
     titles = {t["uuid"]: t.get("title") for t in tasks}   # so the review modal can name each task
-    _ORGANIZE_JOBS[job_id] = {"status": "running", "folder_id": folder_id, "workflow": workflow,
-                              "ts": time.time(), "suggestions": None, "error": None, "count": len(tasks)}
+    _ORGANIZE_JOBS[job_id]["count"] = len(tasks)
 
     def _work() -> None:
         try:
@@ -712,6 +724,16 @@ def ensure_running(open_browser: bool = True, app_mode: bool = False) -> str:
     thread.start()
     url = f"http://127.0.0.1:{port}"
     _running.update(url=url, port=port, thread=thread, server=server)
+    # Wait until the server is actually accepting connections before opening the
+    # browser — otherwise the tab can load before uvicorn binds and show a refused
+    # connection. Poll the port for up to ~3s.
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                break
+        except OSError:
+            time.sleep(0.05)
     if open_browser:
         _open_url(url, app_mode)
     return url
@@ -1281,6 +1303,20 @@ function setHeadIcon(sel){
   el.textContent="";  // areas show their name large, no glyph (matches Things)
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+// Centralized fetch wrappers: every call used to be an inline fetch().json()
+// with no catch, so a thrown fetch (network drop, server restart) failed silently —
+// stale spinners, "nothing happened". These never throw: on any network/parse error
+// they return {ok:false, error} so call sites' existing `if(!r.ok)` handles it.
+async function getJSON(url){
+  try{ const res = await fetch(url); return await res.json(); }
+  catch(e){ return {ok:false, error:(e&&e.message)||String(e), _neterr:true}; }
+}
+async function postJSON(url, body){
+  try{
+    const res = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    return await res.json();
+  }catch(e){ return {ok:false, error:(e&&e.message)||String(e), _neterr:true}; }
+}
 // Safe to drop into a single-quoted JS string inside an inline on*="" handler.
 // encodeURIComponent escapes <>&" and most metachars but NOT the apostrophe, which
 // is exactly the string delimiter — so a title like  '+code+'  would break out and
@@ -1311,17 +1347,15 @@ function ring(p){ const r=6,c=2*Math.PI*r,off=c*(1-p);
   if(p<=0) return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/></svg>`;
   return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/><circle class="ring-fg" cx="8" cy="8" r="6" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 8 8)"/></svg>`; }
 
-async function loadConfig(){ CONFIG=(await (await fetch("/api/config")).json()).config; }
+async function loadConfig(){ CONFIG=(await getJSON("/api/config")).config; }
 // Save only the sections this client owns in this action, so a concurrent edit
 // (CLI / another tab) to a different section is never clobbered.
 async function saveConfig(){
-  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({boards:CONFIG.boards, priority:CONFIG.priority})})).json();
+  const r=await postJSON("/api/config", {boards:CONFIG.boards, priority:CONFIG.priority});
   if(r.ok) CONFIG=r.config;
 }
 async function saveItemRepos(itemId, kind, repos){
-  const r=await (await fetch("/api/link",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({item_id:itemId, kind, repos})})).json();
+  const r=await postJSON("/api/link", {item_id:itemId, kind, repos});
   if(r.ok) CONFIG=r.config;
 }
 
@@ -1386,7 +1420,7 @@ function ckRender(q){
     CK_T=setTimeout(async()=>{
       if(CK_MODE!=="main" || $("#cmdk-input").value.trim()!==q) return;
       try{
-        const d=await (await fetch("/api/search?q="+encodeURIComponent(q))).json();
+        const d=await getJSON("/api/search?q="+encodeURIComponent(q));
         if(!d.ok || CK_MODE!=="main" || $("#cmdk-input").value.trim()!==q) return;
         const tasks=(d.items||[]).slice(0,8).map(it=>({label:it.title||"(untitled)", hint:it.project_title?("Task · "+it.project_title):"Task", icon:"", run:()=>enterTaskScreen({uuid:it.uuid,title:it.title,project_title:it.project_title})}));
         CK_ITEMS=base.concat(tasks); ckDraw();
@@ -1420,7 +1454,7 @@ function enterMoveScreen(t){
 }
 async function moveTask(id, listId){
   if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to move tasks."); return; }
-  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id, list_id:listId})})).json();
+  const r=await postJSON("/api/update", {id, list_id:listId});
   if(!r.ok){ alert("Move failed: "+(r.error||"")); return; }
   loadSidebar(); setTimeout(route,300);
 }
@@ -1449,7 +1483,7 @@ function ckScroll(){ const box=$("#cmdk-list"), sel=box.children[CK_SEL]; if(sel
 
 // --- sidebar ---
 async function loadSidebar(){
-  const data=await (await fetch("/api/sidebar")).json();
+  const data=await getJSON("/api/sidebar");
   AUTH=!!data.auth; if(!data.ok){ $("#sidebar").innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   SIDEBAR=data.sidebar; renderSidebar();
 }
@@ -1533,7 +1567,7 @@ async function renderList(sel, view="list"){
   $("#vt-list").classList.toggle("on",view==="list"); $("#vt-matrix").classList.toggle("on",matrix); $("#vt-levels").classList.toggle("on",levels); $("#vt-cards").classList.toggle("on",cards); $("#vt-timeline").classList.toggle("on",timeline);
   $(".main").classList.toggle("fill", matrix||levels||timeline);
   const c=$("#content"); $("#filterbar").classList.remove("show"); c.innerHTML=`<div class="empty">loading…</div>`;
-  const data=await (await fetch("/api/items?id="+encodeURIComponent(sel.id))).json();
+  const data=await getJSON("/api/items?id="+encodeURIComponent(sel.id));
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   LIST_ITEMS=data.items; LIST_KIND=data.kind; LIST_NOTES=data.notes||null; CUR_FILTER=null; LIST_ROLLUP=data.rollup!==false;
   $("#rollup-vt").classList.toggle("on", LIST_KIND==="area" && LIST_ROLLUP);
@@ -1557,7 +1591,7 @@ function toggleRollupPill(){ setAreaRollup(!LIST_ROLLUP); }
 async function setAreaRollup(on){
   if(!SEL) return;
   CONFIG.area_prefs=CONFIG.area_prefs||{}; CONFIG.area_prefs[SEL.id]={rollup:on};
-  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({area_prefs:CONFIG.area_prefs})})).json();
+  const r=await postJSON("/api/config", {area_prefs:CONFIG.area_prefs});
   if(r.ok) CONFIG=r.config;
   renderList(SEL, MODE);   // keep the current view; server includes/excludes tasks per the pref
 }
@@ -1643,7 +1677,7 @@ function headingDrop(el, heading){
 async function moveToHeading(uuid, heading){
   if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to move tasks under a heading."); return; }
   const it=(LIST_ITEMS||[]).find(x=>x.uuid===uuid); if(it && (it.heading_title||"")===(heading||"")) return;  // already there (top == "")
-  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:uuid, heading})})).json();
+  const r=await postJSON("/api/update", {id:uuid, heading});
   if(!r.ok){ alert("Move failed: "+(r.error||"")); return; }
   if(SEL) setTimeout(()=>renderList(SEL, MODE), 350);   // re-fetch so it shows under its new heading
 }
@@ -1675,7 +1709,7 @@ async function renderBoard(id){
   $("#head-ico").innerHTML=SVG.board; $("#head-title").textContent=b?b.name:"Board";
   setHeadEditable(b?"board":null, b?b.id:null);
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
-  const data=await (await fetch("/api/board?id="+encodeURIComponent(id))).json();
+  const data=await getJSON("/api/board?id="+encodeURIComponent(id));
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   c.innerHTML="";
   const wrap=document.createElement("div"); wrap.className="board-wrap";
@@ -1722,7 +1756,7 @@ function repoChipsHtml(id, kind, title, repos){
 }
 async function fetchPulse(itemId, el){
   try{
-    const d=await (await fetch("/api/pulse?item_id="+encodeURIComponent(itemId))).json();
+    const d=await getJSON("/api/pulse?item_id="+encodeURIComponent(itemId));
     if(!d.ok || !(d.repos||[]).length) return;
     const lines=d.repos.map(r=>{
       const bits=[];
@@ -1735,7 +1769,7 @@ async function fetchPulse(itemId, el){
   }catch(e){}
 }
 async function openRepo(itemId, idx, target){
-  const r=await (await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({item_id:itemId,repo_index:idx,target})})).json();
+  const r=await postJSON("/api/open", {item_id:itemId,repo_index:idx,target});
   if(!r.ok) alert("Open failed: "+(r.error||""));
 }
 let REPOS_ITEM=null;
@@ -1783,7 +1817,7 @@ async function renderPriority(){
   $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
   $("#head-ico").innerHTML=SVG.priority; $("#head-title").textContent="Priority Matrix"; setHeadEditable(null);
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
-  const data=await (await fetch("/api/items?id=today")).json();
+  const data=await getJSON("/api/items?id=today");
   LIST_ITEMS=data.ok?data.items:[]; LIST_KIND="builtin"; renderMatrix(LIST_ITEMS);
 }
 function renderMatrix(items){
@@ -1851,7 +1885,7 @@ async function renderLevels(){
   $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
   $("#head-ico").innerHTML=SVG.levels; $("#head-title").textContent="Priority Levels"; setHeadEditable(null);
   const c=$("#content"); c.innerHTML=`<div class="empty">loading…</div>`;
-  const data=await (await fetch("/api/items?id=today")).json();
+  const data=await getJSON("/api/items?id=today");
   LIST_ITEMS=data.ok?data.items:[]; LIST_KIND="builtin"; renderLevelBands();
 }
 function renderLevelBands(){
@@ -1894,7 +1928,7 @@ async function assignLevel(uuid, levelIdx){
   if(levelIdx>=0){ const canon=L[levelIdx].tags[0];
     if(!canon){ alert("Map a tag to "+L[levelIdx].label+" first (⚙)."); return; }
     tags.push(canon); }
-  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:uuid, tags})})).json();
+  const r=await postJSON("/api/update", {id:uuid, tags});
   if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
   it.tags=tags; renderLevelBands(); loadSidebar();
 }
@@ -1910,7 +1944,7 @@ function openLevelMap(){
 async function saveLevelMap(){
   const rows=[...document.querySelectorAll("#levelmap-rows input")];
   const pl=rows.map((inp,i)=>({label:"P"+(i+1), tags:inp.value.split(",").map(s=>s.trim()).filter(Boolean)}));
-  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({priority_levels:pl})})).json();
+  const r=await postJSON("/api/config", {priority_levels:pl});
   if(r.ok) CONFIG=r.config;
   closeOverlay("levelmap-overlay");
   if(MODE==="levels") renderLevelBands();
@@ -1921,7 +1955,7 @@ const TL_START=6, TL_END=23, TL_H=44;   // 6am–11pm, 44px per hour
 let TL_DUR=30;                            // default block length (minutes)
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 async function saveTimeblocks(){
-  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({timeblocks:CONFIG.timeblocks})})).json();
+  const r=await postJSON("/api/config", {timeblocks:CONFIG.timeblocks});
   if(r.ok) CONFIG=r.config;
 }
 function renderTimeline(items){
@@ -2133,7 +2167,7 @@ async function createFromCard(){
   const btn=$("#ec-add"); const label=btn.textContent;
   CREATING=true; btn.disabled=true; btn.textContent=staged.length?"Adding image…":"Adding…";
   try{
-    const r=await (await fetch("/api/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+    const r=await postJSON("/api/add", body);
     if(!r.ok){ alert("Add failed: "+(r.error||"")); return; }
     if(staged.length){
       if(r.uuid){ for(const p of staged) await uploadAttachmentTo(r.uuid, p.file); }
@@ -2150,7 +2184,7 @@ async function openEdit(uuid){
   EDIT_ID=uuid; EDIT_NEW=false; clearPending();
   $("#ec-kind").style.display="none"; $("#ec-box").style.display=""; $("#ec-add").style.display="none"; $("#ec-where").style.display="none";
   document.querySelectorAll("#edit-overlay .ec-link").forEach(b=>b.style.display="");
-  const data=await (await fetch("/api/item?id="+encodeURIComponent(uuid))).json();
+  const data=await getJSON("/api/item?id="+encodeURIComponent(uuid));
   if(!data.ok){ alert("Could not load task."); return; }
   const it=data.item;
   $("#f-title").value=it.title||""; $("#f-notes").value=it.notes||"";
@@ -2191,8 +2225,7 @@ function uploadAttachmentTo(uuid, file){   // returns Promise<bool>; keys the im
     reader.onerror=()=>{ alert("Couldn't read the image file."); res(false); };   // failed read no longer hangs
     reader.onload=async()=>{
       try{
-        const r=await (await fetch("/api/attach",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({uuid, name:file.name||"image", mime:file.type, data:String(reader.result)})})).json();
+        const r=await postJSON("/api/attach", {uuid, name:file.name||"image", mime:file.type, data:String(reader.result)});
         if(!r.ok){ alert("Attach failed: "+(r.error||"")); res(false); return; }
         (CONFIG.attachments=CONFIG.attachments||{})[uuid]=((CONFIG.attachments||{})[uuid]||[]).concat([r.attachment]); res(true);
       }catch(e){ alert("Attach failed: "+(e&&e.message||e)); res(false); }   // a thrown fetch used to hang the Promise
@@ -2204,8 +2237,7 @@ function uploadAttachment(uuid, file){   // attach to the open existing task + r
   uploadAttachmentTo(uuid, file).then(ok=>{ if(ok){ renderAttachments(uuid); rerenderCurrent(); } });
 }
 async function detachAttachment(uuid, id){
-  const r=await (await fetch("/api/detach",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({uuid, id})})).json();
+  const r=await postJSON("/api/detach", {uuid, id});
   if(!r.ok){ alert("Remove failed."); return; }
   if(CONFIG.attachments&&CONFIG.attachments[uuid]) CONFIG.attachments[uuid]=CONFIG.attachments[uuid].filter(a=>a.id!==id);
   renderAttachments(uuid); rerenderCurrent();   // refresh the row's image icon live
@@ -2232,7 +2264,7 @@ async function saveEdit(){
 async function applyStatus(uuid, field){
   if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to check off tasks."); return false; }
   const body={id:uuid}; body[field]=true;
-  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  const r=await postJSON("/api/update", body);
   if(!r.ok){ alert("Update failed: "+(r.error||"")); return false; }
   const it=(LIST_ITEMS||[]).find(x=>x.uuid===uuid); if(it) it.status=(field==="completed"?"completed":"canceled");
   loadSidebar(); return true;   // refresh counts; the item stays in LIST_ITEMS until next full fetch
@@ -2248,7 +2280,7 @@ function rerenderCurrent(){
 async function completeTask(){ if(await applyStatus(EDIT_ID,"completed")){ closeOverlay("edit-overlay"); rerenderCurrent(); } }
 async function cancelTask(){ if(await applyStatus(EDIT_ID,"canceled")){ closeOverlay("edit-overlay"); rerenderCurrent(); } }
 async function postUpdate(body){
-  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+  const r=await postJSON("/api/update", body);
   if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
   closeOverlay("edit-overlay"); setTimeout(route,350);   // re-render current view
 }
@@ -2258,7 +2290,7 @@ function openInThings(){ if(EDIT_ID) window.location.href="things:///show?id="+e
 async function startOrganize(folderId, workflow){
   folderId = folderId || (SEL && SEL.id); workflow = workflow || "organize";
   if(!folderId){ alert("Open a list first."); return; }
-  const r=await (await fetch("/api/organize",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({folder_id:folderId, workflow})})).json();
+  const r=await postJSON("/api/organize", {folder_id:folderId, workflow});
   if(!r.ok){ alert("Organize: "+(r.error||"failed")); return; }
   openOverlay("organize-overlay");
   const meta=({organize:["✨ Organize folder","Cleaner titles, notes, and tags — review before anything is written."],
@@ -2305,7 +2337,7 @@ async function applyOrganize(){
     const wn=row.querySelector(".acc-when"); if(wn&&wn.checked) body.when=wn.dataset.val;
     const ds=row.querySelector(".acc-dest"); if(ds&&ds.checked){ const lid=resolveDestId(ds.dataset.val); if(lid) body.list_id=lid; }
     if(body.title||body.append_notes||body.add_tags||body.when||body.list_id){
-      const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
+      const r=await postJSON("/api/update", body);
       if(r.ok) n++;
     }
   }
@@ -2318,7 +2350,7 @@ async function applyOrganize(){
 function openPrefs(){ const p=CONFIG.prefs||{}; $("#pf-editor").value=p.editor||""; $("#pf-terminal").value=p.terminal||""; openOverlay("prefs-overlay"); }
 async function savePrefs(){
   const prefs={editor:$("#pf-editor").value.trim(), terminal:$("#pf-terminal").value.trim()};
-  const r=await (await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prefs})})).json();
+  const r=await postJSON("/api/config", {prefs});
   if(r.ok) CONFIG=r.config;
   closeOverlay("prefs-overlay");
 }
@@ -2406,8 +2438,7 @@ async function commitHeadRename(){
     return;
   }
   if(type==="project"){
-    const r=await (await fetch("/api/rename",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({id, title:name, kind:"project"})})).json();
+    const r=await postJSON("/api/rename", {id, title:name, kind:"project"});
     if(!r.ok){ alert("Rename failed: "+(r.error||"")); h.textContent=orig; return; }
     loadSidebar();  // reflect new name in the nav tree
   }
@@ -2431,7 +2462,7 @@ function renderAbout(){
 
 async function reschedule(id, when){
   if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to reschedule by drag."); return; }
-  const r=await (await fetch("/api/update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id, when})})).json();
+  const r=await postJSON("/api/update", {id, when});
   if(!r.ok){ alert("Reschedule failed: "+(r.error||"")); return; }
   loadSidebar(); setTimeout(route, 300);
 }

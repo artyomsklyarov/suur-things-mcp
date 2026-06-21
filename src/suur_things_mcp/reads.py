@@ -72,6 +72,27 @@ def search(query: str) -> list[dict]:
     return things.search(query, **_kw())
 
 
+def find_by_exact_title(title: str) -> list[dict]:
+    """Tasks whose title is EXACTLY ``title`` (uuid + creation time only).
+
+    Used by the dashboard's quick-add to resolve a just-created item's UUID
+    (the URL Scheme doesn't return it). This is a single exact-match read on
+    one column — far cheaper than ``search()``'s ``LIKE '%...%'`` over
+    title+notes+area joins, which the create flow polled up to a dozen times.
+    Read-only and NOT ``immutable`` (we must see Things' fresh async write)."""
+    # mode=ro (no immutable) on a fresh connection so each poll sees newly
+    # committed rows.
+    con = sqlite3.connect(_db_uri(immutable=False), uri=True)
+    try:
+        rows = con.execute(
+            "SELECT uuid, creationDate FROM TMTask WHERE title = ? AND trashed = 0",
+            (title,),
+        ).fetchall()
+    finally:
+        con.close()
+    return [{"uuid": u, "created": c or 0} for (u, c) in rows]
+
+
 def todos(
     project_uuid: str | None = None,
     area_uuid: str | None = None,
@@ -211,6 +232,16 @@ def _db_path() -> str:
     return os.environ.get("THINGS_DB") or _thingsdb.DEFAULT_FILEPATH
 
 
+def _db_uri(immutable: bool) -> str:
+    """Read-only SQLite URI for the Things DB, with the path properly quoted so a
+    path containing spaces/?/# can't break the URI. ``immutable`` for a stable
+    snapshot (counts); leave it off when you must see Things' fresh writes."""
+    from urllib.parse import quote
+
+    flags = "mode=ro&immutable=1" if immutable else "mode=ro"
+    return f"file:{quote(_db_path())}?{flags}"
+
+
 def _project_progress() -> dict[str, float]:
     """uuid -> completion ratio (0..1) for projects, read straight from the DB.
 
@@ -218,7 +249,7 @@ def _project_progress() -> dict[str, float]:
     columns Things itself maintains. Opened read-only + immutable so we never
     contend with the app's writes.
     """
-    uri = f"file:{_db_path()}?mode=ro&immutable=1"
+    uri = _db_uri(immutable=True)
     con = sqlite3.connect(uri, uri=True)
     try:
         rows = con.execute(
@@ -330,7 +361,7 @@ def list_items(list_id: str, completed_limit: int = 50, rollup: bool = True) -> 
 
 def _project_counts() -> dict[str, dict[str, int]]:
     """uuid -> {open, total} leaf-action counts for projects (read-only DB)."""
-    uri = f"file:{_db_path()}?mode=ro&immutable=1"
+    uri = _db_uri(immutable=True)
     con = sqlite3.connect(uri, uri=True)
     try:
         rows = con.execute(

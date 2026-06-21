@@ -4,6 +4,45 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.2] - 2026-06-21
+
+Quality pass: the deferred follow-ups from the v0.8.0 audit, dependency bumps,
+and the project's first real JavaScript test coverage.
+
+### Added
+
+- **Headless-browser test harness** (pytest + Playwright). The dashboard ships its
+  UI as embedded JS with no JS runner; `tests/test_dashboard_browser.py` now loads
+  the real page in Chromium and asserts the client-side behaviours pure-Python
+  tests can't reach — XSS escaping (`jsarg`), the quick-add re-entry guard + button
+  feedback, and a clean (exception-free) boot. Tests skip when Chromium isn't
+  installed, so plain `uv run pytest` still works; CI installs it and runs them.
+
+### Changed
+
+- **Quick-add UUID resolution is faster and more reliable.** Resolving a new item's
+  UUID now uses an exact-title DB read (`find_by_exact_title`) instead of polling
+  the `LIKE`-based search up to a dozen times — the old search could even miss the
+  title entirely (its tokenization didn't always match), silently failing to link a
+  staged image.
+- **Centralized dashboard fetch error handling.** All ~29 frontend `fetch()` calls
+  now go through `getJSON`/`postJSON` helpers that return `{ok:false, error}` on a
+  network/parse failure instead of throwing silently — no more stale spinners when
+  the server restarts.
+- Dependency bumps: starlette 1.3.1, uvicorn 0.49, mcp 1.28, pytest 9.1.1;
+  CI actions checkout v6 + setup-uv v8 (clears the pending Node-20 deprecation).
+
+### Fixed (polish)
+
+- Organize-job slot is now reserved under a lock, so two concurrent requests can't
+  both pass the single-job cap.
+- `ensure_running` waits for the server to accept connections before opening the
+  browser (no more "connection refused" on a just-launched tab).
+- SQLite read URIs are path-quoted (handles a DB path with spaces/`?`/`#`).
+- `attach_image` checks file size before reading and uses a context-managed handle.
+- Checklist inputs are capped at 100 items (`max_length`); attachments capped at 24
+  per item so `board.json` can't grow unbounded.
+
 ## [0.8.0] - 2026-06-05
 
 Security + robustness hardening pass, from a full-codebase review (eng review +

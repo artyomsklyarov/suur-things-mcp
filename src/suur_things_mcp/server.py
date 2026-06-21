@@ -191,7 +191,7 @@ def add_todo(
     ] = None,
     deadline: Annotated[str | None, Field(description="yyyy-mm-dd")] = None,
     tags: list[str] | None = None,
-    checklist_items: Annotated[list[str] | None, Field(description="Up to 100 items.")] = None,
+    checklist_items: Annotated[list[str] | None, Field(description="Up to 100 items.", max_length=100)] = None,
     list_title: Annotated[str | None, Field(description="Destination project/area by title.")] = None,
     list_id: Annotated[str | None, Field(description="Destination project/area by UUID (wins over list_title).")] = None,
     heading: Annotated[str | None, Field(description="Heading within the destination project.")] = None,
@@ -257,8 +257,8 @@ def update_todo(
     deadline: Annotated[str | None, Field(description="yyyy-mm-dd, or empty string to clear.")] = None,
     tags: Annotated[list[str] | None, Field(description="Replaces all existing tags.")] = None,
     add_tags: Annotated[list[str] | None, Field(description="Adds to existing tags.")] = None,
-    checklist_items: Annotated[list[str] | None, Field(description="Replaces all checklist items.")] = None,
-    append_checklist_items: list[str] | None = None,
+    checklist_items: Annotated[list[str] | None, Field(description="Replaces all checklist items.", max_length=100)] = None,
+    append_checklist_items: Annotated[list[str] | None, Field(max_length=100)] = None,
     list_title: str | None = None,
     list_id: str | None = None,
     heading: str | None = None,
@@ -357,7 +357,7 @@ def schedule_todo(
 @mcp.tool()
 def add_checklist_items(
     id: str,
-    items: Annotated[list[str], Field(description="Checklist item titles to append.")],
+    items: Annotated[list[str], Field(description="Checklist item titles to append.", max_length=100)],
 ) -> dict[str, Any]:
     """Append checklist items to an existing to-do. Requires THINGS_AUTH_TOKEN."""
     return _do("update", {"id": id, "append-checklist-items": _lines(items)})
@@ -520,9 +520,10 @@ def attach_image(
     if reads.get(item_uuid) is None:
         return {"ok": False, "error": "no item with that uuid"}
     try:
-        data = open(path, "rb").read()
-        if len(data) > 12 * 1024 * 1024:
+        if os.path.getsize(path) > 12 * 1024 * 1024:  # check size before reading the file in
             return {"ok": False, "error": "image too large (max 12MB)"}
+        with open(path, "rb") as f:                    # context manager — no leaked handle
+            data = f.read()
         meta = boardcfg.save_attachment(item_uuid, data, mime, os.path.basename(path), caption)
     except (OSError, ValueError) as exc:
         return {"ok": False, "error": str(exc)}

@@ -1,6 +1,6 @@
 [project]
 name = "suur-things-mcp"
-version = "0.8.0"
+version = "0.8.2"
 description = "A safe, fast MCP server for the Things 3 task manager (Cultured Code) on macOS — reads from the local SQLite database, writes only through the official Things URL Scheme."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,6 +38,10 @@ suur-things-mcp = "suur_things_mcp.server:main"
 dev = [
     "httpx>=0.28.1",
     "pytest>=8.0",
+    # Real-browser tests for the dashboard's embedded JS (quick-add guards, XSS
+    # escaping). Tests skip cleanly when the Chromium binary isn't installed, so
+    # `uv run pytest` still works without `playwright install`.
+    "pytest-playwright>=0.5",
 ]
 
 [build-system]
@@ -49,3 +53,6 @@ packages = ["src/suur_things_mcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "browser: real-Chromium tests (skipped if Playwright's browser isn't installed)",
+]
