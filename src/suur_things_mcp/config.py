@@ -32,6 +32,7 @@ IMAGE_MIMES = {
     "image/webp": "webp", "image/heic": "heic", "image/heif": "heif",
 }
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+MAX_ATTACH_PER_ITEM = 24  # keep board.json + the attachments dir from growing unbounded
 
 # Accept "owner/repo", an https github URL, or a git@github.com SSH url; capture "owner/repo".
 _GITHUB_RE = re.compile(r"^(?:https?://github\.com/|git@github\.com:)?([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
@@ -470,6 +471,8 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     # "../../foo" would walk mkdir/write_bytes outside the attachments dir.
     if not _SAFE_ID.match(item_uuid):
         raise ValueError("invalid item id")
+    if len(attachments().get(item_uuid, [])) >= MAX_ATTACH_PER_ITEM:
+        raise ValueError(f"too many images on this item (max {MAX_ATTACH_PER_ITEM})")
     mime = (mime or "").strip().lower()
     if mime not in IMAGE_MIMES:
         raise ValueError(f"unsupported image type: {mime!r}")

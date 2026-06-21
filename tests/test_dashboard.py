@@ -699,3 +699,18 @@ def test_overview_shape_with_things():
         "recent_completed",
     }
     assert "today" in ov["counts"]
+
+
+def test_find_by_exact_title():
+    """Quick-add resolves a new item's UUID via an exact-title DB read (not the
+    LIKE search, which could miss the title)."""
+    from suur_things_mcp import reads
+    assert reads.find_by_exact_title("___no_such_title_zzz___") == []
+    if not _things_available():
+        pytest.skip("Things DB not present")
+    sample = reads.anytime() or reads.today()
+    if sample:
+        it = sample[0]
+        hits = reads.find_by_exact_title(it["title"])
+        assert it["uuid"] in {h["uuid"] for h in hits}
+        assert all("uuid" in h and "created" in h for h in hits)
