@@ -350,14 +350,12 @@ async def _add(request: Request) -> JSONResponse:
         # The URL Scheme doesn't return it, so snapshot matching titles, create, then
         # poll for the one that's new. Skipped unless `resolve` is set (avoids the poll).
         resolve = bool(body.get("resolve"))
-        # find_by_exact_title + execute() are blocking (SQLite read, `open`
-        # subprocess); keep them off the single event loop. find_by_exact_title is
-        # an exact-match read on one column — much cheaper than search()'s LIKE join,
-        # which the poll below used to run up to a dozen times (~5s on a big library).
-        before = (
-            {t["uuid"] for t in await run_in_threadpool(reads.find_by_exact_title, title)}
-            if resolve else set()
-        )
+        # find_by_exact_title is an exact-match single-column read (~3ms) — run it
+        # INLINE, not via run_in_threadpool. Through the threadpool it would queue
+        # behind the page's in-flight reads/pulse (git/gh can hold threads for
+        # seconds), stretching the resolve poll below to ~5s and making "Add" look
+        # dead. 3ms on the loop is far cheaper than waiting for a free thread.
+        before = {t["uuid"] for t in reads.find_by_exact_title(title)} if resolve else set()
         if kind == "project":
             params: dict[str, Any] = {"title": title}
             if notes:
@@ -382,7 +380,7 @@ async def _add(request: Request) -> JSONResponse:
         if resolve:
             for _ in range(12):  # Things writes the DB asynchronously after the URL fires
                 await asyncio.sleep(0.15)
-                matches = await run_in_threadpool(reads.find_by_exact_title, title)
+                matches = reads.find_by_exact_title(title)   # inline (~3ms); never threadpool-starved
                 cands = [t for t in matches if t["uuid"] not in before]
                 if cands:
                     new_uuid = max(cands, key=lambda t: t.get("created") or 0)["uuid"]

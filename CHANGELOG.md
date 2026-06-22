@@ -4,6 +4,20 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.4] - 2026-06-22
+
+### Fixed
+
+- **The real fix for "Add looks dead" with an image.** v0.8.3 moved the slow page
+  reads off the event loop, but the quick-add resolve poll still ran its
+  `find_by_exact_title` lookups *through the same thread pool* — so if you tapped
+  Add while the project's data was still loading (the repo pulse can hold threads
+  on `git`/`gh` for seconds), those 3ms lookups **queued behind it** and the add
+  stretched to ~5s. The resolve poll now runs its exact-match read **inline** (3ms
+  on the loop, no thread-pool round-trip), so it can't be starved. Measured: the
+  same "navigate to a project, immediately add with an image" dropped from ~5.3s to
+  ~0.23s, even mid-load.
+
 ## [0.8.3] - 2026-06-22
 
 ### Fixed
