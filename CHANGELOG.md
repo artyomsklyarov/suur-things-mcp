@@ -4,6 +4,17 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.6] - 2026-06-22
+
+### Added
+
+- **The dashboard auto-updates itself.** The running version is baked into the
+  page, and the page polls `/api/version` (on a 60s timer, on focus, and on tab
+  visibility) — when the server reports a newer version after an upgrade, the page
+  reloads itself. No more silently running stale code after an update (especially
+  in a Chromium app-mode window, which restores its previous page on reopen). The
+  reload is skipped while a card/modal is open so it never interrupts editing.
+
 ## [0.8.5] - 2026-06-22
 
 ### Fixed

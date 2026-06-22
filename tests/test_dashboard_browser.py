@@ -139,3 +139,26 @@ def test_create_card_title_field_is_visible(page):
     )
     assert geom["title"] >= 20, f"title field collapsed (height={geom['title']})"
     assert geom["notes"] >= 20, f"notes field collapsed (height={geom['notes']})"
+
+
+def test_auto_reload_on_version_mismatch(page):
+    """When the server reports a different version than the page baked in, the
+    page reloads itself (the auto-update mechanism). We stub fetch so /api/version
+    reports a different version."""
+    page.wait_for_load_state("load")  # let the INITIAL load finish before counting
+    loads = []
+    page.on("load", lambda *_: loads.append(1))
+    stub = """(ver) => {
+        const real = window.fetch;
+        window.fetch = (url, opts) => String(url).includes('/api/version')
+            ? Promise.resolve({json: () => Promise.resolve({ok:true, version: ver})})
+            : real(url, opts);
+    }"""
+    # same version → must NOT reload
+    page.evaluate(stub, page.evaluate("() => SERVER_VERSION"))
+    page.evaluate("() => checkVersion()"); page.wait_for_timeout(300)
+    assert not loads, "should not reload when version matches"
+    # different version → must reload
+    page.evaluate(stub, "mismatch-9.9.9")
+    page.evaluate("() => checkVersion()"); page.wait_for_timeout(800)
+    assert loads, "should reload when the server version changed"
