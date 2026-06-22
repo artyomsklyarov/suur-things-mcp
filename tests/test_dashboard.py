@@ -727,3 +727,14 @@ def test_read_handlers_offload_blocking_to_threadpool():
                dashboard._item, dashboard._board, dashboard._search):
         src = inspect.getsource(fn)
         assert "run_in_threadpool" in src, f"{fn.__name__} blocks the event loop"
+
+
+def test_version_endpoint_and_injection():
+    """The page bakes in the running version and exposes /api/version, so it can
+    auto-reload itself after an upgrade. The template marker must be substituted."""
+    from suur_things_mcp import __version__
+    v = client.get("/api/version").json()
+    assert v["ok"] is True and v["version"] == __version__
+    html = client.get("/").text
+    assert f'SERVER_VERSION="{__version__}"' in html   # marker substituted
+    assert "__SUUR_VERSION__" not in html               # no leftover marker

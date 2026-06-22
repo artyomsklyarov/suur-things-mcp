@@ -45,6 +45,7 @@ from starlette.routing import Route
 import time
 import uuid as _uuid
 
+from . import __version__
 from . import config as boardcfg
 from . import organize as organizer
 from . import reads
@@ -123,7 +124,18 @@ async def _index(_request: Request) -> HTMLResponse:
     # no-store so an edited dashboard always reloads fresh (the HTML is baked into
     # this module; without this the browser serves a stale page while the API
     # keeps returning live data — confusing "old icons, new counts" symptom).
-    return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-store"})
+    # Bake in the running version so the page can auto-reload itself after an
+    # upgrade+restart (the app-mode window otherwise restores a stale page).
+    # Replace the *quoted* marker with a JSON-encoded string so the version can
+    # never break out of the JS string literal, whatever it contains.
+    html = INDEX_HTML.replace('"__SUUR_VERSION__"', json.dumps(__version__))
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
+async def _version(_request: Request) -> JSONResponse:
+    """The running server version — the page polls this and reloads itself when it
+    changes (after an upgrade), so an open window never silently runs stale code."""
+    return JSONResponse({"ok": True, "version": __version__})
 
 
 # These reads hit the Things SQLite DB (hundreds of ms — _sidebar scans ~1.3k
@@ -628,6 +640,7 @@ def create_app(port: int = DEFAULT_PORT) -> Starlette:
     return Starlette(
         routes=[
             Route("/", _index),
+            Route("/api/version", _version),
             Route("/api/organize", _organize_get),
             Route("/api/organize", _organize_post, methods=["POST"]),
             Route("/api/state", _state),
@@ -1325,6 +1338,22 @@ async function postJSON(url, body){
     return await res.json();
   }catch(e){ return {ok:false, error:(e&&e.message)||String(e), _neterr:true}; }
 }
+// Auto-reload after an upgrade. The running version is baked into the page; we poll
+// the server's current version and reload if it changed — so an open window (esp. a
+// Chromium app-mode window that restores its last page) never silently runs stale
+// code. Skipped if a dialog/edit is open, to avoid yanking work mid-action.
+const SERVER_VERSION="__SUUR_VERSION__";
+async function checkVersion(){
+  // If the marker wasn't substituted it still starts with "__" — bail (don't use
+  // the literal marker here, or _index's replace() would rewrite this line too).
+  if(SERVER_VERSION.indexOf("__")===0) return;
+  if(document.querySelector(".overlay.show")) return;  // don't interrupt an open card/modal
+  const v=(await getJSON("/api/version")).version;
+  if(v && v!==SERVER_VERSION) location.reload();
+}
+setInterval(checkVersion, 60000);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) checkVersion(); });
+window.addEventListener("focus", checkVersion);
 // Safe to drop into a single-quoted JS string inside an inline on*="" handler.
 // encodeURIComponent escapes <>&" and most metachars but NOT the apostrophe, which
 // is exactly the string delimiter — so a title like  '+code+'  would break out and
