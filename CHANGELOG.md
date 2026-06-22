@@ -4,6 +4,20 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.3] - 2026-06-22
+
+### Fixed
+
+- **Quick-add with an image no longer looks dead.** Adding a to-do with a staged
+  image could take 5–8 seconds before the card closed (sometimes long enough that
+  you gave up before the task was created). The read endpoints (`/api/state`,
+  `/api/sidebar`, `/api/items`, `/api/item`, `/api/board`) still ran their SQLite
+  reads **synchronously on the event loop** — so while the page loaded its data
+  (the sidebar alone scans ~1.3k projects), the quick-add resolve poll's
+  `asyncio.sleep` clock stretched from ~1.8s to many seconds. Those reads now run
+  off the event loop (`run_in_threadpool`), bringing the same add from ~5.3s back
+  to ~0.3s. (Completes the v0.8.0 blocking-handler fix, which only covered writes.)
+
 ## [0.8.2] - 2026-06-21
 
 Quality pass: the deferred follow-ups from the v0.8.0 audit, dependency bumps,
