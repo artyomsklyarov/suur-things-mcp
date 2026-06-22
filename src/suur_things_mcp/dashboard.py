@@ -126,18 +126,21 @@ async def _index(_request: Request) -> HTMLResponse:
     return HTMLResponse(INDEX_HTML, headers={"Cache-Control": "no-store"})
 
 
+# These reads hit the Things SQLite DB (hundreds of ms — _sidebar scans ~1.3k
+# projects). Run them off the event loop so they can't stall concurrent requests
+# — most importantly the quick-add resolve poll, whose asyncio.sleep clock would
+# otherwise stretch from ~1.8s to many seconds, making "Add" look dead.
 async def _state(_request: Request) -> JSONResponse:
     try:
-        return JSONResponse({"ok": True, "board": reads.board()})
+        return JSONResponse({"ok": True, "board": await run_in_threadpool(reads.board)})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc), "board": {}})
 
 
 async def _sidebar(_request: Request) -> JSONResponse:
     try:
-        return JSONResponse(
-            {"ok": True, "auth": bool(_auth_token()), "sidebar": reads.sidebar()}
-        )
+        sidebar = await run_in_threadpool(reads.sidebar)
+        return JSONResponse({"ok": True, "auth": bool(_auth_token()), "sidebar": sidebar})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc), "sidebar": {}})
 
@@ -148,13 +151,14 @@ async def _items(request: Request) -> JSONResponse:
         # An area folds in its projects' tasks unless the user turned roll-up off
         # for that area (per-area browser pref). Ignored for non-area lists.
         rollup = boardcfg.area_rollup(list_id)
-        return JSONResponse({"ok": True, **reads.list_items(list_id, rollup=rollup)})
+        data = await run_in_threadpool(lambda: reads.list_items(list_id, rollup=rollup))
+        return JSONResponse({"ok": True, **data})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc), "items": []})
 
 
 async def _item(request: Request) -> JSONResponse:
-    detail = reads.item_detail(request.query_params.get("id", ""))
+    detail = await run_in_threadpool(reads.item_detail, request.query_params.get("id", ""))
     return JSONResponse({"ok": detail is not None, "item": detail})
 
 
@@ -179,7 +183,7 @@ async def _board(request: Request) -> JSONResponse:
     if board is None:
         return JSONResponse({"ok": False, "error": "board not found", "columns": []})
     try:
-        cards = reads.board_cards(board)
+        cards = await run_in_threadpool(reads.board_cards, board)
         link_table = boardcfg.links()
         for card in cards:
             card["repos"] = link_table.get(card["id"], {}).get("repos", [])

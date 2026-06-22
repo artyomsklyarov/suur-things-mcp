@@ -714,3 +714,16 @@ def test_find_by_exact_title():
         hits = reads.find_by_exact_title(it["title"])
         assert it["uuid"] in {h["uuid"] for h in hits}
         assert all("uuid" in h and "created" in h for h in hits)
+
+
+def test_read_handlers_offload_blocking_to_threadpool():
+    """The data-read handlers must run their SQLite reads off the event loop.
+    If they block it, the quick-add resolve poll's asyncio.sleep stretches from
+    ~1.8s to many seconds and 'Add' looks dead (the v0.8.3 fix)."""
+    import inspect
+
+    from suur_things_mcp import dashboard
+    for fn in (dashboard._state, dashboard._sidebar, dashboard._items,
+               dashboard._item, dashboard._board, dashboard._search):
+        src = inspect.getsource(fn)
+        assert "run_in_threadpool" in src, f"{fn.__name__} blocks the event loop"
