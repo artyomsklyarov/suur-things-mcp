@@ -960,10 +960,16 @@ INDEX_HTML = """<!DOCTYPE html>
   .ec-box { width:19px; height:19px; flex:0 0 19px; margin-top:3px; border:1.5px solid var(--check-border);
     border-radius:5px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .ec-box:hover { border-color:var(--accent); }
-  .ec-title { flex:1; font:600 17px/1.3 inherit; color:var(--text); border:0; background:transparent; outline:none;
-    padding:0; resize:none; overflow:hidden; }
-  .ec-notes { width:100%; border:0; background:transparent; outline:none; color:var(--text); font:14px/1.5 inherit;
-    padding:0; margin:8px 0 4px; min-height:22px; resize:none; overflow:hidden; }
+  /* Title and notes are distinct boxed fields so it's always obvious which is
+     which (they used to be borderless transparent textareas that blended, and a
+     0-height title sent typed text into notes). */
+  .ec-title { flex:1; font:600 16px/1.35 inherit; color:var(--text); outline:none; resize:none; overflow:hidden;
+    box-sizing:border-box; background:var(--side-bg); border:1px solid var(--divider); border-radius:8px;
+    padding:9px 11px; min-height:40px; }
+  .ec-notes { width:100%; font:14px/1.5 inherit; color:var(--text); outline:none; resize:none; overflow:hidden;
+    box-sizing:border-box; background:var(--side-bg); border:1px solid var(--divider); border-radius:8px;
+    padding:9px 11px; margin:10px 0 4px; min-height:66px; }
+  .ec-title:focus, .ec-notes:focus { border-color:var(--accent); }
   .ec-notes::placeholder, .ec-title::placeholder { color:var(--muted); }
   .ec-pills { display:flex; flex-wrap:wrap; gap:7px; margin:9px 0 2px; }
   .ec-attach { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }
@@ -2070,7 +2076,11 @@ async function deleteBoard(){
 // --- edit dialog (Things-style card; saves on close only if changed) ---
 let EDIT_ORIG=null, WHEN_SEED=null, EDIT_NEW=false, EDIT_KIND="todo", PENDING_ATTACH=[];
 const WHEN_OPTS=[["today","Today"],["evening","This Evening"],["tomorrow","Tomorrow"],["anytime","Anytime"],["someday","Someday"]];
-function autoGrow(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; }
+// Floor the height so a textarea can never collapse to 0 — which made the create
+// card's title field invisible (the checkbox is hidden there, so the flex row had
+// nothing else to give it height), so typed text went into notes and Add saw an
+// empty title and silently bailed.
+function autoGrow(el){ el.style.height="auto"; el.style.height=Math.max(el.scrollHeight, 24)+"px"; }
 function cachedItem(uuid){ return (LIST_ITEMS||[]).find(x=>x.uuid===uuid) || (TODAY_CACHE||[]).find(x=>x.uuid===uuid) || null; }
 function scheduleLabel(ci){
   const today=new Date().toISOString().slice(0,10);
@@ -2126,8 +2136,11 @@ function openCreate(kind){
   ["tool-when","tool-deadline","tool-tags"].forEach(id=>$("#"+id).classList.remove("on"));
   $("#edit-warn").style.display=AUTH?"none":"block";
   WHEN_SEED=null; EDIT_ORIG=null; buildWhenChips(); renderPendingAttach(); updatePills();
-  autoGrow($("#f-title")); autoGrow($("#f-notes"));
-  openOverlay("edit-overlay"); setTimeout(()=>$("#f-title").focus(),0);
+  openOverlay("edit-overlay");
+  // Size the textareas AFTER the card is on screen — autoGrow reads scrollHeight,
+  // which is 0 while the overlay is hidden (that collapsed #f-title to height 0,
+  // making the title field invisible so typed text went into notes instead).
+  setTimeout(()=>{ autoGrow($("#f-title")); autoGrow($("#f-notes")); $("#f-title").focus(); },0);
 }
 function setEditKind(k){
   EDIT_KIND=k; document.querySelectorAll("#ec-kind .vt").forEach(b=>b.classList.toggle("on", b.dataset.kind===k));

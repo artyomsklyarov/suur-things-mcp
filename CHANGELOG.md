@@ -4,6 +4,29 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.8.5] - 2026-06-22
+
+### Fixed
+
+- **The actual "Add does nothing" bug: the title field was invisible.** In the
+  quick-add card the title `<textarea>` collapsed to **0 height** — `autoGrow`
+  measured `scrollHeight` while the overlay was still hidden (so it read 0), and
+  with the checkbox hidden in create mode the flex row had nothing else to give it
+  height. With no visible title field, typed text went into the Notes field, the
+  title stayed empty, and `createFromCard` silently bailed on `if(!title) return`.
+  (This is why it failed for real users but passed every automated test — the
+  tests set the title value programmatically.) `autoGrow` now floors the height so
+  a field can never collapse, and it runs after the card is on screen.
+
+### Changed
+
+- **Title and notes are now distinct boxed fields.** They were two borderless,
+  transparent textareas stacked together, easy to confuse. Each is now a bordered
+  input box with its own label placeholder ("New To-Do" / "Notes") and a focus
+  ring, so it's always clear which is which.
+- Added a headless-browser regression test asserting the title field has a real
+  height when the create card opens.
+
 ## [0.8.4] - 2026-06-22
 
 ### Fixed
