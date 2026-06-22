@@ -121,3 +121,21 @@ def test_page_loads_without_js_exceptions(browser, dashboard_url):
     pg.goto(dashboard_url, wait_until="networkidle")
     pg.close()
     assert not errors, f"uncaught JS exceptions on load: {errors}"
+
+
+def test_create_card_title_field_is_visible(page):
+    """The create card's title field must have a real height. It used to collapse
+    to 0 (autoGrow measured scrollHeight while the card was hidden), so typed text
+    went into Notes and Add silently bailed on an empty title."""
+    page.evaluate("() => openCreate('todo')")
+    page.wait_for_timeout(100)  # let openCreate's autoGrow setTimeout run
+    geom = page.evaluate(
+        """() => {
+            const t = document.querySelector('#f-title');
+            const n = document.querySelector('#f-notes');
+            return { title: t.getBoundingClientRect().height,
+                     notes: n.getBoundingClientRect().height };
+        }"""
+    )
+    assert geom["title"] >= 20, f"title field collapsed (height={geom['title']})"
+    assert geom["notes"] >= 20, f"notes field collapsed (height={geom['notes']})"
