@@ -1,6 +1,6 @@
 [project]
 name = "suur-things-mcp"
-version = "0.8.6"
+dynamic = ["version"]
 description = "A safe, fast MCP server for the Things 3 task manager (Cultured Code) on macOS — reads from the local SQLite database, writes only through the official Things URL Scheme."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,21 +38,40 @@ suur-things-mcp = "suur_things_mcp.server:main"
 dev = [
     "httpx>=0.28.1",
     "pytest>=8.0",
-    # Real-browser tests for the dashboard's embedded JS (quick-add guards, XSS
-    # escaping). Tests skip cleanly when the Chromium binary isn't installed, so
+    # Real-browser tests for the dashboard's JS (quick-add guards, XSS escaping).
+    # Tests skip cleanly when the Chromium binary isn't installed, so
     # `uv run pytest` still works without `playwright install`.
     "pytest-playwright>=0.5",
+    "ruff>=0.8",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Single-source the version: __init__.py owns it; the build reads it from there
+# (bumping two files in lockstep was a release footgun).
+[tool.hatch.version]
+path = "src/suur_things_mcp/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/suur_things_mcp"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+# Defaults (E4/E7/E9/F) + imports, bugbear, pyupgrade. E501 stays off: the
+# dashboard/server keep some long annotated lines on purpose.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "browser: real-Chromium tests (skipped if Playwright's browser isn't installed)",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# The test suite deliberately uses compact `x = ...; x.mkdir()` setup lines.
+"tests/*" = ["E702"]

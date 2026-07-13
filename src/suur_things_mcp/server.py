@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -39,66 +40,106 @@ def _auth() -> str | None:
     return boardcfg.auth_token()
 
 
+def _shape(items: list[dict], limit: int | None = None, compact: bool = True) -> list[dict]:
+    """Token budgeting for list tools: cap the count and project each item to a
+    compact card (uuid/title/status/dates/tags/project + has_notes flag) unless
+    the caller asks for full items. Full detail for ONE item is get_item."""
+    if limit is not None:
+        items = items[: max(0, limit)]
+    return [reads._card(i) for i in items] if compact else items
+
+
 # =========================================================================
 # READ TOOLS
 # =========================================================================
 
 @mcp.tool()
-def get_today() -> list[dict]:
-    """To-dos in the Today list (including overdue and evening items)."""
-    return reads.today()
+def get_today(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """To-dos in the Today list (including overdue and evening items).
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.today(), limit, compact)
 
 
 @mcp.tool()
-def get_inbox() -> list[dict]:
-    """To-dos in the Inbox (unsorted, no project or area yet)."""
-    return reads.inbox()
+def get_inbox(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """To-dos in the Inbox (unsorted, no project or area yet).
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.inbox(), limit, compact)
 
 
 @mcp.tool()
-def get_upcoming() -> list[dict]:
-    """Scheduled to-dos with a future start date (the Upcoming list)."""
-    return reads.upcoming()
+def get_upcoming(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """Scheduled to-dos with a future start date (the Upcoming list).
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.upcoming(), limit, compact)
 
 
 @mcp.tool()
-def get_anytime() -> list[dict]:
-    """To-dos in the Anytime list (actionable but not scheduled)."""
-    return reads.anytime()
+def get_anytime(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """To-dos in the Anytime list (actionable but not scheduled).
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.anytime(), limit, compact)
 
 
 @mcp.tool()
-def get_someday() -> list[dict]:
-    """To-dos in the Someday list (on hold for later)."""
-    return reads.someday()
+def get_someday(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """To-dos in the Someday list (on hold for later).
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.someday(), limit, compact)
 
 
 @mcp.tool()
 def get_logbook(
     limit: Annotated[int, Field(ge=1, le=500)] = 50,
+    compact: bool = True,
 ) -> list[dict]:
-    """Recently completed and canceled to-dos, newest first."""
-    return reads.logbook(limit=limit)
+    """Recently completed and canceled to-dos, newest first.
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.logbook(limit=limit), None, compact)
 
 
 @mcp.tool()
-def get_deadlines() -> list[dict]:
-    """To-dos that have a deadline, ordered by due date."""
-    return reads.deadlines()
+def get_deadlines(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """To-dos that have a deadline, ordered by due date.
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.deadlines(), limit, compact)
 
 
 @mcp.tool()
-def get_trash() -> list[dict]:
-    """To-dos currently in the Trash."""
-    return reads.trash()
+def get_trash(compact: bool = True, limit: int | None = None) -> list[dict]:
+    """To-dos currently in the Trash.
+
+    Returns compact cards by default; compact=false for full items with notes.
+    """
+    return _shape(reads.trash(), limit, compact)
 
 
 @mcp.tool()
 def search_todos(
     query: Annotated[str, Field(description="Full-text search over titles and notes.")],
+    limit: Annotated[int, Field(ge=1, le=500)] = 50,
+    compact: bool = True,
 ) -> list[dict]:
-    """Search across all to-dos and projects by title and notes."""
-    return reads.search(query)
+    """Search across all to-dos and projects by title and notes.
+
+    Returns up to `limit` compact cards (default 50); compact=false for full
+    items with notes.
+    """
+    return _shape(reads.search(query), limit, compact)
 
 
 @mcp.tool()
@@ -108,18 +149,25 @@ def list_todos(
     tag: str | None = None,
     status: Literal["incomplete", "completed", "canceled"] | None = None,
     start: Literal["Inbox", "Anytime", "Someday"] | None = None,
+    compact: bool = True,
+    limit: int | None = None,
 ) -> list[dict]:
     """Query to-dos with optional filters (project, area, tag, status, bucket).
 
     Pass a project_uuid or area_uuid from get_projects / get_areas to scope to
     one container. `start` filters by the Inbox/Anytime/Someday bucket.
+    Returns compact cards by default; compact=false for full items with notes.
     """
-    return reads.todos(
-        project_uuid=project_uuid,
-        area_uuid=area_uuid,
-        tag=tag,
-        status=status,
-        start=start,
+    return _shape(
+        reads.todos(
+            project_uuid=project_uuid,
+            area_uuid=area_uuid,
+            tag=tag,
+            status=status,
+            start=start,
+        ),
+        limit,
+        compact,
     )
 
 
@@ -216,7 +264,11 @@ def add_todo(
         "completed": completed or None,
         "reveal": reveal or None,
     }
-    return _do("add", params)
+    result = _do("add", params)
+    warning = _tag_warning(tags)
+    if warning:
+        result["tag_warning"] = warning
+    return result
 
 
 @mcp.tool()
@@ -243,7 +295,11 @@ def add_project(
         "to-dos": _lines(todos),
         "reveal": reveal or None,
     }
-    return _do("add-project", params)
+    result = _do("add-project", params)
+    warning = _tag_warning(tags)
+    if warning:
+        result["tag_warning"] = warning
+    return result
 
 
 @mcp.tool()
@@ -289,7 +345,7 @@ def update_todo(
         "canceled": canceled,
         "reveal": reveal or None,
     }
-    return _do("update", params)
+    return _do_update("update", params, uuid=id, tags=tags, add_tags=add_tags)
 
 
 @mcp.tool()
@@ -330,19 +386,19 @@ def update_project(
         "canceled": canceled,
         "reveal": reveal or None,
     }
-    return _do("update-project", params)
+    return _do_update("update-project", params, uuid=id, tags=tags, add_tags=add_tags)
 
 
 @mcp.tool()
 def complete_todo(id: str) -> dict[str, Any]:
     """Mark a to-do as completed. Requires THINGS_AUTH_TOKEN."""
-    return _do("update", {"id": id, "completed": True})
+    return _do_update("update", {"id": id, "completed": True}, uuid=id)
 
 
 @mcp.tool()
 def cancel_todo(id: str) -> dict[str, Any]:
     """Mark a to-do as canceled. Requires THINGS_AUTH_TOKEN."""
-    return _do("update", {"id": id, "canceled": True})
+    return _do_update("update", {"id": id, "canceled": True}, uuid=id)
 
 
 @mcp.tool()
@@ -351,7 +407,7 @@ def schedule_todo(
     when: Annotated[str, Field(description="today | tomorrow | evening | anytime | someday | yyyy-mm-dd | yyyy-mm-dd@HH:MM")],
 ) -> dict[str, Any]:
     """Schedule (or reschedule) an existing to-do. Requires THINGS_AUTH_TOKEN."""
-    return _do("update", {"id": id, "when": when})
+    return _do_update("update", {"id": id, "when": when}, uuid=id)
 
 
 @mcp.tool()
@@ -360,7 +416,7 @@ def add_checklist_items(
     items: Annotated[list[str], Field(description="Checklist item titles to append.", max_length=100)],
 ) -> dict[str, Any]:
     """Append checklist items to an existing to-do. Requires THINGS_AUTH_TOKEN."""
-    return _do("update", {"id": id, "append-checklist-items": _lines(items)})
+    return _do_update("update", {"id": id, "append-checklist-items": _lines(items)}, uuid=id)
 
 
 @mcp.tool()
@@ -635,6 +691,90 @@ def _do(command: str, params: dict) -> dict[str, Any]:
         return {"ok": False, "command": command, "error": str(exc)}
 
 
+# --- Write verification ----------------------------------------------------
+# `open -g things:///...` only proves the URL was handed to Things — not that
+# Things accepted it. A bad UUID or an unknown tag fails/vanishes SILENTLY,
+# which would make a tool lie to the model with ok:true. These helpers keep the
+# tools honest; each degrades to "unverified" when the DB isn't readable.
+
+def _item_missing(uuid: str) -> bool:
+    """True only when the DB is readable AND the item definitely doesn't exist."""
+    try:
+        return reads.get(uuid) is None
+    except Exception:  # noqa: BLE001 — DB unreadable: don't block the write
+        return False
+
+
+def _unknown_tags(tags: list[str] | None) -> list[str]:
+    """Requested tags that don't exist in Things. The URL Scheme does NOT create
+    tags — unknown ones are silently dropped by Things, so we surface them."""
+    if not tags:
+        return []
+    try:
+        existing = {t.get("title") for t in reads.tags()}
+    except Exception:  # noqa: BLE001 — DB unreadable: can't check
+        return []
+    return [t for t in tags if t not in existing]
+
+
+def _tag_warning(*tag_lists: list[str] | None) -> str | None:
+    unknown = _unknown_tags([t for lst in tag_lists if lst for t in lst])
+    if not unknown:
+        return None
+    return (
+        "these tags don't exist in Things and will be SILENTLY IGNORED (the URL "
+        f"Scheme can't create tags): {', '.join(unknown)}. Create them in the "
+        "Things app first, or reuse existing tags from get_tags."
+    )
+
+
+def _modified_stamp(uuid: str) -> str | None:
+    try:
+        item = reads.get(uuid)
+        return item.get("modified") if item else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _do_update(command: str, params: dict, *, uuid: str,
+               tags: list[str] | None = None,
+               add_tags: list[str] | None = None) -> dict[str, Any]:
+    """Run an update-style command with honesty checks.
+
+    - Rejects a UUID that verifiably doesn't exist (Things would silently no-op).
+    - Warns about tags Things will silently drop.
+    - Confirms the write landed by watching the item's `modified` stamp
+      (Things applies URL-scheme writes asynchronously): `applied` is true when
+      confirmed, false when no change was observed in time, absent when the DB
+      couldn't be read to verify.
+    """
+    if _item_missing(uuid):
+        return {
+            "ok": False, "command": command,
+            "error": f"no item with UUID '{uuid}' — find the right one with "
+                     "search_todos or get_item; Things would silently ignore this write",
+        }
+    warning = _tag_warning(tags, add_tags)
+    before = _modified_stamp(uuid)
+    result = _do(command, params)
+    if result.get("ok") and before is not None:
+        applied = False
+        for _ in range(10):  # Things usually commits within a few hundred ms
+            time.sleep(0.2)
+            if _modified_stamp(uuid) != before:
+                applied = True
+                break
+        result["applied"] = applied
+        if not applied:
+            result["warning_unverified"] = (
+                "the URL was dispatched but no change to the item was observed "
+                "within 2s — verify with get_item"
+            )
+    if warning:
+        result["tag_warning"] = warning
+    return result
+
+
 # =========================================================================
 # PROMPTS — packaged workflows clients surface as slash commands
 # =========================================================================
@@ -866,6 +1006,17 @@ def main() -> None:
 
     args = sys.argv[1:]
     if args and args[0] == "dashboard":
+        # `--install-service` / `--uninstall-service` manage a launchd KeepAlive
+        # LaunchAgent that runs `dashboard --no-open` at login (always-on board,
+        # no terminal, no browser tab on restarts).
+        if "--install-service" in args[1:]:
+            from .dashboard import install_service
+
+            raise SystemExit(install_service())
+        if "--uninstall-service" in args[1:]:
+            from .dashboard import uninstall_service
+
+            raise SystemExit(uninstall_service())
         from .dashboard import serve_foreground
 
         # `--app` opens the dashboard in a frameless Chromium app window (no tabs

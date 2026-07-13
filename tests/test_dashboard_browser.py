@@ -18,10 +18,9 @@ import pytest
 
 # Skip the whole module if Playwright (the lib) isn't even importable.
 pytest.importorskip("playwright.sync_api")
+import uvicorn  # noqa: E402
 from playwright.sync_api import Error as PWError  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
-
-import uvicorn  # noqa: E402
 
 from suur_things_mcp.dashboard import create_app  # noqa: E402
 
@@ -79,13 +78,23 @@ def page(browser, dashboard_url):
     pg.close()
 
 
-def test_jsarg_neutralizes_apostrophe(page):
-    """jsarg() must make an untrusted title safe inside a single-quoted inline
-    handler (the v0.8.0 XSS fix) while still round-tripping via decodeURIComponent."""
-    payload = "x'+alert(1)+'y"
-    out = page.evaluate("(s) => jsarg(s)", payload)
-    assert "'" not in out  # the string-delimiter breakout char is gone
-    assert page.evaluate("(s) => decodeURIComponent(s)", out) == payload
+def test_repo_chip_title_safe_roundtrip(page):
+    """Untrusted titles ride in an esc()'d data-title attribute (the v0.8.0 jsarg
+    fix, superseded by the CSP no-inline-handlers refactor). A hostile title must
+    round-trip intact for display and never become live markup."""
+    payload = "x'+alert(1)+'y <img src=x onerror=alert(2)>"
+    got = page.evaluate(
+        """(s) => {
+            const d = document.createElement('div');
+            d.innerHTML = repoChipsHtml('uuid-1', 'project', s, []);
+            const btn = d.querySelector('[data-rb=manage]');
+            return { title: btn.dataset.title,
+                     injected: d.querySelectorAll('img,script').length };
+        }""",
+        payload,
+    )
+    assert got["title"] == payload  # intact for display…
+    assert got["injected"] == 0     # …but esc() flattened the hostile markup
 
 
 def test_quickadd_guard_and_feedback(page):

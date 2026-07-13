@@ -239,7 +239,7 @@ def organize(folder_title: str, tasks: list[dict], existing_tags: list[str],
             result = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
                                     timeout=timeout, env=child_env, cwd=cwd)
     except subprocess.TimeoutExpired:
-        raise RuntimeError(f"{agent} timed out after {timeout}s")
+        raise RuntimeError(f"{agent} timed out after {timeout}s") from None
     if result.returncode != 0:
         err = (result.stderr or "").lower()
         if any(k in err for k in ("login", "auth", "unauthor", "api key")):
@@ -248,4 +248,4 @@ def organize(folder_title: str, tasks: list[dict], existing_tags: list[str],
     try:
         return parse_suggestions(result.stdout, agent)
     except (json.JSONDecodeError, ValueError) as exc:
-        raise RuntimeError(f"could not parse {agent} output as suggestions: {exc}")
+        raise RuntimeError(f"could not parse {agent} output as suggestions: {exc}") from exc
