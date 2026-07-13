@@ -10,7 +10,7 @@ Docs: https://culturedcode.com/things/support/articles/2803573/
 from __future__ import annotations
 
 import subprocess
-from typing import Iterable
+from collections.abc import Iterable
 from urllib.parse import quote
 
 SCHEME = "things:///"

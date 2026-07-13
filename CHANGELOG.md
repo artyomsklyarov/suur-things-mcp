@@ -4,6 +4,81 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.9.0] - 2026-07-12
+
+### Added
+
+- **Motion, everywhere it earns its keep.** The dashboard went from literally
+  zero CSS transitions to a full calm-motion system modeled on Things 3:
+  overlay/panel entrances (scale 0.97 + fade, strong ease-out tokens), an
+  optimistic checkoff moment (the ✓ pops the frame you click; a failed write
+  visibly reverts), press feedback on every control, rotating sidebar
+  chevrons, sliding edit-card editors, content fade-ins with anti-flicker
+  loading states, and eased drag-and-drop with a landing settle. ⌘K stays
+  deliberately instant (keyboard-frequency rule) and the background poll never
+  pulses the view. Full `prefers-reduced-motion` support (movement drops,
+  feedback stays). The audit + plans live in `plans/`.
+- **Near-live updates.** The board now polls the cheap `/api/cursor` check
+  every 5s (a few stat() calls server-side) and reloads only when something
+  actually changed — edits made in Things appear on the board within seconds.
+- **Multi-select with batch actions.** Shift-click rows to select; a floating
+  bar offers Complete / Today / Anytime / Someday / Move to project / Clear.
+- **Right-click task menu** on rows and cards: Complete, Cancel, reschedule
+  (Today/Evening/Tomorrow/Anytime/Someday), Move to project…, Open in Things.
+- **Quick-add parse preview.** While typing `buy milk tomorrow #errand`, dashed
+  pills show live what the shorthand will become (📅 tomorrow, # errand).
+- **Timeline "now" line** — a red current-time indicator; the day view opens
+  scrolled to now.
+- **Overdue section in Today** — overdue-deadline items surface under their own
+  red header instead of hiding inside project groups; a fully-checked-off Today
+  earns a calm "Today is done ✨" moment, and an empty Inbox shows "Inbox Zero ✨".
+  Empty lists offer a "＋ Add a task" button that targets the open list.
+
+- **Write verification — tools no longer report success Things didn't deliver.**
+  Update-style tools (`update_todo`, `complete_todo`, `cancel_todo`,
+  `schedule_todo`, `add_checklist_items`, `update_project`) now reject a UUID
+  that verifiably doesn't exist (Things would silently no-op it), and confirm
+  the write landed by watching the item's `modified` stamp: the result carries
+  `applied: true/false`. All tag-taking tools warn when a requested tag doesn't
+  exist in Things — the URL Scheme silently drops unknown tags.
+- **Token budgets on read tools.** Every list-returning tool now returns compact
+  cards by default (uuid/title/status/dates/tags/project + `has_notes`) with new
+  `compact` and `limit` params; `search_todos` caps at 50 results by default.
+  Full items via `compact=false`, full detail for one item via `get_item`.
+- **`dashboard --install-service` / `--uninstall-service`** — installs a launchd
+  KeepAlive LaunchAgent running `dashboard --no-open`, so the board is always
+  live at :8765 with no terminal and no browser tab popping on restarts. Refuses
+  to install when a foreign process already serves the port.
+- **Poll change detection.** The dashboard's 25s auto-refresh first checks a new
+  `/api/cursor` endpoint (mtime/size of the DB, its WAL, and board.json — a few
+  stat() calls, no DB reads) and skips the reload entirely when nothing changed.
+- **reads.py is now tested in CI** against a fixture SQLite database with the
+  real Things schema (`tests/things_schema.sql`) — overview digest, sidebar,
+  area roll-up, board cards, exact-title resolve. Previously all of that only
+  ran on a Mac with Things installed, i.e. never in CI.
+
+### Changed
+
+- **The frontend moved out of dashboard.py** into `static/index.html`, shipped
+  as package data (still zero build step, no external assets). dashboard.py
+  drops from ~2,500 to ~900 lines; the UI is now editable/lintable as real HTML.
+- **Content-Security-Policy on the dashboard.** Scripts are nonce-only: all 59
+  inline `on*` handlers were converted to bound listeners, so an injected
+  `<img onerror=…>` in a task title is dead on arrival even if an escaping bug
+  ever slips in. Plus `X-Content-Type-Options: nosniff` on every response.
+- **Single-sourced version** — `__init__.py` owns it; the build reads it via
+  hatch (`dynamic = ["version"]`). No more bumping two files in lockstep.
+- **Cross-process config lock.** All board.json read-modify-write cycles now
+  hold an flock, so the MCP server and the dashboard service (separate
+  processes) can't silently lose each other's writes.
+- CI now lints (ruff) and installs Chromium so the real-browser dashboard tests
+  actually run (they previously always skipped in CI).
+
+### Removed
+
+- Dead `/api/state` endpoint and `reads.board()` (the pre-sidebar dashboard
+  shape; the frontend stopped calling it several versions ago).
+
 ## [0.8.6] - 2026-06-22
 
 ### Added

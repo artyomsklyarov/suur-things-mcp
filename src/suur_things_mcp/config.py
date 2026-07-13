@@ -13,10 +13,12 @@ concept). Stored as JSON at ``$XDG_CONFIG_HOME/suur-things-mcp/board.json``
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -155,9 +157,9 @@ def _clean_area_prefs(data: dict) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
     out: dict[str, Any] = {}
-    for uuid, v in raw.items():
+    for area_id, v in raw.items():
         if isinstance(v, dict) and "rollup" in v:
-            out[str(uuid)] = {"rollup": bool(v["rollup"])}
+            out[str(area_id)] = {"rollup": bool(v["rollup"])}
     return out
 
 
@@ -219,7 +221,7 @@ def _clean_attachments(data: dict) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
     out: dict[str, Any] = {}
-    for uuid, lst in raw.items():
+    for item_id, lst in raw.items():
         if not isinstance(lst, list):
             continue
         clean = []
@@ -239,7 +241,7 @@ def _clean_attachments(data: dict) -> dict[str, Any]:
                 "added": str(e.get("added")).strip() if e.get("added") else None,
             })
         if clean:
-            out[str(uuid)] = clean
+            out[str(item_id)] = clean
     return out
 
 
@@ -273,6 +275,27 @@ def _clean(data: dict) -> dict[str, Any]:
 def _fresh() -> dict[str, Any]:
     return {"boards": [_default_board()], "priority": {}, "links": {}, "prefs": {},
             "timeblocks": {}, "attachments": {}, "priority_levels": [], "area_prefs": {}}
+
+
+@contextmanager
+def _locked():
+    """Cross-process lock over a load→modify→save cycle.
+
+    The MCP server (one per connected client) and the dashboard service are
+    SEPARATE processes sharing board.json. save() is atomic (no torn files),
+    but two concurrent read-modify-write cycles could still silently lose one
+    side's update (e.g. link_repo via MCP while a board drag saves placements).
+    flock on a sibling lockfile serializes them; it's advisory, but every writer
+    in this codebase goes through here.
+    """
+    lock = _path().with_name(".board.lock")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
 
 
 def area_rollup(area_uuid: str) -> bool:
@@ -342,6 +365,11 @@ def links() -> dict[str, Any]:
 def set_link(item_uuid: str, kind: str, repo: str, github: str | None = None,
              label: str | None = None) -> dict[str, Any]:
     """Add (or replace by path) a repo link for a project/area. Save normalizes."""
+    with _locked():
+        return _set_link(item_uuid, kind, repo, github, label)
+
+
+def _set_link(item_uuid, kind, repo, github=None, label=None) -> dict[str, Any]:
     cfg = load()
     table = cfg.setdefault("links", {})
     item = table.get(str(item_uuid)) or {"kind": kind, "repos": []}
@@ -355,6 +383,11 @@ def set_link(item_uuid: str, kind: str, repo: str, github: str | None = None,
 
 def remove_link(item_uuid: str, repo: str | None = None) -> dict[str, Any]:
     """Remove one repo from an item (by path), or the whole item if repo is None."""
+    with _locked():
+        return _remove_link(item_uuid, repo)
+
+
+def _remove_link(item_uuid, repo=None) -> dict[str, Any]:
     cfg = load()
     table = cfg.get("links", {})
     if repo is None:
@@ -371,9 +404,15 @@ def remove_link(item_uuid: str, repo: str | None = None) -> dict[str, Any]:
 def set_item_repos(item_uuid: str, kind: str, repos: list) -> dict[str, Any]:
     """Replace just one item's repo list (or remove it), preserving everything else.
 
-    Loads fresh + saves, so it never clobbers other items, boards, or priority —
-    this is what makes concurrent edits (CLI, another tab) safe.
+    Loads fresh + saves under the cross-process lock, so it never clobbers
+    other items, boards, or priority — this is what makes concurrent edits
+    (CLI, another tab, the MCP server) safe.
     """
+    with _locked():
+        return _set_item_repos(item_uuid, kind, repos)
+
+
+def _set_item_repos(item_uuid, kind, repos) -> dict[str, Any]:
     cfg = load()
     table = cfg.setdefault("links", {})
     clean = [r for r in (repos or []) if isinstance(r, dict) and r.get("repo")]
@@ -390,9 +429,15 @@ def set_item_repos(item_uuid: str, kind: str, repos: list) -> dict[str, Any]:
 def merge(partial: dict) -> dict[str, Any]:
     """Save only the top-level sections present in ``partial`` (boards/priority/links).
 
-    Sections not included are read fresh from disk and preserved, so saving boards
-    can't wipe links written by another writer, and vice versa.
+    Sections not included are read fresh from disk and preserved (under the
+    cross-process lock), so saving boards can't wipe links written by another
+    writer, and vice versa.
     """
+    with _locked():
+        return _merge(partial)
+
+
+def _merge(partial: dict) -> dict[str, Any]:
     cfg = load()
     for key in ("boards", "priority", "links", "prefs", "timeblocks", "attachments",
                 "priority_levels", "area_prefs"):
@@ -492,10 +537,11 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
         raise ValueError("invalid attachment path")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
-    cfg = load()
-    table = cfg.setdefault("attachments", {})
-    table.setdefault(str(item_uuid), []).append(meta)
-    save(cfg)
+    with _locked():
+        cfg = load()
+        table = cfg.setdefault("attachments", {})
+        table.setdefault(str(item_uuid), []).append(meta)
+        save(cfg)
     return meta
 
 
@@ -521,13 +567,14 @@ def remove_attachment(item_uuid: str, att_id: str) -> bool:
         attachment_path(item_uuid, meta).unlink(missing_ok=True)
     except OSError:
         pass
-    cfg = load()
-    table = cfg.get("attachments", {})
-    if str(item_uuid) in table:
-        table[str(item_uuid)] = [a for a in table[str(item_uuid)] if a.get("id") != att_id]
-        if not table[str(item_uuid)]:
-            table.pop(str(item_uuid))
-        save(cfg)
+    with _locked():
+        cfg = load()
+        table = cfg.get("attachments", {})
+        if str(item_uuid) in table:
+            table[str(item_uuid)] = [a for a in table[str(item_uuid)] if a.get("id") != att_id]
+            if not table[str(item_uuid)]:
+                table.pop(str(item_uuid))
+            save(cfg)
     return True
 
 

@@ -20,7 +20,7 @@ client = TestClient(create_app(), base_url=f"http://127.0.0.1:{DEFAULT_PORT}")
 
 def _things_available() -> bool:
     try:
-        reads.board()
+        reads.sidebar()
         return True
     except Exception:
         return False
@@ -88,20 +88,12 @@ def test_dashboard_default_opens_browser(monkeypatch):
     assert captured["open_browser"] is True and captured["app_mode"] is False
 
 
-def test_state_endpoint_never_500s():
+def test_sidebar_endpoint_never_500s():
     # Even with no Things DB, the endpoint returns a JSON envelope, not a 500.
-    r = client.get("/api/state")
+    r = client.get("/api/sidebar")
     assert r.status_code == 200
     body = r.json()
-    assert "ok" in body and "board" in body
-
-
-@pytest.mark.skipif(not _things_available(), reason="Things database not available")
-def test_state_shape_with_things():
-    body = client.get("/api/state").json()
-    assert body["ok"] is True
-    for col in ("inbox", "today", "upcoming", "anytime", "someday"):
-        assert col in body["board"]
+    assert "ok" in body and "sidebar" in body
 
 
 @pytest.mark.skipif(not _things_available(), reason="Things database not available")
@@ -396,6 +388,7 @@ _PNG_1x1 = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
 def test_attachments_config_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
     import importlib
+
     from suur_things_mcp import config as cfg
     importlib.reload(cfg)
     cfg.set_link("X", "project", str(tmp_path))  # an unrelated section
@@ -515,13 +508,27 @@ def test_organizer_strips_secret_env(monkeypatch):
     assert env.get("ANTHROPIC_API_KEY") == "keep"  # agent's own auth survives
 
 
-def test_quickadd_title_not_raw_xss():
-    """The repo-chip button must escape the untrusted title for an inline JS string
-    (jsarg), not the old encodeURIComponent that leaves the ' delimiter unescaped."""
-    html = client.get("/").text
-    assert "function jsarg(" in html
-    assert "jsarg(title)" in html
-    assert "encodeURIComponent(title)" not in html  # the vulnerable pattern is gone
+def test_csp_and_no_inline_handlers():
+    """XSS hardening: the page ships a nonce-only script-src CSP, and no inline
+    on* handler attributes exist anywhere in the page or its JS templates — an
+    injected onclick/onerror is dead on arrival. Untrusted repo-chip titles ride
+    in an esc()'d data-title attribute, not an inline JS string (the old jsarg
+    pattern is gone)."""
+    import re
+
+    r = client.get("/")
+    csp = r.headers.get("content-security-policy", "")
+    assert "script-src 'nonce-" in csp
+    assert "'unsafe-inline'" not in csp.split("style-src")[0]  # scripts: nonce only
+    html = r.text
+    assert not re.search(r"<[^>]+\son(click|change|input|error|load)\s*=", html)
+    assert 'data-title="${esc(title||"")}"' in html  # untrusted title → escaped attribute
+    assert "jsarg(" not in html
+    # The nonce is fresh per request and is the one stamped into the page.
+    n1 = re.search(r"'nonce-([^']+)'", csp).group(1)
+    assert f'nonce="{n1}"' in html
+    csp2 = client.get("/").headers["content-security-policy"]
+    assert re.search(r"'nonce-([^']+)'", csp2).group(1) != n1
 
 
 def test_origin_guard_blocks_cross_site():
@@ -552,13 +559,13 @@ def test_origin_guard_allows_same_origin(tmp_path, monkeypatch):
 
 def test_trusted_host_rejects_foreign_host():
     # DNS-rebinding sends the attacker's hostname as Host; reject it on reads too.
-    r = client.get("/api/state", headers={"host": "evil.example"})
+    r = client.get("/api/version", headers={"host": "evil.example"})
     assert r.status_code == 400
 
 
 def test_trusted_host_allows_localhost():
     for h in ("127.0.0.1", "localhost", f"127.0.0.1:{DEFAULT_PORT}"):
-        r = client.get("/api/state", headers={"host": h})
+        r = client.get("/api/version", headers={"host": h})
         assert r.status_code == 200
 
 
@@ -723,7 +730,7 @@ def test_read_handlers_offload_blocking_to_threadpool():
     import inspect
 
     from suur_things_mcp import dashboard
-    for fn in (dashboard._state, dashboard._sidebar, dashboard._items,
+    for fn in (dashboard._sidebar, dashboard._items,
                dashboard._item, dashboard._board, dashboard._search):
         src = inspect.getsource(fn)
         assert "run_in_threadpool" in src, f"{fn.__name__} blocks the event loop"
@@ -738,3 +745,95 @@ def test_version_endpoint_and_injection():
     html = client.get("/").text
     assert f'SERVER_VERSION="{__version__}"' in html   # marker substituted
     assert "__SUUR_VERSION__" not in html               # no leftover marker
+
+def test_cursor_endpoint_tracks_changes(tmp_path, monkeypatch):
+    """/api/cursor is the poll's cheap change check: stable while nothing changes,
+    moved by an overlay write (board.json) — no DB reads involved."""
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    c1 = client.get("/api/cursor").json()
+    assert c1["ok"] is True and c1["cursor"]
+    assert client.get("/api/cursor").json()["cursor"] == c1["cursor"]
+    (tmp_path / "board.json").write_text("{}")
+    assert client.get("/api/cursor").json()["cursor"] != c1["cursor"]
+
+
+def test_softrefresh_gates_on_cursor():
+    """The 25s auto-refresh must consult /api/cursor and skip the reload when
+    nothing changed (source guard, like the quick-add ones)."""
+    html = client.get("/").text
+    assert '"/api/cursor"' in html
+    assert "if(c0.cursor===LAST_CURSOR) return" in html
+
+def test_service_plist_generation():
+    """--install-service writes a KeepAlive LaunchAgent that runs the dashboard
+    headless. No secrets may appear in the plist (the token lives in the config
+    dir); the command must end with `dashboard --no-open`."""
+    from suur_things_mcp import dashboard as dash
+    cmd = dash._service_command()
+    assert cmd[-2:] == ["dashboard", "--no-open"]
+    plist = dash._service_plist(cmd)
+    assert f"<string>{dash._SERVICE_LABEL}</string>" in plist
+    assert "<key>KeepAlive</key><true/>" in plist
+    assert "token" not in plist.lower()
+
+
+def test_install_service_refuses_foreign_dashboard(monkeypatch, capsys):
+    """If something else already serves :8765 and our plist isn't installed, a
+    second KeepAlive service would fight it for the port forever — refuse."""
+    from suur_things_mcp import dashboard as dash
+    monkeypatch.setattr(dash, "_dashboard_alive", lambda port: True)
+    monkeypatch.setattr(dash, "_service_plist_path", lambda: "/nonexistent/x.plist")
+    assert dash.install_service() == 1
+    assert "wasn't started by" in capsys.readouterr().out
+
+
+def test_main_dispatches_service_flags(monkeypatch):
+    import sys
+
+    from suur_things_mcp import dashboard as dash
+    from suur_things_mcp import server
+
+    called = []
+    monkeypatch.setattr(dash, "install_service", lambda: called.append("install") or 0)
+    monkeypatch.setattr(dash, "uninstall_service", lambda: called.append("uninstall") or 0)
+    monkeypatch.setattr(sys, "argv", ["suur-things-mcp", "dashboard", "--install-service"])
+    with pytest.raises(SystemExit):
+        server.main()
+    monkeypatch.setattr(sys, "argv", ["suur-things-mcp", "dashboard", "--uninstall-service"])
+    with pytest.raises(SystemExit):
+        server.main()
+    assert called == ["install", "uninstall"]
+
+# --- motion + UX feature source guards (same style as the quick-add guards) ---
+
+def test_motion_foundation_guards():
+    """The motion system's load-bearing pieces: tokens, the animatable overlay
+    pattern (visibility, not display:none), the ⌘K no-animation exemption, and
+    the reduced-motion block."""
+    html = client.get("/").text
+    assert "--ease-out: cubic-bezier(0.23, 1, 0.32, 1)" in html
+    assert "visibility:hidden; opacity:0;" in html            # overlays can fade
+    assert "#cmdk > .ck-panel { transform: none !important" in html  # keyboard surface stays instant
+    assert "@media (prefers-reduced-motion: reduce)" in html
+
+
+def test_near_live_poll_guards():
+    """The poll runs every 5s but is gated by the cheap cursor check, seeded at
+    boot, and a background refresh must never play the content entrance."""
+    html = client.get("/").text
+    assert ", 5000); })();" in html                       # near-live cadence
+    assert "if(d&&d.ok) LAST_CURSOR=d.cursor" in html     # boot seed (no pointless first refresh)
+    assert "SILENT_UNTIL=Date.now()+1500" in html         # silent background refresh
+
+
+def test_ux_feature_guards():
+    """Multi-select, context menu, timeline now-line, overdue group, quick-add
+    parse pills, and the optimistic checkoff with revert-on-failure."""
+    html = client.get("/").text
+    assert "function buildSelBar()" in html and "batchUpdate({completed:true})" in html
+    assert "function taskCtxMenu(" in html and 'e.preventDefault(); taskCtxMenu(it' in html
+    assert 'className="tl-now"' in html                   # current-time indicator
+    assert 'oh.className="grp-head overdue"' in html      # Today's overdue section
+    assert 'className="ec-pill parsed"' in html           # NLP preview pills
+    assert 'box.classList.add("done");   // optimistic' in html
+    assert 'else box.classList.remove("done")' in html    # failed write reverts

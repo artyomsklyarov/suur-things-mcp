@@ -18,7 +18,11 @@ jobs:
           enable-cache: true
       - name: Sync deps
         run: uv sync --dev
+      - name: Lint
+        run: uv run ruff check .
+      - name: Install Chromium for browser tests
+        run: uv run playwright install --with-deps chromium
       - name: Run tests
         run: uv run pytest -q
-      # Data-route tests skip automatically when Things isn't present (Linux/CI);
-      # URL-building + dashboard-route tests run everywhere.
+      # reads.py runs against the fixture DB (tests/things_schema.sql), and the
+      # dashboard's JS runs in real Chromium — no Things app needed anywhere.

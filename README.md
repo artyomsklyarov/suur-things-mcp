@@ -224,6 +224,8 @@ A local web UI that mirrors the Things look (real glyphs, typography, edit card)
 ```bash
 uvx suur-things-mcp dashboard        # opens http://127.0.0.1:8765 in your browser
 uvx suur-things-mcp dashboard --app  # opens it in a frameless app window (no tabs/toolbar)
+uvx suur-things-mcp dashboard --install-service   # always-on: launchd KeepAlive service at login
+uvx suur-things-mcp dashboard --uninstall-service # remove the service again
 ```
 
 `--app` launches a Chromium browser (Chrome / Brave / Edge / Chromium / Vivaldi / Arc) in app mode — a standalone window with its own Dock icon, no address bar — and falls back to a normal tab if none are installed. Or have the agent open it with the `open_dashboard` tool (pass `app=true` for the same window).

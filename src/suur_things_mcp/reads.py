@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re as _re
 import sqlite3
 from typing import Any
 
@@ -144,8 +145,6 @@ def get(uuid: str) -> dict | None:
 
 # --- Digest ---------------------------------------------------------------
 
-import re as _re
-
 _URL_RE = _re.compile(r'https?://[^\s<>"\)]+')
 
 
@@ -218,17 +217,6 @@ def overview(recent_completed: int = 10) -> dict:
         "overdue": overdue,
         "projects_without_next_action": no_next_action,
         "recent_completed": [_card(t) for t in recent],
-    }
-
-
-def board() -> dict:
-    """Kanban columns for the dashboard: list name -> compact cards."""
-    return {
-        "inbox": [_card(t) for t in inbox()],
-        "today": [_card(t) for t in today()],
-        "upcoming": [_card(t) for t in upcoming()],
-        "anytime": [_card(t) for t in anytime()],
-        "someday": [_card(t) for t in someday()],
     }
 
 
