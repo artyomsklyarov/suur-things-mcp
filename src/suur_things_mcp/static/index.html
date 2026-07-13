@@ -732,7 +732,10 @@ function route(){
     else if(rest.endsWith("/c")){ view="cards"; rest=rest.slice(0,-2); }
     else if(rest.endsWith("/t")){ view="timeline"; rest=rest.slice(0,-2); }
     const sel=resolveList(decodeURIComponent(rest)); if(sel) return renderList(sel, view); }
-  return go("#l/today");
+  // Unresolvable hash → fall back to Today, but never recurse when even Today
+  // can't resolve (no sidebar data — e.g. the Things DB isn't readable).
+  if(h!=="#l/today") return go("#l/today");
+  $("#content").innerHTML=`<div class="err">Couldn't load your Things data — is Things 3 installed on this Mac?</div>`;
 }
 window.addEventListener("hashchange", route);
 
@@ -908,7 +911,7 @@ function setActive(id){ CURRENT_ID=id; document.querySelectorAll(".nav-item,.are
 function resolveList(id){
   const bi=(SIDEBAR&&SIDEBAR.builtins)||[]; const b=bi.find(x=>x.id===id);
   if(b) return {id:b.id,icon:b.icon,title:b.title,kind:"builtin"};
-  for(const a of (SIDEBAR.areas||[])){
+  for(const a of ((SIDEBAR&&SIDEBAR.areas)||[])){
     if(a.uuid===id) return {id:a.uuid,icon:"▥",title:a.title,kind:"area"};
     const p=a.projects.find(p=>p.uuid===id); if(p) return {id:p.uuid,icon:"",title:p.title,kind:"project"};
   }
@@ -1456,7 +1459,7 @@ function openBoardSettings(){
   const ce=$("#cols-edit"); ce.innerHTML=""; (b.columns||[]).forEach(c=>ce.appendChild(colInput(c)));
   const inc=$("#includes"); inc.innerHTML="";
   const aSet=new Set(b.include_areas||[]), pSet=new Set(b.include_projects||[]);
-  for(const a of (SIDEBAR.areas||[])){
+  for(const a of ((SIDEBAR&&SIDEBAR.areas)||[])){
     const ah=document.createElement("div"); ah.className="area-pick";
     ah.innerHTML=`<label class="pick"><input type="checkbox" data-area="${a.uuid}" ${aSet.has(a.uuid)?"checked":""}> ${esc(a.title)} <span style="color:var(--muted);font-weight:400">(entire area)</span></label>`;
     ah.querySelector("input").onchange=persistSettings;
