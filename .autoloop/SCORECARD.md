@@ -1,0 +1,20 @@
+# Scorecard
+
+Scores 1-5; baseline and current are equal at orientation. Judgments are bounded by synthetic fixture tests, not real Things write acceptance.
+
+| Dimension | Before | Current | Evidence / limitation |
+|---|---:|---:|---|
+| Correctness | 4 | 4 | 113 tests, local build green; real URL Scheme integration requires human |
+| Reliability | 3 | 3 | Recovery misses non-object JSON/invalid UTF-8; request races and upload cap race |
+| Test coverage | 3 | 3 | Real Chromium + fixture SQL; focused recovery/concurrency/accessibility gaps |
+| Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
+| Architecture | 4 | 4 | Read/write split, overlay store, thin tools; preserves intent |
+| Security | 3 | 3 | Nonce CSP, origins, token redaction; attachment prefix containment weakness |
+| Performance | 4 | 4 | Threaded reads + cheap cursor; no new benchmark claim |
+| UX | 3 | 3 | Local board flows clear; mobile clipping and dialog focus gaps |
+| UI | 3 | 3 | Reviewed baseline desktop light/dark and mobile; dark selected labels low contrast |
+| Accessibility | 2 | 2 | Clickable div/span controls, no modal semantics or focus containment |
+| Product completeness | 4 | 4 | Documented phases done; live integration validation outside loop scope |
+| Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness now available |
+| SEO / discoverability | N/A | N/A | Local desktop dashboard, not public website |
+| Content quality | N/A | N/A | Software repo, not knowledge base |

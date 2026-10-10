@@ -1,0 +1,12 @@
+{
+  "CHANGELOG.md": "b88ba96a75601ba98d4228c72bcdfda3f18708d764f17182b5dd0f6e7e2924c1",
+  "CLAUDE.md": "64b4f388da6b7ab2d4e67c3b71ee605741aae119878ae2c28118c7199bb51c36",
+  "pyproject.toml": "b2ec37188be04b83ad967f15dadd9b900b90e298e68cf7b1c2633a5aebc1e401",
+  "src/suur_things_mcp/__init__.py": "eaf42f6271a90d843869d7cd2264e0e6890915c47f5234982435f0f5500551b0",
+  "src/suur_things_mcp/reads.py": "a91cda773b8bf94d47a876a1cc35df539b1105b62f82223226421576856b3d0b",
+  "src/suur_things_mcp/server.py": "36c230ffa05f0832b18c97092d02b0e31b07a60c168b80ad923007d85ac87d95",
+  "tests/conftest.py": "712dfc076f9c3e7c3b50c6e865aa29bf3d2967dfc9b0f0f7b8cfc43fbfc60e2d",
+  "tests/test_reads.py": "2cb05a2af2a5097ffe73a1560fdb36fe7e640cec0224f925149861234c7bd7e2",
+  "tests/test_server_tools.py": "7b7c345b430f0ba561d0393c4e0b320260a5a1e38fbe19ebdc78c014454f2a91",
+  "uv.lock": "a610c5e4eea622230bb6de9dbfb8459d920a49b8b1fde6f6e1817effc745ca73"
+}
