@@ -137,3 +137,8 @@ Iteration 19 commit: c0db91d.
 
 ## Iteration 20 — Accessibility
 E03 completed and default-enabled with placement=0 diagnostic fallback. Before: four terminal-state/control-boundary regressions and default-control test failed (iter-20-before.txt, iter-20-ui-before.txt). After: 223 tests/full gate green (iter-20.txt); 32 screenshots individually read, reports have no page errors, slot dialog fits 320/768px. Existing timeline drag test now waits for the overlay state, since scheduled cards are also visible; assertions retained. Capture import order corrected after first lint gate. Holistic review re-scored all dimensions, verified all ten original dirty files byte-identical, found B18/B19. Scores stay 4; dream due. Commit: pending iter 20.
+
+Iteration 20 commit: df0670f.
+
+## Dream 8 — Dream
+Ten-years-from-now lens: twelve ideas, two ambitious. Promoted B18/B19, parked personal-history/sync/compensating-undo plans, rejected duplicate or ill-fitting expansions. No product code. Full fixture gate recorded in dream-8.txt. Commit: pending dream 8.

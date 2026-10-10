@@ -60,3 +60,7 @@ Iteration 18: native selects reuse existing actions and require no dependencies.
 Iteration 19: explicit slot dialog uses existing modal management and section-only overlay saves. The 09:00/selected duration is a visible editable form default, never an inferred task estimate. New slots must fit the displayed 06:00–23:00 day; existing drag behavior preserved. Scheduled tasks also have controls in the pool so short calendar blocks need no tiny overflowing buttons. No dependencies.
 
 Iteration 20: enable completed E03 after all-view visual and browser gates. Native placement controls are additive; drag retained. Terminal task completion cannot be repeated. Use theme-specific checkbox border tokens and wrapping slot footer. Holistic review found two bounded issues, B18 successful-store/note-sync boundary and B19 skipped verification; fix before final stopping review. No dependencies.
+
+- H19: Private cross-device sync: specify conflicts using synthetic overlay/task identities, choose encryption/key recovery and an account/backend model, then implement an opt-in provider behind a flag. New infrastructure/accounts and personal-data retention are excluded from this loop.
+
+Dream 8: B18/B19 are concrete, feasible outcomes of the ten-year trust lens, not a new feature expansion. Keep existing product boundaries.

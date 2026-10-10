@@ -148,3 +148,23 @@ The best local task companion would make familiar actions predictable and approa
 | Animated gamified dashboard home | Low | Low | Easy | Reject: calm Things-style list already fits intent |
 
 No code, fresh promotable backlog item or lucid prototype. Finish E03 and holistic review before the final dream.
+
+## Dream 8 — Ten years from now (after iterations 19–20)
+No product code. Imagine a durable personal task companion: opening it years later still reveals the same task vocabulary, a trustworthy record of saved material, and controls that work without remembering gestures. Growth should not erode trust in small operations.
+
+| Idea | Fit / impact / buildability | Disposition and reason |
+|---|---|---|
+| Saved attachments stay visibly successful even when Things note synchronization is unavailable | high / medium / local small | Promote B18: regression then preserve the existing best-effort success contract |
+| A green verification badge means every browser check actually ran | high / medium / local small | Promote B19: enforce zero skipped checks in the fixture gate |
+| One coherent keyboard vocabulary across future task views | high / medium / already built | Reject new work: E01/E03 provide this foundation; protect it rather than inventing another layer |
+| A decade of searchable personal history, including why decisions changed (ambitious) | medium / high / privacy and storage policy | Park H14 existing retention/export/indexing plan |
+| A private cross-device task/attachment mesh with offline conflict resolution (ambitious) | medium / high / new infrastructure | Park H19: synthetic conflict specification first, then choose sync backend, encryption and accounts; no cloud setup in this run |
+| Preserve damaged overlay bytes for forensic recovery years later | high / medium / already built | Reject duplicate work: digest recovery and guide now exist |
+| Archive every screenshot and every personal task change automatically | low / uncertain / storage and privacy cost | Reject automatic collection: no demonstrated value justifies retaining personal history |
+| Reuse the dashboard for other task providers | low / uncertain / architectural expansion | Reject: Things is the product boundary and generic adapters would dilute it |
+| Quiet compact layout that feels familiar after a long absence | high / medium / already built | Reject duplicate work: E02, menu focus and light/dark rendering are covered |
+| A self-updating task companion that deploys its own fixes | medium / uncertain / release authorization | Reject autonomy expansion: deployment is outside this loop and current local gate is appropriate |
+| Guaranteed transactional undo for every Things action | medium / high / external acceptance uncertain | Park H15: retained compensating-write/conflict/retention plan; never claim atomic Things writes |
+| A synthetic example everyone can safely use to learn the system | high / medium / already built | Reject duplicate work: fixture captures and verification guide already offer it |
+
+Waking up: finish the two concrete trust-boundary improvements from holistic review. No new epic; no dependency or accounts. All other ideas are already satisfied, rejected for product fit, or genuinely blocked by live-write/privacy/infrastructure decisions.
