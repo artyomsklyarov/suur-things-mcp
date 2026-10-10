@@ -1,3 +1,5 @@
+**Packaging notice:** This GitHub checkpoint was not uploaded to PyPI: its publisher rejected metadata 2.5 before transfer. Install [0.10.1](https://pypi.org/project/suur-things-mcp/0.10.1/) instead; it includes all improvements below plus the metadata compatibility fix. The original tag is preserved.
+
 # SUUR Things MCP 0.10.0
 
 This release adds reviewable stale-backlog cohorts and makes the local dashboard easier to use with a keyboard and in narrow windows, while hardening attachment/config storage and asynchronous navigation.
@@ -29,7 +31,7 @@ Real Things mutation acceptance, live model quality and comprehensive manual acc
 ```sh
 uv tool upgrade suur-things-mcp
 # Or refresh a uvx dashboard invocation:
-uvx --refresh --from suur-things-mcp==0.10.0 suur-things-mcp dashboard
+uvx --refresh --from suur-things-mcp==0.10.1 suur-things-mcp dashboard
 ```
 
 Restart an existing MCP/dashboard process to use the new package. See the README and STATUS.MD for details and acceptance boundaries.

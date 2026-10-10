@@ -1,0 +1,15 @@
+Repetition 1
+.                                                                        [100%]
+1 passed in 3.41s
+Repetition 2
+.                                                                        [100%]
+1 passed in 2.40s
+Repetition 3
+.                                                                        [100%]
+1 passed in 1.54s
+Repetition 4
+.                                                                        [100%]
+1 passed in 1.67s
+Repetition 5
+.                                                                        [100%]
+1 passed in 1.84s

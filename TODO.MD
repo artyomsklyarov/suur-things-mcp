@@ -21,8 +21,8 @@ No further approval is needed for the GitHub/PyPI release already requested. The
 - [x] Pass the release fixture gate and inspect wheel/sdist metadata and packaged frontend.
 - [x] Commit/push the full intended checkout, pass protected-main CI and merge [release PR #53](https://github.com/artyomsklyarov/suur-things-mcp/pull/53) normally.
 - [x] Publish GitHub `v0.10.0` and inspect the PyPI job: it failed before upload because its metadata validator rejects 2.5.
-- [ ] Merge the metadata 2.4 correction and publish GitHub/PyPI `v0.10.1` through the existing workflow.
-- [ ] Verify fresh PyPI 0.10.1 metadata, both distributions and package contents; record URLs/hashes in STATUS.
+- [x] Merge the metadata 2.4 correction through [PR #54](https://github.com/artyomsklyarov/suur-things-mcp/pull/54) and publish [GitHub](https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.10.1)/[PyPI](https://pypi.org/project/suur-things-mcp/0.10.1/) `v0.10.1` through the existing workflow.
+- [x] Verify fresh PyPI 0.10.1 metadata, both distributions and package contents; record URLs/hashes in STATUS and [release receipts](docs/releases/0.10.1/PYPI-RECEIPT.json). Isolated wheel installation/import also passed.
 
 ## Personal installation and live acceptance
 

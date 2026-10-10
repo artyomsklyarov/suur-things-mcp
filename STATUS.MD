@@ -10,10 +10,10 @@ Updated: 2026-10-10. This is the current-state handoff. Read [CONTEXT.MD](CONTEX
 | Public GitHub release at preparation start | `v0.9.0`; 0.10.0 not yet released |
 | Fresh PyPI metadata at preparation start | 0.9.0; no 0.10.0 release/files existed |
 | Local source/version | 0.10.1, single-sourced in `__init__.py`; metadata 2.4 packaging correction, all 0.10.0 functionality retained |
-| Working branch | `release/0.10.1`; full update merged through PR #53 at `bfbb51c` |
+| Release source checkpoint | `main` at `a8561fb88285fc8cdc9824723b611ccf91312d39`, tagged `v0.10.1`; later documentation receipts do not change the released runtime |
 | Local verification checkpoint | 238 passing tests, zero skips; Ruff, compile and offline wheel/sdist green |
 | New publication authorization | User explicitly requested committing the full update to GitHub and releasing a new version on 2026-10-10 |
-| New release execution | Full update on main and GitHub v0.10.0 public; PyPI upload failed before transfer. Patch 0.10.1 prepared for metadata compatibility |
+| Current public release | GitHub and PyPI 0.10.1 published and verified; downloaded wheel/sdist hashes and isolated package installation passed |
 
 0.10.0 already existed in uncommitted source and was initially unpublished. Its GitHub release is now public, but its PyPI job rejected metadata 2.5 before uploading. The patch release is 0.10.1, explicitly using metadata 2.4 and preserving the public 0.10.0 checkpoint. Changelog dates reflect 2026-10-10. GitHub publication triggers the existing PyPI workflow; no publishing credentials or workflow permissions are being added.
 
@@ -131,4 +131,13 @@ Build output alone is not a release. GitHub merge, GitHub release workflow, PyPI
 - [Required CI](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094162353) passed: 229 passed, nine environment-dependent skips, one test-client warning. The complete local fixture gate separately passed all 238 without skips. Existing setup-uv also emits a Node 20 migration warning on GitHub; no action/config upgrade is included here.
 - [GitHub v0.10.0](https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.10.0) published at that merge commit, 2026-10-10 23:13:59 UTC.
 - [0.10.0 PyPI job](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094300758) failed at metadata validation: `'2.5' is not a valid metadata version`. Fresh 0.10.0 registry metadata returned 404; it is not an installable PyPI release.
-- [0.10.1 full local gate](.autoloop/artifacts/release-0.10.1.txt): 238 passed, zero skips, unchanged test-client warning, Ruff/compile/build and lock consistency green. Both builds explicitly emit metadata 2.4. Patch CI, merge, release and public PyPI verification remain pending; publication is not inferred from local builds.
+- [0.10.1 full local gate](.autoloop/artifacts/release-0.10.1.txt): 238 passed, zero skips, unchanged test-client warning, Ruff/compile/build and lock consistency green. Both builds explicitly emit metadata 2.4. [Patch PR #54](https://github.com/artyomsklyarov/suur-things-mcp/pull/54) passed required CI and merged normally at `a8561fb88285fc8cdc9824723b611ccf91312d39`.
+- [Patch CI](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094495612) passed: 229 passed, nine environment-dependent skips, one test-client warning; local no-skip results above remain the stronger complete-fixture evidence.
+- [GitHub v0.10.1](https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.10.1) published at the patch merge commit, 2026-10-10 23:19:23 UTC. [Its PyPI job](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094617491) succeeded through the existing Trusted Publishing configuration.
+- [Public PyPI 0.10.1](https://pypi.org/project/suur-things-mcp/0.10.1/): fresh version-specific registry JSON and both public distributions verified. Wheel and sdist use metadata 2.4/version 0.10.1/Python >=3.10. Wheel version module, six runtime modules and frontend match the release source byte-for-byte; the sdist includes all five handoff documents.
+- Downloaded public wheel installed into an isolated temporary environment with `--no-deps`; import/version and packaged frontend smoke checks passed. This checks wheel installation, not dependency-resolution or live MCP/Things/client acceptance. No real integrations were launched.
+- Machine-readable URLs, upload times, sizes and SHA-256 values: [PYPI-RECEIPT.json](docs/releases/0.10.1/PYPI-RECEIPT.json). Wheel SHA-256 `0a15748903fe4ee25cecb4ef85704fa039dc7c8a59829c9c98aaab97ae430654`; sdist SHA-256 `078be8b92064577975a1fbdfceb5dacd4beb56a96c2527130a7ac072f30cb794`.
+
+Publication is complete. Owner installation/restart, real task acceptance, live organizer quality and broad manual accessibility/lifecycle checks remain open in TODO/PLAN. The release source distribution contains the preparation-time handoff snapshot; latest GitHub main contains these subsequent publication receipts.
+
+Post-publication verification follow-up: the first receipts CI exposed a dialog initial-focus race in the browser test. Synchronization now waits for queued setup and the close state while preserving the original closed/no-write assertions. Five repetitions and another complete 238-test no-skip gate passed. Released application code is unchanged; [evidence and final PR](docs/releases/0.10.1/CI-FOLLOWUP.md).

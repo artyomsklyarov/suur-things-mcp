@@ -1,0 +1,28 @@
+{
+  "version": "0.10.1",
+  "metadata_url": "https://pypi.org/pypi/suur-things-mcp/0.10.1/json",
+  "files": [
+    {
+      "filename": "suur_things_mcp-0.10.1-py3-none-any.whl",
+      "packagetype": "bdist_wheel",
+      "url": "https://files.pythonhosted.org/packages/69/19/dafd7b7c0b2aa578c5fb6e10fd27119e937a4f429b784fc969edfc105d91/suur_things_mcp-0.10.1-py3-none-any.whl",
+      "size": 111276,
+      "upload_time_iso_8601": "2026-10-10T23:19:44.461199Z",
+      "sha256": "0a15748903fe4ee25cecb4ef85704fa039dc7c8a59829c9c98aaab97ae430654"
+    },
+    {
+      "filename": "suur_things_mcp-0.10.1.tar.gz",
+      "packagetype": "sdist",
+      "url": "https://files.pythonhosted.org/packages/51/77/7fb89b94e900b5be13a91a269821bd8a2b07d97244504f576a45e4984392/suur_things_mcp-0.10.1.tar.gz",
+      "size": 6237914,
+      "upload_time_iso_8601": "2026-10-10T23:19:46.141876Z",
+      "sha256": "078be8b92064577975a1fbdfceb5dacd4beb56a96c2527130a7ac072f30cb794"
+    }
+  ],
+  "checks": [
+    "registry SHA-256 matches downloaded bytes",
+    "both distribution versions, metadata 2.4 and Python >=3.10",
+    "wheel version source, six runtime modules and frontend match release source",
+    "five root handoff docs present in sdist"
+  ]
+}

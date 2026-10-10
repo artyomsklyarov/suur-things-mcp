@@ -1,0 +1,45 @@
+test	Run tests	﻿2026-10-10T23:21:37.2919178Z ##[group]Run uv run pytest -q
+test	Run tests	2026-10-10T23:21:37.2919476Z [36;1muv run pytest -q[0m
+test	Run tests	2026-10-10T23:21:37.2984915Z shell: /usr/bin/bash -e {0}
+test	Run tests	2026-10-10T23:21:37.2985154Z env:
+test	Run tests	2026-10-10T23:21:37.2985384Z   UV_CACHE_DIR: /home/runner/work/_temp/setup-uv-cache
+test	Run tests	2026-10-10T23:21:37.2985841Z ##[endgroup]
+test	Run tests	2026-10-10T23:21:38.9550877Z ................................ss......s............s.................. [ 30%]
+test	Run tests	2026-10-10T23:21:55.6084940Z s....ss.ss...........................................................F.. [ 60%]
+test	Run tests	2026-10-10T23:22:39.5313448Z ........................................................................ [ 90%]
+test	Run tests	2026-10-10T23:22:39.6293660Z ......................                                                   [100%]
+test	Run tests	2026-10-10T23:22:39.6294148Z =================================== FAILURES ===================================
+test	Run tests	2026-10-10T23:22:39.6294506Z ____________ test_create_dialog_has_named_fields_and_keyboard_close ____________
+test	Run tests	2026-10-10T23:22:39.6294754Z 
+test	Run tests	2026-10-10T23:22:39.6295379Z ui = {'page': <Page url='http://127.0.0.1:41041/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+test	Run tests	2026-10-10T23:22:39.6296126Z 
+test	Run tests	2026-10-10T23:22:39.6296282Z     def test_create_dialog_has_named_fields_and_keyboard_close(ui):
+test	Run tests	2026-10-10T23:22:39.6296580Z         page = ui["page"]
+test	Run tests	2026-10-10T23:22:39.6296791Z         page.locator("#add-btn").click()
+test	Run tests	2026-10-10T23:22:39.6297126Z         assert page.get_by_role("dialog", name="New to-do", exact=False).is_visible()
+test	Run tests	2026-10-10T23:22:39.6297500Z         assert page.get_by_label("Task title").count() == 1
+test	Run tests	2026-10-10T23:22:39.6297818Z         assert page.get_by_label("Notes", exact=True).count() == 1
+test	Run tests	2026-10-10T23:22:39.6298157Z         page.get_by_role("button", name="Close (saves changes)").focus()
+test	Run tests	2026-10-10T23:22:39.6298453Z         page.keyboard.press("Enter")
+test	Run tests	2026-10-10T23:22:39.6298808Z >       assert not page.locator("#edit-overlay").evaluate("el => el.classList.contains('show')")
+test	Run tests	2026-10-10T23:22:39.6299177Z E       assert not True
+test	Run tests	2026-10-10T23:22:39.6299425Z E        +  where True = evaluate("el => el.classList.contains('show')")
+test	Run tests	2026-10-10T23:22:39.6299931Z E        +    where evaluate = <Locator frame=<Frame name= url='http://127.0.0.1:41041/#l/today'> selector='#edit-overlay'>.evaluate
+test	Run tests	2026-10-10T23:22:39.6300597Z E        +      where <Locator frame=<Frame name= url='http://127.0.0.1:41041/#l/today'> selector='#edit-overlay'> = locator('#edit-overlay')
+test	Run tests	2026-10-10T23:22:39.6301132Z E        +        where locator = <Page url='http://127.0.0.1:41041/#l/today'>.locator
+test	Run tests	2026-10-10T23:22:39.6301370Z 
+test	Run tests	2026-10-10T23:22:39.6301497Z tests/test_dashboard_interactions.py:232: AssertionError
+test	Run tests	2026-10-10T23:22:39.6301809Z =============================== warnings summary ===============================
+test	Run tests	2026-10-10T23:22:39.6302085Z tests/test_dashboard.py:10
+test	Run tests	2026-10-10T23:22:39.6302836Z   /home/runner/work/suur-things-mcp/suur-things-mcp/tests/test_dashboard.py:10: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+test	Run tests	2026-10-10T23:22:39.6303522Z     from starlette.testclient import TestClient
+test	Run tests	2026-10-10T23:22:39.6303700Z 
+test	Run tests	2026-10-10T23:22:39.6303867Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+test	Run tests	2026-10-10T23:22:39.6304234Z =========================== short test summary info ============================
+test	Run tests	2026-10-10T23:22:39.6304788Z FAILED tests/test_dashboard_interactions.py::test_create_dialog_has_named_fields_and_keyboard_close - assert not True
+test	Run tests	2026-10-10T23:22:39.6305275Z  +  where True = evaluate("el => el.classList.contains('show')")
+test	Run tests	2026-10-10T23:22:39.6305750Z  +    where evaluate = <Locator frame=<Frame name= url='http://127.0.0.1:41041/#l/today'> selector='#edit-overlay'>.evaluate
+test	Run tests	2026-10-10T23:22:39.6306371Z  +      where <Locator frame=<Frame name= url='http://127.0.0.1:41041/#l/today'> selector='#edit-overlay'> = locator('#edit-overlay')
+test	Run tests	2026-10-10T23:22:39.6307465Z  +        where locator = <Page url='http://127.0.0.1:41041/#l/today'>.locator
+test	Run tests	2026-10-10T23:22:39.6307812Z 1 failed, 228 passed, 9 skipped, 1 warning in 61.72s (0:01:01)
+test	Run tests	2026-10-10T23:22:39.7231328Z ##[error]Process completed with exit code 1.
