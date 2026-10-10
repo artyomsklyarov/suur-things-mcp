@@ -227,8 +227,11 @@ def test_create_dialog_has_named_fields_and_keyboard_close(ui):
     assert page.get_by_role("dialog", name="New to-do", exact=False).is_visible()
     assert page.get_by_label("Task title").count() == 1
     assert page.get_by_label("Notes", exact=True).count() == 1
+    # Finish the dialog's queued initial sizing/focus before moving user focus.
+    page.evaluate("() => new Promise(resolve => setTimeout(resolve, 0))")
     page.get_by_role("button", name="Close (saves changes)").focus()
     page.keyboard.press("Enter")
+    page.locator("#edit-overlay.show").wait_for(state="detached")
     assert not page.locator("#edit-overlay").evaluate("el => el.classList.contains('show')")
     assert ui["posts"] == []
 

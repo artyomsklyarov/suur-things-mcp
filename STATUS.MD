@@ -139,3 +139,5 @@ Build output alone is not a release. GitHub merge, GitHub release workflow, PyPI
 - Machine-readable URLs, upload times, sizes and SHA-256 values: [PYPI-RECEIPT.json](docs/releases/0.10.1/PYPI-RECEIPT.json). Wheel SHA-256 `0a15748903fe4ee25cecb4ef85704fa039dc7c8a59829c9c98aaab97ae430654`; sdist SHA-256 `078be8b92064577975a1fbdfceb5dacd4beb56a96c2527130a7ac072f30cb794`.
 
 Publication is complete. Owner installation/restart, real task acceptance, live organizer quality and broad manual accessibility/lifecycle checks remain open in TODO/PLAN. The release source distribution contains the preparation-time handoff snapshot; latest GitHub main contains these subsequent publication receipts.
+
+Post-publication verification follow-up: the first receipts CI exposed a dialog initial-focus race in the browser test. Synchronization now waits for queued setup and the close state while preserving the original closed/no-write assertions. Five repetitions and another complete 238-test no-skip gate passed. Released application code is unchanged; [evidence and final PR](docs/releases/0.10.1/CI-FOLLOWUP.md).
