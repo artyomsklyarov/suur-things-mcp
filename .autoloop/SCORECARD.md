@@ -13,7 +13,7 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 | Performance | 4 | 4 | Threaded reads + cheap cursor; no new benchmark claim |
 | UX | 3 | 3 | Local board flows clear; mobile clipping and dialog focus gaps |
 | UI | 3 | 3 | Reviewed baseline desktop light/dark and mobile; mobile clipping; settled dark theme correct (initial snapshot caught transition) |
-| Accessibility | 2 | 3 | Clickable div/span controls, modal names, labeled fields, inert background and focus containment/return; navigation gaps remain |
+| Accessibility | 2 | 4 | Clickable div/span controls, modal names, labeled fields, inert background and focus containment/return; sidebar/filter/task keyboard access and palette selection semantics; advanced drag views remain a limitation |
 | Product completeness | 4 | 4 | Documented phases done; live integration validation outside loop scope |
 | Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness now available |
 | SEO / discoverability | N/A | N/A | Local desktop dashboard, not public website |

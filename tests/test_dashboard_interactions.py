@@ -229,3 +229,45 @@ def test_create_dialog_has_named_fields_and_keyboard_close(ui):
     page.keyboard.press("Enter")
     assert not page.locator("#edit-overlay").evaluate("el => el.classList.contains('show')")
     assert ui["posts"] == []
+
+
+def test_sidebar_filter_and_task_actions_work_from_keyboard(ui):
+    page = ui["page"]
+    inbox = page.locator('#side-nav [data-id="inbox"]')
+    assert inbox.get_attribute("tabindex") == "0"
+    inbox.focus()
+    page.keyboard.press("Enter")
+    page.locator("#content .empty").wait_for()
+    page.locator('#side-nav [data-id="today"]').focus()
+    page.keyboard.press("Enter")
+    page.locator(".row .title").wait_for()
+    tag = page.get_by_role("button", name="writing", exact=True)
+    tag.focus()
+    page.keyboard.press("Space")
+    assert tag.get_attribute("aria-pressed") == "true"
+    page.get_by_role("button", name=TASK["title"], exact=True).focus()
+    page.keyboard.press("Enter")
+    page.get_by_role("dialog", name="Edit task").wait_for()
+    page.keyboard.press("Escape")
+    checkbox = page.get_by_role("checkbox", name="Complete " + TASK["title"], exact=True)
+    checkbox.focus()
+    page.keyboard.press("Space")
+    page.wait_for_function("() => document.querySelector('.row .box').getAttribute('aria-checked') === 'true'")
+    assert ui["posts"] == [("/api/update", {"id": "task", "completed": True})]
+
+
+def test_palette_exposes_active_option_and_expandable_area_state(ui):
+    page = ui["page"]
+    chev = page.get_by_role("button", name="Toggle Work", exact=True)
+    assert chev.get_attribute("aria-expanded") == "true"
+    chev.focus()
+    page.keyboard.press("Space")
+    page.wait_for_function("() => !document.querySelector('#side-nav [data-id=project]')", timeout=2000)
+    assert page.get_by_role("button", name="Toggle Work", exact=True).get_attribute("aria-expanded") == "false"
+    page.keyboard.press("Control+k")
+    page.locator("#cmdk.show").wait_for()
+    combobox = page.get_by_role("combobox", name="Search tasks or commands")
+    page.keyboard.press("ArrowDown")
+    selected_id = combobox.get_attribute("aria-activedescendant")
+    assert selected_id
+    assert page.locator("#" + selected_id).get_attribute("aria-selected") == "true"

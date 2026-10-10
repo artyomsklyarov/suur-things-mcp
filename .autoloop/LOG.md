@@ -42,3 +42,8 @@ Iteration 6 commit: a823c44.
 
 ## Iteration 7 — Accessibility
 E01 milestone 1: seven named modal overlays, field labels, native close/complete buttons, focus entry/trapping/return and inert background with stacked topmost Escape. Before: three dialog tests fail (iter-7-before.txt). After: 152 tests and full gate green (iter-7.txt); eight screenshots read with no unintended normal-layout change. Accessibility 2 -> 3. Found arealess-project resolution gap while planning empty-state evidence, tracked B14. Commit: pending iter 7.
+
+Iteration 7 commit: 2873a6e.
+
+## Iteration 8 — Accessibility
+E01 milestone 2 complete: sidebar links/area toggles, task edit/complete, filter keyboard controls and state; palette combobox/listbox selected options; visible focus. Before: two new tests fail (iter-8-before.txt). First edit script aborted before changing files on an unmatched source fragment; corrected and reran full gate. After: 154 tests/full gate green (iter-8.txt); all eight images read, established UI retained. Accessibility 3 -> 4. Dream due before next product iteration. Commit: pending iter 8.

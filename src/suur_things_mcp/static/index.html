@@ -28,6 +28,9 @@
     --chip-bg:#363b42; --chip-fg:#c5c9cf; --chip-active-bg:#dfe1e6; --chip-active-fg:#1b1e23; --gold:#f5c026;
   }
   * { box-sizing:border-box; }
+  [tabindex]:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
   html, body { height:100%; margin:0; overflow:hidden; }
   body { font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
     background:var(--main-bg); color:var(--text); -webkit-font-smoothing:antialiased; }
@@ -526,8 +529,8 @@
 
 <div class="overlay" id="cmdk" role="dialog" aria-modal="true" aria-label="Search and commands" aria-hidden="true" tabindex="-1" style="align-items:flex-start; padding-top:84px">
   <div class="ck-panel">
-    <input id="cmdk-input" aria-label="Search tasks or commands" placeholder="Search tasks or type a command…" autocomplete="off">
-    <div class="ck-list" id="cmdk-list"></div>
+    <input id="cmdk-input" aria-label="Search tasks or commands" role="combobox" aria-controls="cmdk-list" aria-expanded="false" aria-autocomplete="list" placeholder="Search tasks or type a command…" autocomplete="off">
+    <div class="ck-list" id="cmdk-list" role="listbox" aria-label="Commands"></div>
   </div>
 </div>
 
@@ -704,6 +707,12 @@ function linkify(s){
       return pre+_anchor("https://"+host+path, host+path); });
   return h.replace(/\u0001(\d+)\u0001/g, (m,i)=>_anchor(urls[+i], urls[+i]));
 }
+function keyboardAction(el, role="button", label=null){
+  el.tabIndex=0; el.setAttribute("role",role); if(label) el.setAttribute("aria-label",label);
+  el.addEventListener("keydown",e=>{
+    if(e.target===el&&(e.key==="Enter"||(role!=="link"&&e.key===" "))){ e.preventDefault(); el.click(); }
+  });
+}
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
 function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#theme").textContent=t==="dark"?"☀":"☾"; storageSet("things-theme",t); }
@@ -779,7 +788,7 @@ function ckCommands(){
   out.push({label:"About · Credits", hint:"App", icon:SVG.info, run:()=>{closeCmdk(); go("#about");}});
   return out;
 }
-function openCmdk(){ CK_MODE="main"; openOverlay("cmdk"); const i=$("#cmdk-input"); i.value=""; ckRender(""); setTimeout(()=>i.focus(),0); }
+function openCmdk(){ $("#cmdk-input").setAttribute("aria-expanded","true"); CK_MODE="main"; openOverlay("cmdk"); const i=$("#cmdk-input"); i.value=""; ckRender(""); setTimeout(()=>i.focus(),0); }
 function closeCmdk(){ closeOverlay("cmdk"); }
 function ckRender(q){
   if(CK_MODE==="sub"){ CK_ITEMS = q ? CK_BASE.filter(c=>c._back||fuzzy(q,c.label)) : CK_BASE.slice(); CK_SEL=0; ckDraw(); return; }
@@ -836,13 +845,15 @@ async function moveTask(id, listId){
   loadSidebar(); setTimeout(route,300);
 }
 function ckDraw(){
-  const box=$("#cmdk-list"); box.innerHTML="";
+  const box=$("#cmdk-list"); box.innerHTML=""; $("#cmdk-input").removeAttribute("aria-activedescendant");
   if(!CK_ITEMS.length){ box.innerHTML=`<div class="empty" style="padding:16px">No matches</div>`; return; }
   CK_ITEMS.forEach((c,i)=>{
     const row=document.createElement("div"); row.className="ck-row"+(i===CK_SEL?" sel":"");
+    row.id="ck-option-"+i; row.setAttribute("role","option"); row.setAttribute("aria-selected",String(i===CK_SEL));
+    if(i===CK_SEL) $("#cmdk-input").setAttribute("aria-activedescendant",row.id);
     row.innerHTML=`<span class="ck-ico">${c.icon||""}</span><span class="ck-label">${esc(c.label)}</span><span class="ck-hint">${esc(c.hint||"")}</span>`;
     row.addEventListener("mousedown",e=>{ e.preventDefault(); c.run(); });
-    row.addEventListener("mouseenter",()=>{ CK_SEL=i; [...box.children].forEach((ch,j)=>ch.classList.toggle("sel",j===i)); });
+    row.addEventListener("mouseenter",()=>{ CK_SEL=i; $("#cmdk-input").setAttribute("aria-activedescendant",row.id); [...box.children].forEach((ch,j)=>{ ch.classList.toggle("sel",j===i); ch.setAttribute("aria-selected",String(j===i)); }); });
     box.appendChild(row);
   });
 }
@@ -909,12 +920,23 @@ function renderSidebar(){
   }
   el.appendChild(Object.assign(document.createElement("div"),{className:"side-sep"}));
   bi.filter(b=>["logbook","trash"].includes(b.id)).forEach(b=>el.appendChild(builtinEl(b)));  // Logbook + Trash last
+  el.querySelectorAll('.nav-item,.project').forEach(n=>keyboardAction(n,"link"));
+  el.querySelectorAll('.area-head[data-id]').forEach(n=>{
+    keyboardAction(n.querySelector('.label'),"link");
+    const chev=n.querySelector('.chev'); keyboardAction(chev,"button","Toggle "+n.querySelector('.label').textContent);
+    chev.setAttribute("aria-expanded",String(chev.classList.contains("open")));
+  });
+  el.querySelectorAll('.group-head .add').forEach(n=>keyboardAction(n,"button","New board"));
   setActive(CURRENT_ID);
 }
 function toggleArea(uuid, chev){ COLLAPSED.has(uuid)?COLLAPSED.delete(uuid):COLLAPSED.add(uuid);
   storageSet("collapsed-areas", JSON.stringify([...COLLAPSED]));
   // let the chevron's rotation play before the tree rebuild replaces the node
-  if(chev){ chev.classList.toggle("open"); setTimeout(renderSidebar, 200); }
+  if(chev){
+    const focused=document.activeElement===chev;
+    chev.classList.toggle("open"); chev.setAttribute("aria-expanded",String(!COLLAPSED.has(uuid)));
+    setTimeout(()=>{ renderSidebar(); if(focused){ const n=$("#side-nav [data-id=\""+CSS.escape(uuid)+"\"] .chev"); if(n) n.focus(); } },200);
+  }
   else renderSidebar(); }
 function builtinEl(b){
   const row=document.createElement("div"); row.className="nav-item"; row.dataset.id=b.id;
@@ -929,7 +951,9 @@ function builtinEl(b){
   }
   return row;
 }
-function setActive(id){ CURRENT_ID=id; document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.toggle("active", n.dataset.id===String(id))); const al=$("#about-link"); if(al) al.classList.remove("active"); }
+function setActive(id){ CURRENT_ID=id; document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>{ const active=n.dataset.id===String(id); n.classList.toggle("active",active);
+    const target=n.classList.contains("area-head")?n.querySelector('.label'):n;
+    if(active) target.setAttribute("aria-current","page"); else target.removeAttribute("aria-current"); }); const al=$("#about-link"); if(al) al.classList.remove("active"); }
 function resolveList(id){
   const bi=(SIDEBAR&&SIDEBAR.builtins)||[]; const b=bi.find(x=>x.id===id);
   if(b) return {id:b.id,icon:b.icon,title:b.title,kind:"builtin"};
@@ -986,7 +1010,7 @@ async function setAreaRollup(on){
 function projCardEl(p){
   const el=document.createElement("div"); el.className="projcard";
   el.innerHTML=`${ring(p.progress||0)}<span class="pt">${esc(p.title)}</span>`;
-  el.onclick=()=>go("#l/"+encodeURIComponent(p.uuid)); return el;
+  el.onclick=()=>go("#l/"+encodeURIComponent(p.uuid)); keyboardAction(el,"link",p.title); return el;
 }
 // --- cards view (YouTube thumbnails for link tasks) ---
 function ytId(url){ if(!url) return null; const m=url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/); return m?m[1]:null; }
@@ -998,7 +1022,7 @@ function renderCards(items){
 }
 function taskCardEl(it){
   const el=document.createElement("div"); el.className="taskcard"+((it.status==="completed"||it.status==="canceled")?" is-done":"");
-  el.onclick=()=>openEdit(it.uuid);
+  el.onclick=()=>openEdit(it.uuid); keyboardAction(el,"button",it.title||"(untitled)");
   el.addEventListener("contextmenu",e=>{ e.preventDefault(); taskCtxMenu(it, e.clientX, e.clientY); });
   const yt=ytId(it.link); let title=it.title||"";
   if(it.link){ title=title.replace(it.link,"").replace(/^\s*watch:?\s*/i,"").trim(); if(!title) title=yt?"YouTube video":it.link; }
@@ -1023,7 +1047,7 @@ function buildFilterBar(){
 }
 function chipEl(label, tag){
   const c=document.createElement("div"); c.className="chip"+(CUR_FILTER===tag?" active":"");
-  c.textContent=label;
+  c.textContent=label; keyboardAction(c); c.setAttribute("aria-pressed",String(CUR_FILTER===tag));
   c.onclick=()=>{ CUR_FILTER=(CUR_FILTER===tag?null:tag); buildFilterBar(); renderRows(); };
   return c;
 }
@@ -1115,6 +1139,13 @@ function rowEl(it){
   row.addEventListener("dragend",()=>{ row.classList.remove("dragging"); document.body.classList.remove("dragging-task"); });
   const m=metaHtml(it);
   row.innerHTML=`<span class="box ${done?"done":cancel?"cancel":""}"></span><span class="title">${esc(it.title||"(untitled)")}</span>`+(m?`<span class="meta">${m}</span>`:"");
+  keyboardAction(row.querySelector(".title"),"button",it.title||"(untitled)");
+  const check=row.querySelector(".box");
+  check.setAttribute("role","checkbox"); check.setAttribute("aria-label","Complete "+(it.title||"(untitled)"));
+  check.setAttribute("aria-checked",String(done||cancel)); check.setAttribute("aria-disabled",String(!AUTH||done||cancel));
+  if(AUTH&&!done&&!cancel){ check.tabIndex=0; check.addEventListener("keydown",e=>{
+    if(e.key===" "||e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); check.click(); }
+  }); }
   if(!done&&!cancel){ const box=row.querySelector(".box"); box.title="Complete"; box.style.cursor="pointer";
     box.onclick=(e)=>{ e.stopPropagation(); box.classList.add("done");   // optimistic: the ✓ pops now, not after the round-trip
       applyStatus(it.uuid,"completed").then(ok=>{ if(ok) rerenderCurrent(); else box.classList.remove("done"); }); }; }
@@ -1615,7 +1646,7 @@ function openCreate(kind){
   setTimeout(()=>{ autoGrow($("#f-title")); autoGrow($("#f-notes")); $("#f-title").focus(); },0);
 }
 function setEditKind(k){
-  EDIT_KIND=k; document.querySelectorAll("#ec-kind .vt").forEach(b=>b.classList.toggle("on", b.dataset.kind===k));
+  EDIT_KIND=k; $("#edit-overlay").setAttribute("aria-label",k==="project"?"New project":"New to-do"); document.querySelectorAll("#ec-kind .vt").forEach(b=>b.classList.toggle("on", b.dataset.kind===k));
   let w;
   if(k==="project") w=(SEL&&SEL.kind==="area")?("in area: "+SEL.title):"top level";
   else w=(SEL&&(SEL.kind==="project"||SEL.kind==="area"))?("in: "+SEL.title):"to Inbox";
@@ -1925,6 +1956,7 @@ function openOverlay(id){
 function closeOverlay(id){
   const o=$("#"+id), wasTop=o===activeOverlay(), trigger=OVERLAY_FOCUS.get(id);
   o.classList.remove("show"); o.setAttribute("aria-hidden","true");
+  if(id==="cmdk") $("#cmdk-input").setAttribute("aria-expanded","false");
   const i=OPEN_OVERLAYS.indexOf(id); if(i>=0) OPEN_OVERLAYS.splice(i,1);
   OVERLAY_FOCUS.delete(id); syncOverlayState();
   if(wasTop){
