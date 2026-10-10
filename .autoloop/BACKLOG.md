@@ -17,11 +17,9 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B11 | Async list navigation discards stale responses | Fix | M | M | S | done iter 15 |
 | B12 | Add verification/recovery developer guide without changing existing docs | Docs | M | L | S | done iter 16 |
 | B13 | Existing dependency warning / real Things writes / dirty-file work | Docs | M | H | M | human |
-
 | B14 | Arealess project links fail to resolve in hash navigation | Fix | H | L | S | done iter 9 |
 | B15 | Preserve supported organizer agent/model preferences in config | Fix | M | L | S | done iter 14 |
 | B16 | Measure and fix small-text contrast in both themes | Accessibility | H | L | S | done iter 12 |
 | B17 | Keyboard destination selectors for advanced drag views | Accessibility | M | M | M | done E03 iter 17-20 |
-
 | B18 | Preserve successful upload response when best-effort note sync fails | Fix | M | L | S | done iter 21 |
-| B19 | Fail fixture gate when pytest skips verification | Safety net | M | L | S | ready, holistic 20 |
+| B19 | Fail fixture gate when pytest skips verification | Safety net | M | L | S | done iter 22 |

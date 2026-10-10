@@ -147,3 +147,8 @@ Dream 8 commit: f8dfef2.
 
 ## Iteration 21 — Fix
 B18 fixes optional note-sync failures after durable upload. Before: three failures reproduced, existing URL Scheme failure already behaved correctly (iter-21-before.txt); success and duplicate-reference checks pass. After: six regressions, full gate 229 tests (iter-21.txt). Storage bytes/metadata retained exactly once, success response preserved with note_updated=false; all Things operations mocked. No UI/dependency/sensitive edits. Reliability remains 4. Commit: pending iter 21.
+
+Iteration 21 commit: 2dbbd43.
+
+## Iteration 22 — Safety net
+B19 requires valid complete pytest JUnit evidence before packaging. Before: six false-green gate regressions (iter-22-before.txt), success/failed-command controls already pass. After: eight harness tests and full gate 237 tests, zero skips (iter-22.txt). Disposable DB/config/token isolation and cleanup verified; standard library only, original test skip behavior retained. All applicable scores remain 4; no ready items or High items. Dream due after two unchanged scores and before stopping. Commit: pending iter 22.

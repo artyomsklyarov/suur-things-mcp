@@ -66,3 +66,7 @@ Iteration 20: enable completed E03 after all-view visual and browser gates. Nati
 Dream 8: B18/B19 are concrete, feasible outcomes of the ten-year trust lens, not a new feature expansion. Keep existing product boundaries.
 
 Iteration 21: once image bytes and metadata are durably saved, optional Things note synchronization must not turn the upload into a failure. Catch ordinary exceptions only within that existing best-effort boundary (not BaseException/cancellation), keep note_updated false and preserve the success payload. No retry, compensating write, deletion, credentials or dependency changes. Six regressions include read/SQLite/opener failures and successful/duplicate note references.
+
+Iteration 22: use pytest's existing JUnit output and standard-library XML parser to enforce complete fixture execution. Do not change existing tests' optional-environment behavior or dependency requirements. Missing/malformed/empty/skipped/error reports fail before packaging even if the process incorrectly reports success. Mocked harness tests prove stop order, disposable environment isolation and cleanup; real full gate still runs all browsers. No dependencies.
+
+Final decision review: H06 (new project timeline) and H08 (time-budget warnings) require no sensitive setup; they are rejected for insufficient product-value evidence and added view/warning complexity, not artificially blocked on approval. H11 was implemented as E03. Other parked research ideas are optional future directions, not unmet current acceptance.

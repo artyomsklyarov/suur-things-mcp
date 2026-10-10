@@ -12,7 +12,7 @@ From the repository root, use an existing development environment with pytest, R
 
 The harness runs Ruff, Python compilation, all pytest tests, and offline source/wheel builds. It creates a temporary synthetic Things database and config, disables the environment/token-file auth paths, and removes the temporary directory afterward. Things mutations and organizer processes are mocked by tests. No service is installed and no dashboard is opened against personal tasks. Loopback sockets and Chromium must be available; a restricted sandbox may require permission for those local resources.
 
-Results are in `.autoloop/artifacts/local-check.txt`. Expect no database-dependent skips with this harness. A missing Chromium executable is an environment failure, not a passing browser check. Builds use the installed/cached toolchain (`uv build --offline`) and do not publish anything. The existing Starlette/TestClient deprecation is recorded separately from new warnings.
+Results are in `.autoloop/artifacts/local-check.txt`. The gate parses a temporary pytest JUnit report and rejects skipped tests, missing/malformed reports, empty execution, errors and failures before building. Expect zero skipped tests with this harness. A missing Chromium executable is an environment failure, not a passing browser check. Builds use the installed/cached toolchain (`uv build --offline`) and do not publish anything. The existing Starlette/TestClient deprecation is recorded separately from new warnings.
 
 There is no configured standalone typechecker. `ruff format --check src tests` is an advisory audit: existing compact-style files and pre-existing work must not be reformatted en masse. Run Ruff formatting on new test files or the files you actually own.
 

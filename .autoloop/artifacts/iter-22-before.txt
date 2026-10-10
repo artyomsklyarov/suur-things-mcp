@@ -1,0 +1,386 @@
+.FFFFFF.                                                                 [100%]
+=================================== FAILURES ===================================
+_ test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>-1] _
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107fce780>
+report = '<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>'
+expected = 1
+
+    @pytest.mark.parametrize(
+        "report,expected",
+        [
+            ('<testsuites><testsuite tests="2" skipped="0" errors="0" failures="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>', 1),
+            (None, 1),
+            ("not XML", 1),
+            ('<testsuites><testsuite tests="0" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="many" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="2" errors="1"/></testsuites>', 1),
+        ],
+    )
+    def test_fixture_gate_requires_complete_pytest_report(tmp_path, monkeypatch, report, expected):
+        monkeypatch.setattr(harness, "ROOT", tmp_path)
+        (tmp_path / ".autoloop/artifacts").mkdir(parents=True)
+        monkeypatch.setattr(harness, "build_things_db", lambda path: Path(path).write_text("synthetic DB"))
+        monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "fixture-check"])
+        commands = []
+    
+        def run(cmd, *, cwd, env, stdout, stderr):
+            commands.append(cmd)
+            assert cwd == tmp_path
+            assert env["THINGS_AUTH_TOKEN"] == ""
+            assert env["SUUR_THINGS_CONFIG"] != str(tmp_path / "personal-config.json")
+            assert not Path(env["SUUR_THINGS_TOKEN_FILE"]).exists()
+            assert Path(env["THINGS_DB"]).read_text() == "synthetic DB"
+            if "pytest" in cmd and report is not None:
+                (Path(env["THINGS_DB"]).parent / "pytest.xml").write_text(report)
+            stdout.write("fixture subprocess completed\n")
+            return subprocess.CompletedProcess(cmd, 0)
+    
+        monkeypatch.setattr(harness.subprocess, "run", run)
+>       assert harness.main() == expected
+E       assert 0 == 1
+E        +  where 0 = <function main at 0x1080324b0>()
+E        +    where <function main at 0x1080324b0> = harness.main
+
+tests/test_verification_harness.py:48: AssertionError
+----------------------------- Captured stdout call -----------------------------
+$ /private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com1/.venv/bin/ruff check .
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q
+fixture subprocess completed
+Exit: 0
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-r9en1840/dist
+fixture subprocess completed
+Exit: 0
+
+
+__________ test_fixture_gate_requires_complete_pytest_report[None-1] ___________
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107fef2f0>
+report = None, expected = 1
+
+    @pytest.mark.parametrize(
+        "report,expected",
+        [
+            ('<testsuites><testsuite tests="2" skipped="0" errors="0" failures="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>', 1),
+            (None, 1),
+            ("not XML", 1),
+            ('<testsuites><testsuite tests="0" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="many" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="2" errors="1"/></testsuites>', 1),
+        ],
+    )
+    def test_fixture_gate_requires_complete_pytest_report(tmp_path, monkeypatch, report, expected):
+        monkeypatch.setattr(harness, "ROOT", tmp_path)
+        (tmp_path / ".autoloop/artifacts").mkdir(parents=True)
+        monkeypatch.setattr(harness, "build_things_db", lambda path: Path(path).write_text("synthetic DB"))
+        monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "fixture-check"])
+        commands = []
+    
+        def run(cmd, *, cwd, env, stdout, stderr):
+            commands.append(cmd)
+            assert cwd == tmp_path
+            assert env["THINGS_AUTH_TOKEN"] == ""
+            assert env["SUUR_THINGS_CONFIG"] != str(tmp_path / "personal-config.json")
+            assert not Path(env["SUUR_THINGS_TOKEN_FILE"]).exists()
+            assert Path(env["THINGS_DB"]).read_text() == "synthetic DB"
+            if "pytest" in cmd and report is not None:
+                (Path(env["THINGS_DB"]).parent / "pytest.xml").write_text(report)
+            stdout.write("fixture subprocess completed\n")
+            return subprocess.CompletedProcess(cmd, 0)
+    
+        monkeypatch.setattr(harness.subprocess, "run", run)
+>       assert harness.main() == expected
+E       assert 0 == 1
+E        +  where 0 = <function main at 0x1080324b0>()
+E        +    where <function main at 0x1080324b0> = harness.main
+
+tests/test_verification_harness.py:48: AssertionError
+----------------------------- Captured stdout call -----------------------------
+$ /private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com2/.venv/bin/ruff check .
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q
+fixture subprocess completed
+Exit: 0
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-a826dviq/dist
+fixture subprocess completed
+Exit: 0
+
+
+_________ test_fixture_gate_requires_complete_pytest_report[not XML-1] _________
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107c0bbd0>
+report = 'not XML', expected = 1
+
+    @pytest.mark.parametrize(
+        "report,expected",
+        [
+            ('<testsuites><testsuite tests="2" skipped="0" errors="0" failures="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>', 1),
+            (None, 1),
+            ("not XML", 1),
+            ('<testsuites><testsuite tests="0" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="many" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="2" errors="1"/></testsuites>', 1),
+        ],
+    )
+    def test_fixture_gate_requires_complete_pytest_report(tmp_path, monkeypatch, report, expected):
+        monkeypatch.setattr(harness, "ROOT", tmp_path)
+        (tmp_path / ".autoloop/artifacts").mkdir(parents=True)
+        monkeypatch.setattr(harness, "build_things_db", lambda path: Path(path).write_text("synthetic DB"))
+        monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "fixture-check"])
+        commands = []
+    
+        def run(cmd, *, cwd, env, stdout, stderr):
+            commands.append(cmd)
+            assert cwd == tmp_path
+            assert env["THINGS_AUTH_TOKEN"] == ""
+            assert env["SUUR_THINGS_CONFIG"] != str(tmp_path / "personal-config.json")
+            assert not Path(env["SUUR_THINGS_TOKEN_FILE"]).exists()
+            assert Path(env["THINGS_DB"]).read_text() == "synthetic DB"
+            if "pytest" in cmd and report is not None:
+                (Path(env["THINGS_DB"]).parent / "pytest.xml").write_text(report)
+            stdout.write("fixture subprocess completed\n")
+            return subprocess.CompletedProcess(cmd, 0)
+    
+        monkeypatch.setattr(harness.subprocess, "run", run)
+>       assert harness.main() == expected
+E       assert 0 == 1
+E        +  where 0 = <function main at 0x1080324b0>()
+E        +    where <function main at 0x1080324b0> = harness.main
+
+tests/test_verification_harness.py:48: AssertionError
+----------------------------- Captured stdout call -----------------------------
+$ /private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com3/.venv/bin/ruff check .
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q
+fixture subprocess completed
+Exit: 0
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-12rqabhz/dist
+fixture subprocess completed
+Exit: 0
+
+
+_ test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="0" skipped="0"/></testsuites>-1] _
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com4')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1080d8050>
+report = '<testsuites><testsuite tests="0" skipped="0"/></testsuites>'
+expected = 1
+
+    @pytest.mark.parametrize(
+        "report,expected",
+        [
+            ('<testsuites><testsuite tests="2" skipped="0" errors="0" failures="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>', 1),
+            (None, 1),
+            ("not XML", 1),
+            ('<testsuites><testsuite tests="0" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="many" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="2" errors="1"/></testsuites>', 1),
+        ],
+    )
+    def test_fixture_gate_requires_complete_pytest_report(tmp_path, monkeypatch, report, expected):
+        monkeypatch.setattr(harness, "ROOT", tmp_path)
+        (tmp_path / ".autoloop/artifacts").mkdir(parents=True)
+        monkeypatch.setattr(harness, "build_things_db", lambda path: Path(path).write_text("synthetic DB"))
+        monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "fixture-check"])
+        commands = []
+    
+        def run(cmd, *, cwd, env, stdout, stderr):
+            commands.append(cmd)
+            assert cwd == tmp_path
+            assert env["THINGS_AUTH_TOKEN"] == ""
+            assert env["SUUR_THINGS_CONFIG"] != str(tmp_path / "personal-config.json")
+            assert not Path(env["SUUR_THINGS_TOKEN_FILE"]).exists()
+            assert Path(env["THINGS_DB"]).read_text() == "synthetic DB"
+            if "pytest" in cmd and report is not None:
+                (Path(env["THINGS_DB"]).parent / "pytest.xml").write_text(report)
+            stdout.write("fixture subprocess completed\n")
+            return subprocess.CompletedProcess(cmd, 0)
+    
+        monkeypatch.setattr(harness.subprocess, "run", run)
+>       assert harness.main() == expected
+E       assert 0 == 1
+E        +  where 0 = <function main at 0x1080324b0>()
+E        +    where <function main at 0x1080324b0> = harness.main
+
+tests/test_verification_harness.py:48: AssertionError
+----------------------------- Captured stdout call -----------------------------
+$ /private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com4/.venv/bin/ruff check .
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q
+fixture subprocess completed
+Exit: 0
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-jgranehu/dist
+fixture subprocess completed
+Exit: 0
+
+
+_ test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="many" skipped="0"/></testsuites>-1] _
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com5')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108091150>
+report = '<testsuites><testsuite tests="many" skipped="0"/></testsuites>'
+expected = 1
+
+    @pytest.mark.parametrize(
+        "report,expected",
+        [
+            ('<testsuites><testsuite tests="2" skipped="0" errors="0" failures="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>', 1),
+            (None, 1),
+            ("not XML", 1),
+            ('<testsuites><testsuite tests="0" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="many" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="2" errors="1"/></testsuites>', 1),
+        ],
+    )
+    def test_fixture_gate_requires_complete_pytest_report(tmp_path, monkeypatch, report, expected):
+        monkeypatch.setattr(harness, "ROOT", tmp_path)
+        (tmp_path / ".autoloop/artifacts").mkdir(parents=True)
+        monkeypatch.setattr(harness, "build_things_db", lambda path: Path(path).write_text("synthetic DB"))
+        monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "fixture-check"])
+        commands = []
+    
+        def run(cmd, *, cwd, env, stdout, stderr):
+            commands.append(cmd)
+            assert cwd == tmp_path
+            assert env["THINGS_AUTH_TOKEN"] == ""
+            assert env["SUUR_THINGS_CONFIG"] != str(tmp_path / "personal-config.json")
+            assert not Path(env["SUUR_THINGS_TOKEN_FILE"]).exists()
+            assert Path(env["THINGS_DB"]).read_text() == "synthetic DB"
+            if "pytest" in cmd and report is not None:
+                (Path(env["THINGS_DB"]).parent / "pytest.xml").write_text(report)
+            stdout.write("fixture subprocess completed\n")
+            return subprocess.CompletedProcess(cmd, 0)
+    
+        monkeypatch.setattr(harness.subprocess, "run", run)
+>       assert harness.main() == expected
+E       assert 0 == 1
+E        +  where 0 = <function main at 0x1080324b0>()
+E        +    where <function main at 0x1080324b0> = harness.main
+
+tests/test_verification_harness.py:48: AssertionError
+----------------------------- Captured stdout call -----------------------------
+$ /private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com5/.venv/bin/ruff check .
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q
+fixture subprocess completed
+Exit: 0
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-jrug8oxh/dist
+fixture subprocess completed
+Exit: 0
+
+
+_ test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="2" errors="1"/></testsuites>-1] _
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com6')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108091c50>
+report = '<testsuites><testsuite tests="2" errors="1"/></testsuites>'
+expected = 1
+
+    @pytest.mark.parametrize(
+        "report,expected",
+        [
+            ('<testsuites><testsuite tests="2" skipped="0" errors="0" failures="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>', 1),
+            (None, 1),
+            ("not XML", 1),
+            ('<testsuites><testsuite tests="0" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="many" skipped="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="2" errors="1"/></testsuites>', 1),
+        ],
+    )
+    def test_fixture_gate_requires_complete_pytest_report(tmp_path, monkeypatch, report, expected):
+        monkeypatch.setattr(harness, "ROOT", tmp_path)
+        (tmp_path / ".autoloop/artifacts").mkdir(parents=True)
+        monkeypatch.setattr(harness, "build_things_db", lambda path: Path(path).write_text("synthetic DB"))
+        monkeypatch.setattr(sys, "argv", [str(_SCRIPT), "fixture-check"])
+        commands = []
+    
+        def run(cmd, *, cwd, env, stdout, stderr):
+            commands.append(cmd)
+            assert cwd == tmp_path
+            assert env["THINGS_AUTH_TOKEN"] == ""
+            assert env["SUUR_THINGS_CONFIG"] != str(tmp_path / "personal-config.json")
+            assert not Path(env["SUUR_THINGS_TOKEN_FILE"]).exists()
+            assert Path(env["THINGS_DB"]).read_text() == "synthetic DB"
+            if "pytest" in cmd and report is not None:
+                (Path(env["THINGS_DB"]).parent / "pytest.xml").write_text(report)
+            stdout.write("fixture subprocess completed\n")
+            return subprocess.CompletedProcess(cmd, 0)
+    
+        monkeypatch.setattr(harness.subprocess, "run", run)
+>       assert harness.main() == expected
+E       assert 0 == 1
+E        +  where 0 = <function main at 0x1080324b0>()
+E        +    where <function main at 0x1080324b0> = harness.main
+
+tests/test_verification_harness.py:48: AssertionError
+----------------------------- Captured stdout call -----------------------------
+$ /private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-37/test_fixture_gate_requires_com6/.venv/bin/ruff check .
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+fixture subprocess completed
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q
+fixture subprocess completed
+Exit: 0
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-q37t62zs/dist
+fixture subprocess completed
+Exit: 0
+
+
+=========================== short test summary info ============================
+FAILED tests/test_verification_harness.py::test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="2" skipped="1" errors="0" failures="0"/></testsuites>-1]
+FAILED tests/test_verification_harness.py::test_fixture_gate_requires_complete_pytest_report[None-1]
+FAILED tests/test_verification_harness.py::test_fixture_gate_requires_complete_pytest_report[not XML-1]
+FAILED tests/test_verification_harness.py::test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="0" skipped="0"/></testsuites>-1]
+FAILED tests/test_verification_harness.py::test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="many" skipped="0"/></testsuites>-1]
+FAILED tests/test_verification_harness.py::test_fixture_gate_requires_complete_pytest_report[<testsuites><testsuite tests="2" errors="1"/></testsuites>-1]
+6 failed, 2 passed in 0.09s

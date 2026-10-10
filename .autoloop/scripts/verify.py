@@ -4,11 +4,28 @@ import os
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests"))
 from conftest import build_things_db  # noqa: E402
+
+
+def _pytest_report_error(path):
+    """A successful fixture gate requires executed tests with no skips."""
+    try:
+        suites = list(ET.parse(path).getroot().iter("testsuite"))
+        counts = {
+            key: sum(int(suite.get(key, "0")) for suite in suites) for key in ("tests", "skipped", "errors", "failures")
+        }
+        if any(value < 0 for value in counts.values()):
+            raise ValueError("negative test count")
+    except (OSError, ET.ParseError, ValueError) as exc:
+        return f"Cannot verify pytest report: {exc}"
+    if not counts["tests"] or counts["skipped"] or counts["errors"] or counts["failures"]:
+        return f"Incomplete fixture verification: {counts}. All tests must run and pass."
+    return None
 
 
 def main():
@@ -24,10 +41,11 @@ def main():
             SUUR_THINGS_TOKEN_FILE=str(base / "no-token"),
             THINGS_AUTH_TOKEN="",
         )
+        pytest_report = base / "pytest.xml"
         checks = [
             [str(ROOT / ".venv/bin/ruff"), "check", "."],
             [sys.executable, "-m", "compileall", "-q", "src"],
-            [sys.executable, "-m", "pytest", "-q"],
+            [sys.executable, "-m", "pytest", "-q", f"--junitxml={pytest_report}"],
             ["uv", "build", "--offline", "--out-dir", str(base / "dist")],
         ]
         with artifact.open("w") as output:
@@ -40,6 +58,14 @@ def main():
                 if result.returncode:
                     print(artifact.read_text())
                     return result.returncode
+                if "pytest" in cmd:
+                    error = _pytest_report_error(pytest_report)
+                    if error:
+                        output.write(error + "\n")
+                        output.flush()
+                        print(artifact.read_text())
+                        return 1
+                    output.write("Pytest report verified: executed tests, zero skips/errors/failures.\n\n")
     print(artifact.read_text())
     return 0
 

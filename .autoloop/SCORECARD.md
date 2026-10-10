@@ -4,7 +4,7 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 
 | Dimension | Before | Current | Evidence / limitation |
 |---|---:|---:|---|
-| Correctness | 4 | 4 | 223 tests, local build green; real URL Scheme integration requires human |
+| Correctness | 4 | 4 | 237 tests, local build green; real URL Scheme integration requires human |
 | Reliability | 3 | 4 | Lossless config recovery, atomic caps and resilient startup; latest view discards stale reads, iter-15 |
 | Test coverage | 3 | 4 | Real Chromium + fixture SQL; recovery/concurrency/agent safety protected; intercepted browser workflow suite, iter-5.txt |
 | Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
@@ -48,3 +48,5 @@ Iteration 19: E03 preview now covers explicit timeline scheduling/unscheduling a
 Holistic iteration 20: all applicable dimensions remain 4; evidence and limits in artifacts/holistic-20.txt. 223 tests, 32 inspected images, 10/10 protected files byte-identical. Checkbox boundaries previously 1.715 light / 2.632 dark now exceed 3:1 in tested selected/unselected backgrounds. B18/B19 added from boundary review; no High items.
 
 Iteration 21: six upload note-sync regressions; three reproduced post-storage server errors now keep successful upload metadata/bytes and report note_updated=false. Reliability stays 4, total 229 tests. No live writes.
+
+Iteration 22: eight harness regressions now reject incomplete verification before builds; six failures reproduced before the fix. Coverage/DX remain 4; full fixture gate 237 tests with zero skips. No ready backlog items remain. Final dream and stop audit follow.
