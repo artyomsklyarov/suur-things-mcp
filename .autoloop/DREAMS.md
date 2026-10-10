@@ -168,3 +168,23 @@ No product code. Imagine a durable personal task companion: opening it years lat
 | A synthetic example everyone can safely use to learn the system | high / medium / already built | Reject duplicate work: fixture captures and verification guide already offer it |
 
 Waking up: finish the two concrete trust-boundary improvements from holistic review. No new epic; no dependency or accounts. All other ideas are already satisfied, rejected for product fit, or genuinely blocked by live-write/privacy/infrastructure decisions.
+
+## Dream 9 — First impression revisited (final stopping review)
+No product code. A new contributor opens this repository and should reach a safe, visible, reproducible example in minutes. A returning user should recognize Things, find tasks without a pointer, and trust saved changes. Imagine the ideal first five minutes without assuming new product demand.
+
+| Idea | Fit / impact / buildability | Disposition and reason |
+|---|---|---|
+| One command proves a disposable end-to-end fixture checkout | high / medium / already built | Reject duplicate work: verify.py now enforces complete execution |
+| A new reader can see the dashboard without personal tasks | high / medium / already built | Reject duplicate work: synthetic capture script and guide exist |
+| First-use keyboard path from sidebar through task editing | high / high / already built | Reject duplicate work: E01 and browser workflows cover it |
+| Small split windows remain readable without configuration | high / high / already built | Reject duplicate work: E02 default compact mode |
+| Advanced planning has obvious native destination controls | high / medium / already built | Reject duplicate work: E03 now enabled and inspected |
+| Rich practical project examples in an onboarding tour | medium / uncertain / local feasible | Reject: synthetic fixtures already explain views; a tour adds UI without evidence of demand |
+| A verified live Things write demonstration | high / medium / live task/token | Park existing H02: disposable user task acceptance, not fixture inference |
+| A private assistant learns every personal project from years of history (ambitious) | medium / high / model and retention choices | Park existing H10/H14; no private indexing or guessed retention |
+| Every collaborator joins an encrypted shared planning space (ambitious) | low / uncertain / new sync/accounts | Reject: collaboration changes this local Things companion into a different product; H19 remains optional personal sync research |
+| No dependency warning on first test run | high / low / protected dirty manifests | Park existing H03: separate compatible-client/dependency review |
+| A release includes the checked improvements | high / medium / explicit publish boundary | Park existing H04: local branch review and normal release process |
+| More animation, badges and motivational urgency for first use | low / low / feasible | Reject: quiet familiar lists fit intent; no fabricated urgency |
+
+Waking up: zero fresh promotable or lucid ideas. All applicable dimensions score 4, no High-impact or ready backlog remains, and all three epics are complete. Stop condition 1 is met after final verification; remaining live acceptance, protected work and optional infrastructure/privacy/model proposals are explicitly separate.

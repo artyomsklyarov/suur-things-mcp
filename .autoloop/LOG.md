@@ -157,3 +157,8 @@ Iteration 22 commit: fc28ced.
 
 ## Iteration 23 — Fix
 Stabilization after the final gate found a browser fixture polling mismatch (iter-23-before-full.txt). New unchanged-cursor regression reproduces it (iter-23-before.txt). Fixture now returns a stable real-shaped cursor; no product-code change or original completion-assertion change. Full gate in iter-23.txt; focused repeated completion/poll checks in iter-23-repeat.txt. Final dream/summary drafts retained for after this green checkpoint. Scores stay 4. Commit: pending iter 23.
+
+Iteration 23 commit: 0c02b3c.
+
+## Dream 9 — Dream
+Final first-impression lens: twelve ideas, two ambitious; existing capabilities recognized, optional expansions rejected or retained under existing human plans. No promotable/lucid item and no product code. Initial closeout gate exposed B20; iteration 23 stabilized its cursor fixture before the final repeated gate. Final full suite in final-verification.txt; protected files rehashed in protected-final.json. Stop condition 1: all applicable dimensions 4, no High/ready items, final dream nothing promotable. Commit identified by subject: autoloop dream 9: final first impression and stopping audit.
