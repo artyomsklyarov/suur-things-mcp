@@ -85,3 +85,24 @@ What if this felt as dependable as a database, as navigable as an editor, and as
 | Excel ribbon exposing all actions at once | Low | Low | Easy | Reject: wastes scarce task space and duplicates palette |
 
 No implementation. No new backlog item or lucid prototype. Existing self-contained fixes remain higher value than expanding the product.
+
+## Dream 5 — A day in the life (after iterations 14-15)
+
+A developer checks Today beside an editor, prioritizes one task, reviews a proposal, and returns to the same project later. The biggest remaining gap is using advanced placement without a pointer.
+
+| Idea | Fit | Impact | Buildability | Waking label |
+|---|---|---|---|---|
+| Rank tasks with a named native destination picker | High | Medium | Existing tags/overlay actions | Promote existing B17 |
+| Schedule an explicit start time without dragging | High | Medium | Existing timeline overlay | Promote same B17 |
+| Move a project stage using a keyboard | High | Medium | Existing board placement | Promote same B17 |
+| Verify all advanced actions without opening Things | High | Medium | Intercepted browser routes | Promote B17 safety-net milestone |
+| Contributor runs green checks before their first edit | High | Medium | Existing fixture scripts | Promote existing B12 |
+| Wait-free switching among lists | High | Medium | Existing request ownership | Built iter 15 |
+| Readable quiet metadata in both themes | High | High | Measured shared tokens | Built iter 12 |
+| Preferences remember which organizer was chosen | High | Medium | Existing config fields | Built iter 14 |
+| A workspace-aware agent autonomously negotiates an entire quarter (ambitious) | Medium | High | Metered agent plus organizational rules | Park H16 |
+| A private shared timeline across multiple people's Things libraries (ambitious) | Low | High | New identity/sync/data permissions | Reject: outside local single-user architecture |
+| Schedule tasks by guessed duration | Low | Medium | Would invent data | Reject: explicit user-entered durations only |
+| Add badges for every available action | Low | Low | Easy | Reject: distracts from the core task list |
+
+No code. No new product epic beyond already promoted B17. Next B12 has lower risk; then protect the existing drag actions before the keyboard epic. Dream session 6 also due after product iteration 16 under the eight-iteration cadence.

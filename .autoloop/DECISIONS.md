@@ -48,3 +48,5 @@ Iteration 13: retain existing 200/ok=false read/storage error convention, use es
 Iteration 14: B15 selected before B11 because equal Medium impact has lower risk and effort. Preserve only the two existing organizer integrations, and arbitrary nonempty model string without inventing a model catalog. Preferences UI carries forward other existing preference keys; no model execution or account configuration.
 
 Iteration 15: a monotonic generation counter is enough; cancellation would add complexity without benefit for cheap read-only local requests. Guard every view after await and before both error/success rendering and global list state. No new dependency.
+
+- H16: Quarter planner: specify input goals and review boundaries using synthetic projects first. Any real model execution or organization-specific decision needs opt-in authorization; do not dispatch unreviewed updates. Feasible local prerequisites already exist, but live metered planning is outside this run.

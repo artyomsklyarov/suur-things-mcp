@@ -97,3 +97,8 @@ Iteration 14 commit: b59ca4e.
 
 ## Iteration 15 — Fix
 B11: one request generation per async view, synchronous About invalidates old reads, guard before data errors/content/global-list mutation. Before: five race regressions fail (iter-15-before.txt). After: 199 tests/full gate green (iter-15.txt). Scores stay 4; dream due. Commit: pending iter 15.
+
+Iteration 15 commit: fe03c5e.
+
+## Dream 5 — Dream
+A-day-in-the-life lens, twelve ideas, two ambitious. Existing B17 decomposed into protect/place/schedule; B12 retained; three built, one parked and three rejected. No code. Commit: pending dream 5.
