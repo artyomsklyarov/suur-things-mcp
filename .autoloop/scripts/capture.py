@@ -33,6 +33,22 @@ def main():
 
         from suur_things_mcp.dashboard import create_app
 
+        if scenario == "placement":
+            from suur_things_mcp import config
+
+            config.save(
+                {
+                    "boards": [
+                        {
+                            "id": "default",
+                            "name": "Project Board",
+                            "columns": ["Backlog", "Done"],
+                            "include_projects": ["proj-book"],
+                        }
+                    ]
+                }
+            )
+
         sock = socket.socket()
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
@@ -52,9 +68,27 @@ def main():
                     page = browser.new_page(viewport={"width": width, "height": height})
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(
-                        f"http://127.0.0.1:{port}" + ("?compact=1" if scenario == "compact" else ""),
+                        f"http://127.0.0.1:{port}"
+                        + (
+                            "?compact=1" if scenario == "compact" else "?placement=1" if scenario == "placement" else ""
+                        ),
                         wait_until="networkidle",
                     )
+                    if scenario == "placement":
+                        for view, selector in [("matrix", ".matrix"), ("levels", ".levels"), ("board", ".board-wrap")]:
+                            if view == "board":
+                                page.evaluate('() => go("#b/default")')
+                            else:
+                                page.locator("#vt-" + view).click()
+                            page.locator(selector).wait_for()
+                            for theme in ["light", "dark"]:
+                                page.evaluate("(t) => applyTheme(t)", theme)
+                                page.wait_for_timeout(250)
+                                page.screenshot(path=str(out / f"{name}-{view}-{theme}.png"))
+                            if view != "board":
+                                page.locator("#vt-list").click()
+                        page.close()
+                        continue
                     if scenario == "advanced":
                         for view, selector in [("matrix", ".matrix"), ("timeline", ".tl-wrap")]:
                             page.locator("#vt-" + view).click()

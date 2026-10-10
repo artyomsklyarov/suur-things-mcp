@@ -532,3 +532,86 @@ def test_timeline_drag_places_and_unschedules_without_task_mutation(ui):
     page.locator(".pcard").wait_for()
     assert ui["posts"][-1] == ("/api/config", {"timeblocks": {}})
     assert all(path == "/api/config" for path, _ in ui["posts"])
+
+
+def _enable_placement_preview(page):
+    page.set_default_timeout(3000)
+    page.goto(page.url.split("#")[0].split("?")[0] + "?placement=1#l/today", wait_until="networkidle")
+    page.locator(".row").wait_for()
+
+
+def test_keyboard_matrix_picker_preserves_priority_and_focus(ui):
+    page = ui["page"]
+    _enable_placement_preview(page)
+    ui["config"]["priority"] = {"other": "delegate"}
+    page.evaluate("() => loadConfig()")
+    page.locator("#vt-matrix").click()
+    picker = page.get_by_label("Quadrant for Write an outline")
+    picker.focus()
+    picker.select_option("do")
+    page.locator(".q-do .pcard").wait_for()
+    assert ui["posts"] == [("/api/config", {"priority": {"other": "delegate", "task": "do"}})]
+    assert picker.evaluate("el => document.activeElement === el") is True
+    title = page.locator(".q-do .pt")
+    title.focus()
+    page.keyboard.press("Enter")
+    page.locator("#edit-overlay.show").wait_for()
+
+
+def test_keyboard_level_picker_preserves_other_tags_and_disables_without_auth(ui):
+    page = ui["page"]
+    _enable_placement_preview(page)
+    ui["config"]["priority_levels"] = [{"label": "P1", "tags": ["urgent"]}, {"label": "P2", "tags": ["later"]}]
+    ui["task"]["tags"] = ["writing", "later"]
+    page.evaluate("() => loadConfig()")
+    page.locator("#vt-levels").click()
+    picker = page.get_by_label("Priority level for Write an outline")
+    picker.focus()
+    picker.select_option("0")
+    page.locator(".lvl-1 .pcard").wait_for()
+    assert ui["posts"] == [("/api/update", {"id": "task", "tags": ["writing", "urgent"]})]
+    assert picker.evaluate("el => document.activeElement === el") is True
+    page.evaluate("() => {AUTH=false;renderLevelBands();}")
+    assert picker.is_disabled()
+
+
+def test_keyboard_board_picker_uses_existing_stages_and_keeps_focus(ui):
+    page = ui["page"]
+    _enable_placement_preview(page)
+    _fixture_board(ui)
+    picker = page.get_by_label("Stage for Book")
+    picker.focus()
+    picker.select_option("Done")
+    page.locator(".col:last-child .card").wait_for()
+    assert ui["posts"][-1][1]["boards"][0]["placements"] == {"project": "Done"}
+    assert set(ui["posts"][-1][1]) == {"boards"}
+    assert picker.evaluate("el => document.activeElement === el") is True
+    title = page.locator(".card .ct")
+    title.focus()
+    page.keyboard.press("Enter")
+    page.wait_for_function("() => location.hash === '#l/project'")
+
+
+def test_failed_matrix_picker_keeps_previous_placement(ui):
+    page = ui["page"]
+    _enable_placement_preview(page)
+    page.locator("#vt-matrix").click()
+    page.route("**/api/config", lambda route: route.fulfill(json={"ok": False, "error": "fixture failure"}))
+    page.on("dialog", lambda dialog: dialog.dismiss())
+    picker = page.get_by_label("Quadrant for Write an outline")
+    picker.select_option("do")
+    page.wait_for_function("() => !document.querySelector('.placement').disabled")
+    assert picker.input_value() == ""
+    assert page.evaluate("() => CONFIG.priority") == {}
+    assert page.locator(".pri-pool .pcard").count() == 1
+
+
+def test_priority_card_completion_works_from_keyboard(ui):
+    page = ui["page"]
+    _enable_placement_preview(page)
+    page.locator("#vt-matrix").click()
+    check = page.get_by_role("checkbox", name="Complete Write an outline")
+    check.focus()
+    page.keyboard.press("Space")
+    page.locator(".pcard").wait_for(state="detached")
+    assert ui["posts"] == [("/api/update", {"id": "task", "completed": True})]

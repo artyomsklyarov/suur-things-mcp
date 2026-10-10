@@ -7,8 +7,11 @@ Spec: preserve drag and click behavior while giving each advanced task/project a
 Milestones:
 1. Safety net: protect board/matrix/level/timeline drag behavior with synthetic intercepted routes, including no-token level write refusal.
 2. Native board-stage, matrix and level selectors; keyboard card actions; preserve focus after placement, guard async rerenders and restore UI on failure.
-3. Timeline time/duration/unschedule dialog; inspect light/dark narrow/desktop views, then default-enable all completed controls with `?placement=0` diagnostic fallback.
+3. Timeline time/duration/unschedule dialog; inspect light/dark narrow/desktop views, retain preview until the final whole-view check.
+4. Whole-view/viewport verification and holistic review, default-enable with `?placement=0` diagnostic fallback.
 
 Verification: full gate each slice; focused browser tests assert request scopes, unrelated tags and source records remain, no real URL Scheme/model execution. UI evidence before from iter-12-advanced, after new preview captures. No task-data deletion, migrations, feature removal or environment changes.
 
 Milestone 1 DONE iteration 17: five browser tests cover board, matrix, level tag-preservation/no-token and timeline place/unschedule actions. All requests intercepted; unrelated priority/tags retained; 204 tests/full gate green. Existing actions preserved unchanged.
+
+Milestone 2 DONE iteration 18: native stage/quadrant/level selectors, keyboard card edit/open/complete, scoped section saves, focus restoration, no-auth level disable and failed-save retention. Five new regressions; 209 tests green. Twelve rendered preview screenshots read (iter-18-screens); native controls fit both themes/windows. Small pools retain internal scrolling and boards horizontal scrolling. Still ?placement=1 until timeline + final checks complete.

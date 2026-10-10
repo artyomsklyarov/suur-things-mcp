@@ -28,7 +28,7 @@
     --chip-bg:#363b42; --chip-fg:#c5c9cf; --chip-active-bg:#dfe1e6; --chip-active-fg:#1b1e23; --gold:#f5c026;
   }
   * { box-sizing:border-box; }
-  [tabindex]:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+  [tabindex]:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
     outline:2px solid var(--accent); outline-offset:2px;
   }
   html, body { height:100%; margin:0; overflow:hidden; }
@@ -324,6 +324,8 @@
   .q-do .quad-head .qt { color:var(--red); }
   .q-sched .quad-head .qt { color:var(--green); }
   .q-deleg .quad-head .qt { color:var(--orange); }
+  .placement { display:block; width:100%; margin-top:8px; padding:4px 6px; border:1px solid var(--pill-border);
+    border-radius:6px; background:var(--main-bg); color:var(--text); font:inherit; font-size:12px; }
   .pcard { background:var(--card-bg); border-radius:8px; padding:8px 11px; margin:6px 0; box-shadow:var(--card-shadow); cursor:pointer; }
   .pcard.dragging { opacity:.4; } .pcard .pt { font-weight:500; }
   .pcard .psub { color:var(--muted); font-size:12px; margin-top:2px; }
@@ -627,6 +629,7 @@
 <script nonce="__CSP_NONCE__">
 const $ = (s, r=document) => r.querySelector(s);
 const COMPACT_LAYOUT=new URLSearchParams(location.search).get("compact")!=="0";
+const PLACEMENT_CONTROLS=new URLSearchParams(location.search).get("placement")==="1";
 document.documentElement.dataset.compact=COMPACT_LAYOUT?"on":"off";
 const NARROW_WINDOW=matchMedia("(max-width:800px)");
 function compactWindow(){ return COMPACT_LAYOUT&&NARROW_WINDOW.matches; }
@@ -1235,13 +1238,13 @@ function boardColEl(col,boardId){
   const c=document.createElement("div"); c.className="col";
   c.innerHTML=`<div class="col-head"><span>${esc(col.title)}</span><span>${col.cards.length}</span></div>`;
   const list=document.createElement("div"); list.className="col-cards";
-  for(const card of col.cards) list.appendChild(boardCardEl(card));
+  for(const card of col.cards) list.appendChild(boardCardEl(card,boardId));
   c.addEventListener("dragover",e=>{ e.preventDefault(); c.classList.add("drop"); });
   c.addEventListener("dragleave",()=>c.classList.remove("drop"));
   c.addEventListener("drop",e=>{ e.preventDefault(); c.classList.remove("drop"); const id=e.dataTransfer.getData("text/id"); if(id) placeCard(boardId,id,col.name); });
   c.appendChild(list); return c;
 }
-function boardCardEl(card){
+function boardCardEl(card,boardId=CUR_BOARD){
   const el=document.createElement("div"); el.className="card"; el.draggable=true; el.dataset.id=card.id;
   el.onclick=()=>go("#l/"+encodeURIComponent(card.id));
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",card.id); el.classList.add("dragging"); });
@@ -1253,7 +1256,46 @@ function boardCardEl(card){
     `<div class="cfoot"><span class="kind">${card.kind}</span>${ring(card.progress)}<span>${card.open} open${card.total?` / ${card.total}`:""}</span></div>`+
     `<div class="crepos">${repoHtml}</div>`;
   if((card.repos||[]).length) fetchPulse(card.id, el);
+  if(PLACEMENT_CONTROLS){
+    keyboardAction(el.querySelector('.ct'),"link","Open "+card.title);
+    const board=CONFIG.boards.find(b=>b.id===boardId);
+    if(board) placementSelect(el,"Stage for "+card.title,
+      [["","Unsorted"],...board.columns.map(c=>[c,c])], (board.placements||{})[card.id]||"", async value=>{
+        const request=VIEW_REQUEST;
+        const placements={...(board.placements||{})};
+        if(value) placements[card.id]=value; else delete placements[card.id];
+        await savePlacement("boards",CONFIG.boards.map(b=>b.id===boardId?{...b,placements}:b));
+        if(request===VIEW_REQUEST) await renderBoard(boardId);
+      });
+  }
   return el;
+}
+async function savePlacement(section,value){
+  const r=await postJSON("/api/config",{[section]:value});
+  if(!r.ok) throw new Error(r.error||"error");
+  CONFIG=r.config;
+}
+function placementSelect(el,label,choices,value,action){
+  const select=document.createElement("select"); select.className="placement";
+  select.setAttribute("aria-label",label);
+  choices.forEach(([key,title,disabled])=>{ const option=new Option(title,String(key)); option.disabled=!!disabled; select.appendChild(option); });
+  select.value=String(value); select.disabled=!CONFIG_READY;
+  select.addEventListener("click",e=>e.stopPropagation());
+  select.addEventListener("keydown",e=>e.stopPropagation());
+  select.onchange=async()=>{
+    const focused=document.activeElement===select, hash=location.hash, mode=MODE;
+    select.disabled=true;
+    try{ await action(select.value); }
+    catch(e){ alert("Placement could not be saved: "+e.message); }
+    finally{
+      if(select.isConnected){ select.disabled=!CONFIG_READY; select.value=String(value); }
+      if(focused&&hash===location.hash&&mode===MODE&&(document.activeElement===select||document.activeElement===document.body)){
+        const next=[...document.querySelectorAll('.placement')].find(s=>s.getAttribute('aria-label')===label);
+        if(next) next.focus();
+      }
+    }
+  };
+  el.appendChild(select); return select;
 }
 // Repo chips (open in editor/terminal/github) + a "🔗 repos" manage button.
 // Shared by board cards and the project/area list-view repo bar.
@@ -1364,18 +1406,18 @@ function renderMatrix(items){
   pool.innerHTML=`<div class="col-head"><span>Unsorted</span><span>${unassigned.length}</span></div>`;
   const pc=document.createElement("div"); pc.className="col-cards";
   if(!unassigned.length) pc.innerHTML=`<div class="empty" style="padding:16px 6px">All sorted 🎉</div>`;
-  unassigned.forEach(t=>pc.appendChild(priCardEl(t))); pool.appendChild(pc); dropZone(pool,null,items); wrap.appendChild(pool);
+  unassigned.forEach(t=>pc.appendChild(priCardEl(t,items))); pool.appendChild(pc); dropZone(pool,null,items); wrap.appendChild(pool);
   const mx=document.createElement("div"); mx.className="matrix";
   for(const q of QUADS){
     const quad=document.createElement("div"); quad.className="quad "+q.cls;
     quad.innerHTML=`<div class="quad-head"><div class="qt">${q.title}</div><div class="qs">${q.sub}</div></div>`;
     const cards=document.createElement("div"); cards.className="cards";
-    items.filter(t=>pr[t.uuid]===q.key).forEach(t=>cards.appendChild(priCardEl(t)));
+    items.filter(t=>pr[t.uuid]===q.key).forEach(t=>cards.appendChild(priCardEl(t,items)));
     quad.appendChild(cards); dropZone(quad,q.key,items); mx.appendChild(quad);
   }
   wrap.appendChild(mx); c.appendChild(wrap);
 }
-function priCardEl(t){
+function priCardEl(t,items=LIST_ITEMS){
   const el=document.createElement("div"); el.className="pcard"; el.draggable=true; el.dataset.id=t.uuid;
   el.onclick=t._proj?()=>go("#l/"+encodeURIComponent(t.uuid)):()=>openEdit(t.uuid);
   if(!t._proj) el.addEventListener("contextmenu",e=>{ e.preventDefault(); taskCtxMenu(t, e.clientX, e.clientY); });
@@ -1386,13 +1428,35 @@ function priCardEl(t){
   el.innerHTML=`<div style="display:flex;align-items:center;gap:8px">${box}<div class="pt">${esc(t.title||"(untitled)")}</div></div>`+
     (t._proj?`<div class="psub">Project</div>`:(t.project_title?`<div class="psub">${esc(t.project_title)}</div>`:""));
   if(!t._proj){ const b=el.querySelector(".box");
-    b.onclick=(e)=>{ e.stopPropagation(); b.classList.add("done");
+    b.onclick=(e)=>{ e.stopPropagation(); b.classList.add("done"); if(PLACEMENT_CONTROLS) b.setAttribute("aria-checked","true");
       applyStatus(t.uuid,"completed").then(ok=>{ if(ok){
         // calm exit: shrink-fade before the card leaves the quadrant
         el.style.transition="opacity 200ms var(--ease-out), transform 200ms var(--ease-out)";
         el.style.opacity="0"; el.style.transform="scale(0.96)";
         setTimeout(()=>el.remove(), 200);
-      } else b.classList.remove("done"); }); }; }
+      } else { b.classList.remove("done"); if(PLACEMENT_CONTROLS) b.setAttribute("aria-checked","false"); } }); }; }
+  if(PLACEMENT_CONTROLS){
+    keyboardAction(el.querySelector('.pt'),t._proj?"link":"button",(t._proj?"Open ":"Edit ")+(t.title||"(untitled)"));
+    const check=el.querySelector('.box');
+    if(check){ check.setAttribute("role","checkbox"); check.setAttribute("aria-label","Complete "+(t.title||"(untitled)"));
+      check.setAttribute("aria-checked","false"); check.setAttribute("aria-disabled",String(!AUTH));
+      if(AUTH){ check.tabIndex=0; check.addEventListener("keydown",e=>{
+        if(e.key===" "||e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); check.click(); }
+      }); }
+    }
+    if(MODE==="matrix") placementSelect(el,"Quadrant for "+(t.title||"(untitled)"),
+      [["","Unsorted"],...QUADS.map(q=>[q.key,q.title])],(CONFIG.priority||{})[t.uuid]||"",async value=>{
+        const request=VIEW_REQUEST, priority={...(CONFIG.priority||{})};
+        if(value) priority[t.uuid]=value; else delete priority[t.uuid];
+        await savePlacement("priority",priority);
+        if(request===VIEW_REQUEST) renderMatrix(items);
+      });
+    else if(MODE==="levels"){
+      const select=placementSelect(el,"Priority level for "+(t.title||"(untitled)"),
+        [[-1,"Unranked"],...plevels().map((l,i)=>[i,l.label,!l.tags.length])],levelOf(t),value=>assignLevel(t.uuid,+value));
+      select.disabled=!AUTH||!CONFIG_READY;
+    }
+  }
   return el;
 }
 function dropZone(elm,quad,items){
@@ -1466,6 +1530,7 @@ function levelDrop(elm,levelIdx){
 // level's canonical tag (tags[0]). We send the full replacement set so the old
 // level tag is removed in the same write. Token required; falls back to read-only.
 async function assignLevel(uuid, levelIdx){
+  const request=VIEW_REQUEST;
   if(!AUTH){ alert("Set THINGS_AUTH_TOKEN to rank tasks (the view is read-only without it)."); return; }
   const it=LIST_ITEMS.find(t=>t.uuid===uuid); if(!it) return;
   const L=plevels(), levelTags=levelTagSet();
@@ -1475,6 +1540,7 @@ async function assignLevel(uuid, levelIdx){
     tags.push(canon); }
   const r=await postJSON("/api/update", {id:uuid, tags});
   if(!r.ok){ alert("Update failed: "+(r.error||"")); return; }
+  if(request!==VIEW_REQUEST) return;
   it.tags=tags; renderLevelBands(); settleCard('.pcard[data-id="'+uuid+'"]'); loadSidebar();
 }
 function openLevelMap(){

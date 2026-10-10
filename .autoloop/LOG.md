@@ -117,3 +117,8 @@ Dream 6 commit: 41c3729.
 
 ## Iteration 17 — Safety net
 E03 protection milestone: five existing drag workflows covered, including mapped-tag-only replacement, no-token refusal and overlay-only timeline changes. Before: 199 tests, no advanced drag workflow protection. After: 204 tests/full gate green (iter-17.txt). No product code, accounts or dependencies changed. Scores stay 4. Commit: pending iter 17.
+
+Iteration 17 commit: 88bb5c2.
+
+## Iteration 18 — Accessibility
+E03 selectors/card keyboard actions protected and implemented behind ?placement=1. Before: four missing-control regressions fail (iter-18-before.txt; default locator timeout made this capture slower than needed, subsequent helper timeout 3s). After: 209 tests/full gate green (iter-18.txt), scoped requests/focus/failure/no-token/keyboard completion verified; twelve images read. First gate exposed an immediate visibility assertion before async edit loaded; it now waits for the same visible dialog. No assertion removed. Scores remain 4; dream due. Commit: pending iter 18.

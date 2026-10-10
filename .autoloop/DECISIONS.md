@@ -52,3 +52,5 @@ Iteration 15: a monotonic generation counter is enough; cancellation would add c
 - H16: Quarter planner: specify input goals and review boundaries using synthetic projects first. Any real model execution or organization-specific decision needs opt-in authorization; do not dispatch unreviewed updates. Feasible local prerequisites already exist, but live metered planning is outside this run.
 
 - H17: Live organizer comparison: choose approved models, a capped monetary budget, privacy-approved task fixtures and a rubric; run identical mocked fixtures first. This loop makes no metered calls or credential changes.
+
+Iteration 18: native selects reuse existing actions and require no dependencies. Save only the owned section, update local CONFIG after success, guard rerenders by view generation, retain previous selection on failure, restore focus only if the user has not moved it elsewhere. Levels requires auth and disables unmapped targets. Preview flag stays until timeline is complete.

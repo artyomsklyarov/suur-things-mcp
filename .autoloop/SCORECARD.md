@@ -40,3 +40,5 @@ Iteration 15: five delayed list/board/matrix/levels responses no longer replace 
 Iteration 16: new docs/DEVELOPMENT-VERIFICATION.md documents the reproducible fixture gate, captures, honest acceptance boundaries and byte-preserving config recovery. Existing README preserved; proposed insertion separate. Docs/DX stays 4. Full gate 199 tests.
 
 Iteration 17: five advanced drag workflows now protected by intercepted browser tests before E03 control changes. Test coverage remains 4; total 204.
+
+Iteration 18: E03 preview adds keyboard stage/quadrant/level destinations and advanced card edit/open/complete, focus restoration and failed-save retention. Accessibility stays 4 until timeline/default enablement; 209 tests. Twelve images read.
