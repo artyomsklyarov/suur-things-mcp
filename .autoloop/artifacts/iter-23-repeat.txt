@@ -1,0 +1,9 @@
+Focused repetition 1
+..                                                                       [100%]
+2 passed, 51 deselected in 3.65s
+Focused repetition 2
+..                                                                       [100%]
+2 passed, 51 deselected in 3.13s
+Focused repetition 3
+..                                                                       [100%]
+2 passed, 51 deselected in 3.01s

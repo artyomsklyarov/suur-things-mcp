@@ -4,7 +4,7 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 
 | Dimension | Before | Current | Evidence / limitation |
 |---|---:|---:|---|
-| Correctness | 4 | 4 | 237 tests, local build green; real URL Scheme integration requires human |
+| Correctness | 4 | 4 | 238 tests, local build green; real URL Scheme integration requires human |
 | Reliability | 3 | 4 | Lossless config recovery, atomic caps and resilient startup; latest view discards stale reads, iter-15 |
 | Test coverage | 3 | 4 | Real Chromium + fixture SQL; recovery/concurrency/agent safety protected; intercepted browser workflow suite, iter-5.txt |
 | Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
@@ -50,3 +50,5 @@ Holistic iteration 20: all applicable dimensions remain 4; evidence and limits i
 Iteration 21: six upload note-sync regressions; three reproduced post-storage server errors now keep successful upload metadata/bytes and report note_updated=false. Reliability stays 4, total 229 tests. No live writes.
 
 Iteration 22: eight harness regressions now reject incomplete verification before builds; six failures reproduced before the fix. Coverage/DX remain 4; full fixture gate 237 tests with zero skips. No ready backlog items remain. Final dream and stop audit follow.
+
+Iteration 23: final gate exposed an inaccurate fixture cursor: generic ok response forced periodic reloads of static incomplete task data during completion. Stable endpoint cursor plus unchanged-cursor content-read regression protects the actual refresh contract; original completion assertion retained. 238 tests, scores remain 4.

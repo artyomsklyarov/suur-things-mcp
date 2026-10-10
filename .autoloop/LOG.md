@@ -152,3 +152,8 @@ Iteration 21 commit: 2dbbd43.
 
 ## Iteration 22 — Safety net
 B19 requires valid complete pytest JUnit evidence before packaging. Before: six false-green gate regressions (iter-22-before.txt), success/failed-command controls already pass. After: eight harness tests and full gate 237 tests, zero skips (iter-22.txt). Disposable DB/config/token isolation and cleanup verified; standard library only, original test skip behavior retained. All applicable scores remain 4; no ready items or High items. Dream due after two unchanged scores and before stopping. Commit: pending iter 22.
+
+Iteration 22 commit: fc28ced.
+
+## Iteration 23 — Fix
+Stabilization after the final gate found a browser fixture polling mismatch (iter-23-before-full.txt). New unchanged-cursor regression reproduces it (iter-23-before.txt). Fixture now returns a stable real-shaped cursor; no product-code change or original completion-assertion change. Full gate in iter-23.txt; focused repeated completion/poll checks in iter-23-repeat.txt. Final dream/summary drafts retained for after this green checkpoint. Scores stay 4. Commit: pending iter 23.

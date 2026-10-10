@@ -76,6 +76,8 @@ def ui(browser, dashboard_url):
             data = {"ok": True, "item": task}
         elif url.path == "/api/search":
             data = {"ok": True, "items": []}
+        elif url.path == "/api/cursor":
+            data = {"ok": True, "cursor": "fixture-cursor"}
         elif url.path == "/api/version":
             data = {"ok": True, "version": page.evaluate("() => SERVER_VERSION")}
         else:
@@ -759,3 +761,14 @@ def test_scheduled_slot_dialog_fits_narrow_windows(ui, width):
     geometry = page.locator("#slot-overlay .panel").evaluate("el=>({width:el.clientWidth,scroll:el.scrollWidth})")
     assert geometry["scroll"] <= geometry["width"]
     assert page.locator("#slot-overlay .panel").bounding_box()["width"] <= width
+
+
+def test_unchanged_fixture_cursor_skips_content_reload(ui):
+    page = ui["page"]
+    page.set_default_timeout(3000)
+    page.wait_for_function("() => LAST_CURSOR === 'fixture-cursor'")
+    reads = []
+    page.on("request", lambda request: reads.append(request.url))
+    page.evaluate("() => softRefresh()")
+    assert any("/api/cursor" in url for url in reads)
+    assert not any("/api/items" in url or "/api/sidebar" in url for url in reads)

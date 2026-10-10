@@ -23,3 +23,4 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B17 | Keyboard destination selectors for advanced drag views | Accessibility | M | M | M | done E03 iter 17-20 |
 | B18 | Preserve successful upload response when best-effort note sync fails | Fix | M | L | S | done iter 21 |
 | B19 | Fail fixture gate when pytest skips verification | Safety net | M | L | S | done iter 22 |
+| B20 | Model unchanged cursor in intercepted browser fixture; avoid spurious poll refresh | Fix | M | L | S | done iter 23 |
