@@ -271,3 +271,17 @@ def test_palette_exposes_active_option_and_expandable_area_state(ui):
     selected_id = combobox.get_attribute("aria-activedescendant")
     assert selected_id
     assert page.locator("#" + selected_id).get_attribute("aria-selected") == "true"
+
+
+def test_standalone_project_resolves_and_navigates(ui):
+    page = ui["page"]
+    page.evaluate(
+        "() => { SIDEBAR.arealess.push({uuid:'standalone',title:'Independent project',progress:0}); renderSidebar(); }"
+    )
+    result = page.evaluate("() => resolveList('standalone')")
+    assert result == {"id": "standalone", "icon": "", "title": "Independent project", "kind": "project"}
+    page.locator('#side-nav [data-id="standalone"]').click()
+    page.wait_for_function(
+        "() => document.querySelector('#head-title').textContent === 'Independent project'", timeout=2000
+    )
+    assert page.url.endswith("#l/standalone")

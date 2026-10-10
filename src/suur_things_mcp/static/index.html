@@ -961,6 +961,8 @@ function resolveList(id){
     if(a.uuid===id) return {id:a.uuid,icon:"▥",title:a.title,kind:"area"};
     const p=a.projects.find(p=>p.uuid===id); if(p) return {id:p.uuid,icon:"",title:p.title,kind:"project"};
   }
+  const p=((SIDEBAR&&SIDEBAR.arealess)||[]).find(p=>p.uuid===id);
+  if(p) return {id:p.uuid,icon:"",title:p.title,kind:"project"};
   return null;
 }
 

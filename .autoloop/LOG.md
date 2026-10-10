@@ -52,3 +52,8 @@ Iteration 8 commit: fddcf99. Screenshot readback correction: initial tool forwar
 
 ## Dream 2 — 2026-10-10
 Mode: Dream. Data-dream lens, 12 ideas, two ambitious; four grounded promotions (three existing backlog items), two already built, three parked plans and three rejections. No product code. Commit: pending dream 2.
+
+Dream 2 commit: 575066c.
+
+## Iteration 9 — Fix
+B14: resolve standalone projects after area lookup, preserving nested/builtin behavior. Before: resolver returns null (iter-9-before.txt). After: 155 tests/full gate green (iter-9.txt), independent project URL/title are correct. Four actual empty-project screenshots read (iter-9-screens); mobile clipping remains. Commit: pending iter 9.

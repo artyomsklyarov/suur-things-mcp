@@ -1,0 +1,19 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_standalone_project_resolves_and_navigates ________________
+
+ui = {'page': <Page url='http://127.0.0.1:51058/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+
+    def test_standalone_project_resolves_and_navigates(ui):
+        page = ui["page"]
+        page.evaluate(
+            "() => { SIDEBAR.arealess.push({uuid:'standalone',title:'Independent project',progress:0}); renderSidebar(); }"
+        )
+        result = page.evaluate("() => resolveList('standalone')")
+>       assert result == {"id": "standalone", "icon": "", "title": "Independent project", "kind": "project"}
+E       AssertionError: assert None == {'id': 'standalone', 'icon': '', 'title': 'Independent project', 'kind': 'project'}
+
+tests/test_dashboard_interactions.py:282: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_standalone_project_resolves_and_navigates
+1 failed, 15 deselected in 2.20s

@@ -24,3 +24,5 @@ Iteration 2: reliability remains 3 pending concurrency/frontend work; config rec
 Iteration 3: eight simultaneous uploads now accept exactly the configured two; metadata/file counts match. Concurrent direct saves both complete with valid JSON and no temporary leftovers. Reliability stays 3 pending startup work. Total 132 tests.
 
 Iteration 4: seven organizer safety failures now pass, including IDs outside submitted scope and duplicate IDs; 139 tests. Reliability/test coverage still 3 until frontend failure/accessibility coverage.
+
+Iteration 9: standalone-project route now resolves correctly, proven by synthetic browser test and actual fixture empty-project screenshots. Correctness remains 4, UX remains 3 pending narrow layout. 155 tests.

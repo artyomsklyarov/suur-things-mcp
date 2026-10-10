@@ -16,6 +16,7 @@ from conftest import build_things_db  # noqa: E402
 
 def main():
     label = sys.argv[1] if len(sys.argv) > 1 else "screens"
+    scenario = sys.argv[2] if len(sys.argv) > 2 else "normal"
     out = ROOT / ".autoloop/artifacts" / label
     out.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="suur-capture-") as directory:
@@ -51,10 +52,16 @@ def main():
                     page = browser.new_page(viewport={"width": width, "height": height})
                     page.on("pageerror", lambda error: errors.append(str(error)))
                     page.goto(f"http://127.0.0.1:{port}", wait_until="networkidle")
+                    if scenario == "project":
+                        page.evaluate('() => go("#l/proj-empty")')
+                        page.wait_for_timeout(300)
                     for theme in ["light", "dark"]:
                         page.evaluate("(t) => applyTheme(t)", theme)
                         page.wait_for_timeout(250)
                         page.screenshot(path=str(out / f"{name}-{theme}.png"))
+                    if scenario == "project":
+                        page.close()
+                        continue
                     page.evaluate("() => openPrefs()")
                     page.wait_for_timeout(250)
                     page.screenshot(path=str(out / f"{name}-prefs.png"))
