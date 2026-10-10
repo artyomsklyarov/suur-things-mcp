@@ -1,6 +1,6 @@
 # SUUR Things MCP — technical specification
 
-Updated: 2026-10-10. Scope: 0.10.0 source and its release preparation. Product behavior is in [CONTEXT.MD](CONTEXT.MD); evidence/publication state is in [STATUS.MD](STATUS.MD). Source is authoritative when a historical README/roadmap disagrees with current behavior.
+Updated: 2026-10-10. Scope: 0.10.1 source, including the 0.10.0 feature set and metadata compatibility correction. Product behavior is in [CONTEXT.MD](CONTEXT.MD); evidence/publication state is in [STATUS.MD](STATUS.MD). Source is authoritative when a historical README/roadmap disagrees with current behavior.
 
 ## Package, platform and stack
 
@@ -179,7 +179,7 @@ Compact mode defaults at <=800px; cards simplify further at small widths. `?comp
 ```sh
 uv sync --dev
 uv run playwright install chromium
-.venv/bin/python .autoloop/scripts/verify.py release-0.10.0
+.venv/bin/python .autoloop/scripts/verify.py release-0.10.1
 ```
 
 The strict gate runs Ruff, compilation, all pytest tests and `uv build --offline` against a temporary seeded Things DB/config/token path. Its pytest JUnit report must contain executed tests with zero skips/errors/failures; packaging stops on incomplete verification. Mutation and organizer subprocess calls are mocked. The ordinary `uv run pytest` can still skip environment-dependent tests; that command alone is not equivalent to this gate.
@@ -191,3 +191,7 @@ Safe captures use `.autoloop/scripts/capture.py <label> [project|advanced|placem
 Main is protected by the `test` status check and up-to-date PR requirement. Existing CI syncs dev dependencies, installs Chromium, lints and runs pytest on Ubuntu. The stricter complete fixture gate is local; remote CI's ordinary test command can have environment skips. A published GitHub Release triggers the existing `release.yml`: build with uv, then PyPI Trusted Publishing/OIDC in the `pypi` environment. No API token is committed. Workflow configuration/permissions are not changed by this release.
 
 Release order: validate version/lock/changelog and package assets, commit the full intended checkout, push branch, pass CI, merge normally, publish a tag/release at the checked commit, then verify the release job and fresh PyPI version/file hashes. A tag or GitHub Release alone is not proof of PyPI publication; record each state separately in STATUS.
+
+### Distribution metadata compatibility
+
+Wheel and sdist targets explicitly set `core-metadata-version = "2.4"`. The existing pinned publisher rejected the new Hatchling default of 2.5 before uploading 0.10.0. This uses the documented [wheel](https://hatch.pypa.io/latest/plugins/builder/wheel/) and [sdist](https://hatch.pypa.io/latest/plugins/builder/sdist/) options instead of changing publishing credentials/workflows or constraining runtime dependencies. Inspect both wheel METADATA and top-level sdist PKG-INFO before release, including version, Python floor, dependency metadata and packaged frontend. 0.10.1 preserves the 0.10.0 tag and carries the correction in a new commit/version.

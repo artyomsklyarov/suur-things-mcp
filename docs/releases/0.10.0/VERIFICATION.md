@@ -13,4 +13,4 @@ Local gate on 2026-10-10: `.venv/bin/python .autoloop/scripts/verify.py release-
 
 Evidence: [full release gate](../../../.autoloop/artifacts/release-0.10.0.txt).
 
-GitHub CI/merge/release and public PyPI distribution receipts are pending here until observed. Local builds are not publication proof; fixture tests are not live Things mutation or live model acceptance.
+[PR #53](https://github.com/artyomsklyarov/suur-things-mcp/pull/53) passed its required CI (229 passed, nine environment skips, one test-client warning), then merged at `bfbb51cec06e898ccb9b64747d442a9f8733e002`. [GitHub v0.10.0](https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.10.0) is public. [PyPI publishing failed](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094300758) before uploading: the pinned action rejects the build backend's metadata 2.5. Fresh version-specific PyPI JSON returned 404. The patch release is 0.10.1 with explicit metadata 2.4 for both targets; the 0.10.0 tag remains intact. Local builds are not publication proof; fixture tests are not live Things mutation or live model acceptance.

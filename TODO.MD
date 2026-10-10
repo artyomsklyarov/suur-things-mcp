@@ -9,7 +9,7 @@ Updated: 2026-10-10. This is an owner checklist, not an engineering backlog. [PL
 - [x] Complete the authorized autonomous improvement run: 23 verified improvement iterations, nine dreams, three complete epics.
 - [x] Preserve the ten pre-existing dirty files during that autonomous run; [historical hashes](.autoloop/artifacts/protected-final.json) confirm it.
 - [x] Authorize the full intended checkout, including the existing staleness update, to be committed to the public GitHub repository (2026-10-10).
-- [x] Authorize a new public version release (2026-10-10); 0.10.0 is the prepared, previously unpublished version.
+- [x] Authorize a new public version release (2026-10-10); 0.10.0 was the prepared version; 0.10.1 carries the packaging correction after its publish job failed.
 - [x] Request separate detailed product/technical/status/user-action/unfinished-plan documents.
 - [x] Enable the completed compact/keyboard-placement improvements by default; no flag setup is required.
 
@@ -19,14 +19,15 @@ No further approval is needed for the GitHub/PyPI release already requested. The
 
 - [x] Complete the five documents, README/changelog consistency and reviewed 0.10.0 checkpoint.
 - [x] Pass the release fixture gate and inspect wheel/sdist metadata and packaged frontend.
-- [ ] Commit/push the full intended checkout, pass protected-main CI and merge the release PR normally.
-- [ ] Publish GitHub `v0.10.0` and verify the existing PyPI Trusted Publishing job.
-- [ ] Verify fresh PyPI metadata, both distributions and package contents; record URLs/hashes in STATUS.
+- [x] Commit/push the full intended checkout, pass protected-main CI and merge [release PR #53](https://github.com/artyomsklyarov/suur-things-mcp/pull/53) normally.
+- [x] Publish GitHub `v0.10.0` and inspect the PyPI job: it failed before upload because its metadata validator rejects 2.5.
+- [ ] Merge the metadata 2.4 correction and publish GitHub/PyPI `v0.10.1` through the existing workflow.
+- [ ] Verify fresh PyPI 0.10.1 metadata, both distributions and package contents; record URLs/hashes in STATUS.
 
 ## Personal installation and live acceptance
 
-- [ ] When ready to use the new public version, refresh the installed package and restart the MCP client/server. Use the install method you actually use: `uv tool upgrade suur-things-mcp` for a persistent tool, or `uvx --refresh --from suur-things-mcp==0.10.0 suur-things-mcp dashboard` for the pinned dashboard. Do not treat a package refresh as proof that an already running dashboard process restarted.
-- [ ] Confirm the running dashboard/About version and connected MCP tools/prompts show 0.10.0, including `stale_review` and `stale_sweep`.
+- [ ] When ready to use the new public version, refresh the installed package and restart the MCP client/server. Use the install method you actually use: `uv tool upgrade suur-things-mcp` for a persistent tool, or `uvx --refresh --from suur-things-mcp==0.10.1 suur-things-mcp dashboard` for the pinned dashboard. Do not treat a package refresh as proof that an already running dashboard process restarted.
+- [ ] Confirm the running dashboard/About version and connected MCP tools/prompts show 0.10.1, including `stale_review` and `stale_sweep`.
 - [ ] Choose a disposable Things project/task for live acceptance; keep it separate from meaningful work. Record the original title/notes/tags/status/dates.
 - [ ] Enable Things URLs if not already enabled and supply its modification token through your existing local secure setup. Never put it in these docs, the repository or a public bug report.
 - [ ] Define the exact live test operations before execution: create, title/notes/scheduling/tag update, checklist append, complete/cancel and a small batch if desired. Verify actual fields and modification timestamps after each; retain records rather than deleting them as cleanup.

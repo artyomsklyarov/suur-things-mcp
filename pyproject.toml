@@ -59,6 +59,11 @@ path = "src/suur_things_mcp/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/suur_things_mcp"]
+# The pinned publisher accepts metadata 2.4, but not Hatchling's new 2.5 default.
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 
 [tool.ruff]
 target-version = "py310"
