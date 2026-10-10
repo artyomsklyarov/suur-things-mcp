@@ -324,7 +324,53 @@ def test_narrow_views_fit_and_resize_restores_desktop(ui, width):
         assert geometry["scroll"] <= geometry["width"] + 1, (width, view, geometry)
     page.locator("#nav-toggle").click()
     page.set_viewport_size({"width": 1440, "height": 900})
-    page.wait_for_function("() => !document.querySelector('#sidebar').inert")
+    page.wait_for_function("() => !document.querySelector('#sidebar').inert && !document.querySelector('.main').inert")
     assert page.locator(".main").evaluate("el => el.inert") is False
     assert page.locator("#nav-toggle").is_visible() is False
     assert page.locator("#sidebar").bounding_box()["width"] == 272
+
+
+def _contrast(foreground, background):
+    def luminance(rgb):
+        channels = [x / 255 for x in rgb]
+        linear = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in channels]
+        return sum(x * weight for x, weight in zip(linear, [0.2126, 0.7152, 0.0722], strict=True))
+
+    a, b = sorted([luminance(foreground), luminance(background)])
+    return (b + 0.05) / (a + 0.05)
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_small_text_and_primary_controls_have_sufficient_contrast(ui, theme):
+    page = ui["page"]
+    page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
+    page.wait_for_timeout(250)
+    samples = []
+
+    def measure(selectors):
+        for selector in selectors:
+            pairs = page.locator(selector).evaluate_all("""els => els.map(el => {
+                const rgb = value => value.match(/[\\d.]+/g).map(Number).slice(0, 3);
+                let parent = el, bg;
+                while(parent) {
+                    bg = getComputedStyle(parent).backgroundColor;
+                    if(bg !== 'rgba(0, 0, 0, 0)') break;
+                    parent = parent.parentElement;
+                }
+                return [rgb(getComputedStyle(el).color), rgb(bg)];
+            })""")
+            assert pairs, selector
+            samples.extend((selector, _contrast(fg, bg)) for fg, bg in pairs)
+
+    measure([".nav-item .count", ".group-head"])
+    page.locator("#vt-matrix").click()
+    page.locator(".quad-head").first.wait_for()
+    measure([".quad-head .qt", ".quad-head .qs", ".pri-pool .col-head"])
+    page.locator("#vt-levels").click()
+    page.locator(".lvl-head").first.wait_for()
+    measure([".lvl-head .lt", ".lvl-head .ls", ".lvl-mapnote"])
+    page.locator("#prefs-btn").click()
+    page.wait_for_timeout(250)
+    measure(["#prefs-overlay .hint", "#prefs-overlay .field label", "#pf-save", "#pf-cancel"])
+    print(f"{theme} contrast ratios: {samples}")
+    assert all(ratio >= 4.5 for _, ratio in samples), samples

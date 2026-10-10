@@ -38,3 +38,5 @@ Dream 3 correction: H11 interaction design does not require human setup or sensi
 - H14: Decade-memory plan: synthetic local demo first; define retention/export/deletion and privacy guarantees before indexing personal history or choosing infrastructure.
 
 Iteration 11: E02 is complete and default-enabled after all-view width tests and rendered inspection. Keep ?compact=0 as a reversible diagnostic fallback. No dependencies or platform changes.
+
+Iteration 12: computed foreground/effective background colors, standard sRGB luminance; normal text target 4.5:1 from https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html . Shared theme-specific muted/priority/on-accent tokens preserve semantic hues. No dependencies. Existing resize regression now waits for BOTH sidebar/main inert states because sidebar is already non-inert while its menu is open; assertions unchanged.

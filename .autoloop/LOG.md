@@ -72,3 +72,8 @@ Dream 3 commit: 7161021.
 
 ## Iteration 11 — UI
 E02 complete: enable compact layout automatically, stack advanced pools/grids/calendar, align filter/header spacing. Before: three viewport regressions fail (iter-11-before.txt). After: 159 tests/full gate green (iter-11.txt), 320/390/768px all views and desktop resize pass. All twenty screenshots inspected (iter-11-screens, iter-11-empty, iter-11-advanced), no page errors; a mistaken screenshot filename was corrected with actual file inventory. UX/UI 3 -> 4. Optional ?compact=0 fallback retained. Commit: pending iter 11.
+
+Iteration 11 commit: 3ed5b28.
+
+## Iteration 12 — Accessibility
+B16: measured and fixed text/control colors in both themes. Before: two real contrast failures (iter-12-before.txt), minimum 2.48 light/3.19 dark; initial test selector/cardinality mistakes corrected before recording this baseline. After: minimum 4.86/4.93 (iter-12-ratios.txt), 161 tests/full gate green (iter-12.txt). All sixteen screenshots inspected. First gate found missing strict zip; next found 4.494 below threshold plus a resize test waiting on an already-true sidebar condition. Darkened light muted further and waited for both inert states, without relaxing thresholds/assertions. Scores remain 4. Commit: pending iter 12.
