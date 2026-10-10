@@ -67,3 +67,8 @@ Iteration 10 commit: cfafaec.
 
 ## Dream 3 — 2026-10-10
 Mode: Dream. Emotion lens after two unchanged integer scores; 12 ideas including two ambitious. Continue E02, promote measured contrast B16 and feasible keyboard-placement B17, three already built, three parked and three rejected. H11 corrected to feasible backlog work instead of an invented human gate. No code. Commit: pending dream 3.
+
+Dream 3 commit: 7161021.
+
+## Iteration 11 — UI
+E02 complete: enable compact layout automatically, stack advanced pools/grids/calendar, align filter/header spacing. Before: three viewport regressions fail (iter-11-before.txt). After: 159 tests/full gate green (iter-11.txt), 320/390/768px all views and desktop resize pass. All twenty screenshots inspected (iter-11-screens, iter-11-empty, iter-11-advanced), no page errors; a mistaken screenshot filename was corrected with actual file inventory. UX/UI 3 -> 4. Optional ?compact=0 fallback retained. Commit: pending iter 11.

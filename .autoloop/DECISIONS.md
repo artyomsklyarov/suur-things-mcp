@@ -36,3 +36,5 @@ Dream 3 correction: H11 interaction design does not require human setup or sensi
 - H12: Return onboarding research: ask real users what they need after a break; only then prototype a dismissible local hint. No guesses about overdue-task guilt.
 - H13: Energy-aware agent plan: user provides constraints; opt-in existing review workflow proposes a schedule; user reviews before URL Scheme updates. Any live model call needs separate authorization for metered work.
 - H14: Decade-memory plan: synthetic local demo first; define retention/export/deletion and privacy guarantees before indexing personal history or choosing infrastructure.
+
+Iteration 11: E02 is complete and default-enabled after all-view width tests and rendered inspection. Keep ?compact=0 as a reversible diagnostic fallback. No dependencies or platform changes.

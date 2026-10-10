@@ -306,3 +306,25 @@ def test_compact_preview_uses_window_width_and_navigation_can_close(ui):
     assert toggle.get_attribute("aria-expanded") == "false"
     assert page.locator(".main").evaluate("el => el.inert") is False
     assert page.locator("#vt-timeline").bounding_box()["x"] < 390
+
+
+@pytest.mark.parametrize("width", [320, 390, 768])
+def test_narrow_views_fit_and_resize_restores_desktop(ui, width):
+    page = ui["page"]
+    page.set_default_timeout(3000)
+    page.set_viewport_size({"width": width, "height": 844})
+    page.reload(wait_until="networkidle")
+    assert page.locator(".main").bounding_box()["width"] == width
+    assert page.locator("#sidebar").evaluate("el => el.inert") is True
+    for view in ["matrix", "levels", "cards", "timeline", "list"]:
+        page.locator("#vt-" + view).click()
+        page.wait_for_function("v => MODE === v", arg=view)
+        page.wait_for_timeout(100)
+        geometry = page.locator("#content").evaluate("el => ({width:el.clientWidth, scroll:el.scrollWidth})")
+        assert geometry["scroll"] <= geometry["width"] + 1, (width, view, geometry)
+    page.locator("#nav-toggle").click()
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.wait_for_function("() => !document.querySelector('#sidebar').inert")
+    assert page.locator(".main").evaluate("el => el.inert") is False
+    assert page.locator("#nav-toggle").is_visible() is False
+    assert page.locator("#sidebar").bounding_box()["width"] == 272

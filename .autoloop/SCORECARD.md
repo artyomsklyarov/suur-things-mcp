@@ -11,8 +11,8 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 | Architecture | 4 | 4 | Read/write split, overlay store, thin tools; preserves intent |
 | Security | 3 | 4 | Nonce CSP, origins, token redaction; attachment path containment enforced; five regressions in iter-1.txt |
 | Performance | 4 | 4 | Threaded reads + cheap cursor; no new benchmark claim |
-| UX | 3 | 3 | Local board flows clear; mobile clipping and dialog focus gaps |
-| UI | 3 | 3 | Reviewed baseline desktop light/dark and mobile; mobile clipping; settled dark theme correct (initial snapshot caught transition) |
+| UX | 3 | 4 | Full-width small windows, accessible menu/dialog focus, 320/390/768px all-view tests; iter-11 |
+| UI | 3 | 4 | Desktop styling retained, compact views no longer clip; 20 inspected light/dark populated/empty screenshots, iter-11; text contrast tracked B16 |
 | Accessibility | 2 | 4 | Clickable div/span controls, modal names, labeled fields, inert background and focus containment/return; sidebar/filter/task keyboard access and palette selection semantics; advanced drag views remain a limitation |
 | Product completeness | 4 | 4 | Documented phases done; live integration validation outside loop scope |
 | Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness now available |

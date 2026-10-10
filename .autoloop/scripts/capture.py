@@ -55,6 +55,17 @@ def main():
                         f"http://127.0.0.1:{port}" + ("?compact=1" if scenario == "compact" else ""),
                         wait_until="networkidle",
                     )
+                    if scenario == "advanced":
+                        for view, selector in [("matrix", ".matrix"), ("timeline", ".tl-wrap")]:
+                            page.locator("#vt-" + view).click()
+                            page.locator(selector).wait_for()
+                            for theme in ["light", "dark"]:
+                                page.evaluate("(t) => applyTheme(t)", theme)
+                                page.wait_for_timeout(250)
+                                page.screenshot(path=str(out / f"{name}-{view}-{theme}.png"))
+                            page.locator("#vt-list").click()
+                        page.close()
+                        continue
                     if scenario == "project":
                         page.evaluate('() => go("#l/proj-empty")')
                         page.wait_for_timeout(300)

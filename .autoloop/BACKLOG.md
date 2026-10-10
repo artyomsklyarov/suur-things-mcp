@@ -1,6 +1,6 @@
 # Backlog
 
-Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rotation excludes orientation/dream. No active epic yet.
+Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rotation excludes orientation/dream. E01 and E02 complete; no active epic.
 
 | ID | Item | Mode | Impact | Risk | Effort | Status |
 |---|---|---|---|---|---|---|
@@ -12,7 +12,7 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B06 | Accessible dialogs and keyboard navigation epic | Accessibility | H | M | M | done E01 iter 7-8 |
 | B07 | Frontend startup config/storage errors and recoverable sidebar | Fix | H | M | S | done iter 6 |
 | B08 | Dark theme control/selection contrast | UI | M | L | S | rejected: settled screenshots correct |
-| B09 | Narrow-window usable navigation/content epic | UX | H | M | M | active E02, milestone 1 done |
+| B09 | Narrow-window usable navigation/content epic | UX | H | M | M | done E02 iter 10-11 |
 | B10 | API input and read failure envelopes | Fix | M | L | S | ready |
 | B11 | Async list navigation discards stale responses | Fix | M | M | S | ready |
 | B12 | Add verification/recovery developer guide without changing existing docs | Docs | M | L | S | ready |

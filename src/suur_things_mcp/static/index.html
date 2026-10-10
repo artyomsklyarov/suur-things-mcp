@@ -447,10 +447,22 @@
     html[data-compact="on"] #viewtog { order:5; width:100%; min-width:0; overflow-x:auto; }
     html[data-compact="on"] #viewtog .vt { flex:1; padding:6px 8px; white-space:nowrap; }
     html[data-compact="on"] #content { padding:0 16px 40px; }
-    html[data-compact="on"] .filterbar { margin-left:16px; margin-right:16px; }
+    html[data-compact="on"] .filterbar { margin-left:0; margin-right:0; padding-left:16px; padding-right:16px; }
     html[data-compact="on"] .row { flex-wrap:wrap; }
     html[data-compact="on"] .row .meta { margin-left:28px; }
     html[data-compact="on"] .overlay { padding-top:20px; }
+    html[data-compact="on"] .main.fill #content { padding:0 12px 24px; overflow:auto; }
+    html[data-compact="on"] .pri-wrap, html[data-compact="on"] .tl-wrap { flex-direction:column; height:auto; min-height:100%; }
+    html[data-compact="on"] .pri-pool, html[data-compact="on"] .tl-pool { width:auto; flex:none; max-height:240px; }
+    html[data-compact="on"] .matrix, html[data-compact="on"] .levels { flex:none; min-height:440px; }
+    html[data-compact="on"] .tl-cal { flex:none; height:480px; }
+  }
+  @media (max-width:600px) {
+    html[data-compact="on"] .matrix, html[data-compact="on"] .levels {
+      grid-template-columns:1fr; grid-template-rows:repeat(4,minmax(140px,auto));
+    }
+    html[data-compact="on"] .quad .cards, html[data-compact="on"] .lvl .cards { max-height:260px; }
+
   }
 
 </style>
@@ -614,7 +626,7 @@
 
 <script nonce="__CSP_NONCE__">
 const $ = (s, r=document) => r.querySelector(s);
-const COMPACT_LAYOUT=new URLSearchParams(location.search).get("compact")==="1";
+const COMPACT_LAYOUT=new URLSearchParams(location.search).get("compact")!=="0";
 document.documentElement.dataset.compact=COMPACT_LAYOUT?"on":"off";
 const NARROW_WINDOW=matchMedia("(max-width:800px)");
 function compactWindow(){ return COMPACT_LAYOUT&&NARROW_WINDOW.matches; }
