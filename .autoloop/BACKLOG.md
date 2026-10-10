@@ -13,7 +13,7 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B07 | Frontend startup config/storage errors and recoverable sidebar | Fix | H | M | S | done iter 6 |
 | B08 | Dark theme control/selection contrast | UI | M | L | S | rejected: settled screenshots correct |
 | B09 | Narrow-window usable navigation/content epic | UX | H | M | M | done E02 iter 10-11 |
-| B10 | API input and read failure envelopes | Fix | M | L | S | ready |
+| B10 | API input and read failure envelopes | Fix | M | L | S | done iter 13 |
 | B11 | Async list navigation discards stale responses | Fix | M | M | S | ready |
 | B12 | Add verification/recovery developer guide without changing existing docs | Docs | M | L | S | ready |
 | B13 | Existing dependency warning / real Things writes / dirty-file work | Docs | M | H | M | human |

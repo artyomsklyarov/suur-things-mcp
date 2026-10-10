@@ -210,8 +210,11 @@ async def _items(request: Request) -> JSONResponse:
 
 
 async def _item(request: Request) -> JSONResponse:
-    detail = await run_in_threadpool(reads.item_detail, request.query_params.get("id", ""))
-    return JSONResponse({"ok": detail is not None, "item": detail})
+    try:
+        detail = await run_in_threadpool(reads.item_detail, request.query_params.get("id", ""))
+        return JSONResponse({"ok": detail is not None, "item": detail})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc), "item": None})
 
 
 async def _search(request: Request) -> JSONResponse:
@@ -231,10 +234,10 @@ async def _search(request: Request) -> JSONResponse:
 # --- Boards + config ------------------------------------------------------
 
 async def _board(request: Request) -> JSONResponse:
-    board = boardcfg.get_board(request.query_params.get("id", ""))
-    if board is None:
-        return JSONResponse({"ok": False, "error": "board not found", "columns": []})
     try:
+        board = boardcfg.get_board(request.query_params.get("id", ""))
+        if board is None:
+            return JSONResponse({"ok": False, "error": "board not found", "columns": []})
         cards = await run_in_threadpool(reads.board_cards, board)
         link_table = boardcfg.links()
         for card in cards:
@@ -259,14 +262,26 @@ async def _board(request: Request) -> JSONResponse:
 
 
 async def _config_get(_request: Request) -> JSONResponse:
-    return JSONResponse({"ok": True, "config": boardcfg.load()})
+    try:
+        return JSONResponse({"ok": True, "config": boardcfg.load()})
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(exc), "config": None})
 
 
 async def _config_post(request: Request) -> JSONResponse:
     # Section merge: only the keys present in the body are overwritten; others are
     # read fresh and preserved (so saving boards can't wipe links, and vice versa).
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
+    section_types = {"boards": list, "priority_levels": list, "priority": dict,
+                     "links": dict, "prefs": dict, "timeblocks": dict,
+                     "attachments": dict, "area_prefs": dict}
+    for key, kind in section_types.items():
+        if key in body and not isinstance(body[key], kind):
+            return JSONResponse({"ok": False, "error": f"invalid {key} section"}, status_code=400)
     try:
-        return JSONResponse({"ok": True, "config": boardcfg.merge(await request.json())})
+        return JSONResponse({"ok": True, "config": boardcfg.merge(body)})
     except Exception as exc:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(exc)})
 
@@ -290,12 +305,16 @@ async def _link_post(request: Request) -> JSONResponse:
 
     Auto-detects each repo's GitHub from its `origin` remote when not provided.
     """
+    body = await _json_body(request)
+    if body is None:
+        return JSONResponse({"ok": False, "error": "invalid JSON body"}, status_code=400)
+    repos = body.get("repos", [])
+    if not isinstance(repos, list) or any(not isinstance(repo, dict) for repo in repos):
+        return JSONResponse({"ok": False, "error": "repos must be a list of objects"}, status_code=400)
     try:
-        body = await request.json()
         item_id = str(body.get("item_id") or "")
         if not item_id:
             return JSONResponse({"ok": False, "error": "missing item_id"})
-        repos = body.get("repos") or []
         for r in repos:
             if isinstance(r, dict) and r.get("repo") and not r.get("github"):
                 path = boardcfg._normalize_repo(r["repo"])
@@ -521,7 +540,10 @@ async def _attach(request: Request) -> JSONResponse:
     if not item_uuid:
         return JSONResponse({"ok": False, "error": "missing uuid"})
     raw = body.get("data") or ""
-    mime = (body.get("mime") or "").strip().lower()
+    mime = body.get("mime") or ""
+    if not isinstance(mime, str):
+        return JSONResponse({"ok": False, "error": "mime must be a string"}, status_code=400)
+    mime = mime.strip().lower()
     if isinstance(raw, str) and raw.startswith("data:"):  # data:image/png;base64,XXXX
         head, _, b64 = raw.partition(",")
         if not mime and ";" in head:
@@ -538,7 +560,7 @@ async def _attach(request: Request) -> JSONResponse:
     try:
         meta = boardcfg.save_attachment(item_uuid, data, mime,
                                         body.get("name") or "image", body.get("caption"))
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
 
     note_updated = False

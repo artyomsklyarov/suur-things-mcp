@@ -77,3 +77,8 @@ Iteration 11 commit: 3ed5b28.
 
 ## Iteration 12 — Accessibility
 B16: measured and fixed text/control colors in both themes. Before: two real contrast failures (iter-12-before.txt), minimum 2.48 light/3.19 dark; initial test selector/cardinality mistakes corrected before recording this baseline. After: minimum 4.86/4.93 (iter-12-ratios.txt), 161 tests/full gate green (iter-12.txt). All sixteen screenshots inspected. First gate found missing strict zip; next found 4.494 below threshold plus a resize test waiting on an already-true sidebar condition. Darkened light muted further and waited for both inert states, without relaxing thresholds/assertions. Scores remain 4. Commit: pending iter 12.
+
+Iteration 12 commit: d1be10a.
+
+## Iteration 13 — Fix
+B10: validate config/link object and section/list shapes before mutation, reject non-string MIME, envelope config/item/board reads and attachment disk errors. Before: 18 targeted failures (iter-13-before.txt). After: 26 new regressions, 187 tests/full gate green (iter-13.txt); invalid payload tests assert saved bytes unchanged. Existing warning only. No real Things/model writes. Scores remain 4; dream due before next product iteration. Commit: pending iter 13.

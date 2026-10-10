@@ -30,3 +30,5 @@ Iteration 9: standalone-project route now resolves correctly, proven by syntheti
 Holistic iteration 10: all dimensions rescored in artifacts/holistic-10.txt. Scores unchanged, UX/UI 3 because compact layout is a preview until all views pass. Preview measurable geometry improves 118px -> 390px; no new exceptions or warnings. 156 tests.
 
 Iteration 12: sampled sidebar counts/headings, matrix/level names/subtitles, preferences hints/labels/buttons now all meet 4.5:1. Minimum light 2.48 -> 4.86, dark 3.19 -> 4.93. Accessibility remains 4, not a claim of exhaustive WCAG conformance. 161 tests.
+
+Iteration 13: API config/link malformed roots and section/list shapes reject with 400 without changing bytes. Config/item/board I/O errors and upload storage errors have structured envelopes. 26 new tests, 187 total. Correctness/reliability remain 4.
