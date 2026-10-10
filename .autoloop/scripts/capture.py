@@ -51,7 +51,10 @@ def main():
                 for name, width, height in [("desktop", 1440, 900), ("mobile", 390, 844)]:
                     page = browser.new_page(viewport={"width": width, "height": height})
                     page.on("pageerror", lambda error: errors.append(str(error)))
-                    page.goto(f"http://127.0.0.1:{port}", wait_until="networkidle")
+                    page.goto(
+                        f"http://127.0.0.1:{port}" + ("?compact=1" if scenario == "compact" else ""),
+                        wait_until="networkidle",
+                    )
                     if scenario == "project":
                         page.evaluate('() => go("#l/proj-empty")')
                         page.wait_for_timeout(300)

@@ -26,3 +26,5 @@ Iteration 3: eight simultaneous uploads now accept exactly the configured two; m
 Iteration 4: seven organizer safety failures now pass, including IDs outside submitted scope and duplicate IDs; 139 tests. Reliability/test coverage still 3 until frontend failure/accessibility coverage.
 
 Iteration 9: standalone-project route now resolves correctly, proven by synthetic browser test and actual fixture empty-project screenshots. Correctness remains 4, UX remains 3 pending narrow layout. 155 tests.
+
+Holistic iteration 10: all dimensions rescored in artifacts/holistic-10.txt. Scores unchanged, UX/UI 3 because compact layout is a preview until all views pass. Preview measurable geometry improves 118px -> 390px; no new exceptions or warnings. 156 tests.

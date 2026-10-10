@@ -1,0 +1,9 @@
+Ten-iteration review
+Protected files: 10/10 byte-identical to baseline
+Full gate: iter-10.txt
+Visual evidence: eight iter-10-screens images inspected
+All dimensions re-evaluated: correctness 4, reliability 4, test coverage 4, code quality 4, architecture 4, security 4, performance 4, UX 3, UI 3, accessibility 4, product completeness 4, docs/DX 4; SEO/content N/A.
+Compact preview restores 390px main width from 118px, but default remains off pending E02 milestone 2.
+New regression review: no page exceptions; task writes still exclusively URL Scheme/mocked in tests; no new dependencies; no token/config/CI changes.
+Remaining order: E02 milestone 2; API validation B10, stale navigation B11, prefs B15, docs B12.
+Cadence audit: after iterations 2 and 3 scores did not cross an integer boundary but fixes were measurable; a dream should have been scheduled then. Going forward the literal two-no-score trigger is tracked; dream 3 due after 9/10.

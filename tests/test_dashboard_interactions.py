@@ -285,3 +285,24 @@ def test_standalone_project_resolves_and_navigates(ui):
         "() => document.querySelector('#head-title').textContent === 'Independent project'", timeout=2000
     )
     assert page.url.endswith("#l/standalone")
+
+
+def test_compact_preview_uses_window_width_and_navigation_can_close(ui):
+    page = ui["page"]
+    page.set_default_timeout(3000)
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(page.url.split("#")[0] + "?compact=1", wait_until="networkidle")
+    assert page.locator(".main").bounding_box()["width"] == 390
+    toggle = page.get_by_role("button", name="Open navigation", exact=True)
+    toggle.click()
+    assert toggle.get_attribute("aria-expanded") == "true"
+    assert page.locator(".main").evaluate("el => el.inert") is True
+    page.keyboard.press("Escape")
+    assert toggle.get_attribute("aria-expanded") == "false"
+    assert page.evaluate("() => document.activeElement.id") == "nav-toggle"
+    toggle.click()
+    page.locator('#side-nav [data-id="inbox"]').click()
+    page.locator("#content .empty").wait_for()
+    assert toggle.get_attribute("aria-expanded") == "false"
+    assert page.locator(".main").evaluate("el => el.inert") is False
+    assert page.locator("#vt-timeline").bounding_box()["x"] < 390

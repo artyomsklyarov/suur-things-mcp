@@ -57,3 +57,8 @@ Dream 2 commit: 575066c.
 
 ## Iteration 9 — Fix
 B14: resolve standalone projects after area lookup, preserving nested/builtin behavior. Before: resolver returns null (iter-9-before.txt). After: 155 tests/full gate green (iter-9.txt), independent project URL/title are correct. Four actual empty-project screenshots read (iter-9-screens); mobile clipping remains. Commit: pending iter 9.
+
+Iteration 9 commit: 4d371ac.
+
+## Iteration 10 — UX
+E02 milestone 1: compact navigation and full-width list/header behind ?compact=1; desktop preserved. Before: 390px viewport has 118px main (iter-10-before.txt). After: 390px main with usable view buttons/menu focus and Escape; 156 tests/full gate green (iter-10.txt), all eight preview/desktop images read. Mandatory holistic review artifacts/holistic-10.txt: all ten protected files unchanged, dimensions rescored and backlog re-ranked. No integer score improvement while flag incomplete; dream due. Commit: pending iter 10.

@@ -427,10 +427,37 @@
     .selbar, .selbar.show { transform: translateX(-50%); }
     .ctxmenu { transform: none; }
   }
+
+  #nav-toggle, #nav-shade { display:none; }
+  @media (max-width:800px) {
+    html[data-compact="on"] .topbar { gap:8px; padding:0 10px; }
+    html[data-compact="on"] .brand { display:none; }
+    html[data-compact="on"] #nav-toggle { display:flex; }
+    html[data-compact="on"] .cmdk-btn { flex:1; min-width:0; max-width:none; margin-left:0; width:auto; }
+    html[data-compact="on"] .cmdk-btn .ck-ph { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+    html[data-compact="on"] .cmdk-btn kbd, html[data-compact="on"] .topbar > .grow { display:none; }
+    html[data-compact="on"] .sidebar { position:absolute; inset:0 auto 0 0; z-index:12; width:272px;
+      visibility:hidden; transform:translateX(-100%); }
+    html[data-compact="on"] body.sidebar-open .sidebar { visibility:visible; transform:none; }
+    html[data-compact="on"] body.sidebar-open #nav-shade { display:block; position:absolute; inset:0; z-index:11;
+      border:0; background:var(--overlay); padding:0; }
+    html[data-compact="on"] .main-head { flex-wrap:wrap; padding:20px 16px 0; gap:8px; }
+    html[data-compact="on"] .main-head h1 { flex:1; min-width:0; overflow-wrap:anywhere; }
+    html[data-compact="on"] .main-head > .grow { display:none; }
+    html[data-compact="on"] #viewtog { order:5; width:100%; min-width:0; overflow-x:auto; }
+    html[data-compact="on"] #viewtog .vt { flex:1; padding:6px 8px; white-space:nowrap; }
+    html[data-compact="on"] #content { padding:0 16px 40px; }
+    html[data-compact="on"] .filterbar { margin-left:16px; margin-right:16px; }
+    html[data-compact="on"] .row { flex-wrap:wrap; }
+    html[data-compact="on"] .row .meta { margin-left:28px; }
+    html[data-compact="on"] .overlay { padding-top:20px; }
+  }
+
 </style>
 </head>
 <body>
 <div class="topbar">
+  <button class="iconbtn" id="nav-toggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
   <div class="brand">SUUR THINGS</div>
   <button id="cmdk-btn" class="cmdk-btn" title="Search & commands (⌘K)">
     <svg viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.1"/><path d="M9.9 9.9 14 14"/></g></svg>
@@ -442,6 +469,7 @@
   <button class="iconbtn" id="theme" title="Toggle light/dark">◐</button>
 </div>
 <div class="views">
+  <button id="nav-shade" tabindex="-1" aria-label="Close navigation"></button>
   <aside class="sidebar" id="sidebar">
     <div class="side-nav" id="side-nav"></div>
     <button class="side-foot" id="about-link">
@@ -586,6 +614,20 @@
 
 <script nonce="__CSP_NONCE__">
 const $ = (s, r=document) => r.querySelector(s);
+const COMPACT_LAYOUT=new URLSearchParams(location.search).get("compact")==="1";
+document.documentElement.dataset.compact=COMPACT_LAYOUT?"on":"off";
+const NARROW_WINDOW=matchMedia("(max-width:800px)");
+function compactWindow(){ return COMPACT_LAYOUT&&NARROW_WINDOW.matches; }
+function setSidebarOpen(on){
+  const wasOpen=document.body.classList.contains("sidebar-open"), open=!!on&&compactWindow();
+  document.body.classList.toggle("sidebar-open",open);
+  $("#nav-toggle").setAttribute("aria-expanded",String(open));
+  $("#sidebar").inert=compactWindow()&&!open; $(".main").inert=open;
+  if(open){ const first=$("#sidebar .active[tabindex],#sidebar [tabindex='0'],#about-link"); if(first) first.focus(); }
+  else if(wasOpen) $("#nav-toggle").focus();
+}
+NARROW_WINDOW.addEventListener("change",()=>setSidebarOpen(false));
+setSidebarOpen(false);
 let CONFIG_READY=false;
 let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{},priority_levels:[],area_prefs:{}};
 let MODE="list", CUR_BOARD=null, SEL=null, EDIT_ID=null, CURRENT_ID="today", TODAY_CACHE=[];
@@ -743,7 +785,7 @@ async function saveItemRepos(itemId, kind, repos){
 }
 
 // --- navigation (hash-based, Back/Forward works) ---
-function go(h){ if(location.hash===h) route(); else location.hash=h; }
+function go(h){ setSidebarOpen(false); if(location.hash===h) route(); else location.hash=h; }
 function route(){
   const h=location.hash;
   $("#levels-gear").style.display="none";   // only the Priority Levels view shows it
@@ -1971,7 +2013,9 @@ document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{
   if(e.target===o&&o===activeOverlay()){ if(o.id==="edit-overlay") closeEdit(); else closeOverlay(o.id); }
 }));
 document.addEventListener("keydown",e=>{
-  const o=activeOverlay(); if(!o) return;
+  const modal=activeOverlay(), o=modal||(compactWindow()&&document.body.classList.contains("sidebar-open")?$("#sidebar"):null);
+  if(!o) return;
+  if(!modal&&e.key==="Escape"){ e.preventDefault(); setSidebarOpen(false); return; }
   if(e.key==="Escape"){ e.preventDefault(); if(o.id==="edit-overlay") closeEdit(); else closeOverlay(o.id); }
   else if(e.key==="Tab"){
     const controls=overlayControls(o), first=controls[0], last=controls[controls.length-1];
@@ -2161,6 +2205,8 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden && canAut
 function wireStatic(){
   const on=(sel,fn)=>{ const el=$(sel); if(el) el.onclick=fn; };
   on("#cmdk-btn",openCmdk);
+  on("#nav-toggle",()=>setSidebarOpen(!document.body.classList.contains("sidebar-open")));
+  on("#nav-shade",()=>setSidebarOpen(false));
   on("#add-btn",()=>openCreate("todo"));
   on("#prefs-btn",openPrefs);
   on("#config-retry",async()=>{ if(await loadConfig()){ if(SIDEBAR) renderSidebar(); route(); } });
