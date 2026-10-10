@@ -107,3 +107,8 @@ Dream 5 commit: e164d13.
 
 ## Iteration 16 — Docs
 B12: standalone verification/recovery guide and proposed README insertion, preserving existing docs. Before: commands/limitations only in loop state and scattered tests; no consolidated recovery procedure. After: docs/DEVELOPMENT-VERIFICATION.md with commands exercised in prior/current artifacts, 199 tests/full gate green (iter-16.txt). No new tests for prose-only work. Eight-iteration dream cadence due. Commit: pending iter 16.
+
+Iteration 16 commit: 05eba0a.
+
+## Dream 6 — Dream
+Remove-a-constraint lens at iteration 16, twelve ideas including two ambitious. Existing B17 prioritized, two existing/new paid or persistent-model plans parked, six scope/boundary/duplication ideas rejected, settings resilience already built. No code. Commit: pending dream 6.

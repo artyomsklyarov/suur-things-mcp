@@ -50,3 +50,5 @@ Iteration 14: B15 selected before B11 because equal Medium impact has lower risk
 Iteration 15: a monotonic generation counter is enough; cancellation would add complexity without benefit for cheap read-only local requests. Guard every view after await and before both error/success rendering and global list state. No new dependency.
 
 - H16: Quarter planner: specify input goals and review boundaries using synthetic projects first. Any real model execution or organization-specific decision needs opt-in authorization; do not dispatch unreviewed updates. Feasible local prerequisites already exist, but live metered planning is outside this run.
+
+- H17: Live organizer comparison: choose approved models, a capped monetary budget, privacy-approved task fixtures and a rubric; run identical mocked fixtures first. This loop makes no metered calls or credential changes.

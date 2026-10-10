@@ -106,3 +106,24 @@ A developer checks Today beside an editor, prioritizes one task, reviews a propo
 | Add badges for every available action | Low | Low | Easy | Reject: distracts from the core task list |
 
 No code. No new product epic beyond already promoted B17. Next B12 has lower risk; then protect the existing drag actions before the keyboard epic. Dream session 6 also due after product iteration 16 under the eight-iteration cadence.
+
+## Dream 6 — Remove a constraint (eight-iteration cadence)
+
+With unlimited time and resources, the tool could be an operating environment for a person's projects. Waking up, the current product still benefits most from reaching existing actions with a keyboard.
+
+| Idea | Fit | Impact | Buildability | Waking label |
+|---|---|---|---|---|
+| Every existing placement action has a direct keyboard route | High | Medium | Existing actions/native controls | Promote existing B17 |
+| Each drag action has fixture evidence before changing it | High | Medium | Existing browser suite | Promote B17 protection slice |
+| Screen-reader labels tell task and destination together | High | Medium | Native controls/labels | Promote same B17 |
+| Broken settings never erase the user's review context | High | High | Existing guards | Built iter 6/13 |
+| Per-user intelligence learned from a decade of tasks (ambitious) | Medium | High | Models/privacy/retention | Park existing H10/H14 |
+| A distributed private project operating system (ambitious) | Low | High | Hosting/accounts/sync/security | Reject: outside local MCP/dashboard scope |
+| Compare a live organizer across many paid models | Medium | Medium | Metered execution | Park H17 |
+| Cross-device remote dashboard | Low | Medium | New exposed auth/network architecture | Reject: weakens local boundary without demonstrated need |
+| Direct SQLite writes for instant feedback | Low | High | Technically possible but forbidden boundary | Reject: official URL Scheme is the write authority |
+| Replace Things with a new task database | Low | High | Large data migration | Reject: removes the product's integration value |
+| Plugin marketplace for arbitrary automation | Low | Medium | Trust/signing/accounts | Reject: new execution/security product without evidence |
+| Build custom selects to imitate native widgets | Low | Low | Easy but maintenance-heavy | Reject: native controls already provide keyboard semantics |
+
+No code, new dependency or fresh epic. Continue only the already-supported placement gap; then assess stopping against the scorecard and final dream.
