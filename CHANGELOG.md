@@ -4,6 +4,17 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.1] - 2026-10-10
+
+### Fixed
+
+- Explicitly emit core metadata 2.4 for wheel and source distributions. The
+  existing pinned PyPI publishing action rejected Hatchling's new 2.5 default
+  before uploading 0.10.0. No publishing workflow, credentials, runtime
+  dependencies or Python minimum changed. Includes all 0.10.0 improvements.
+- Preserve the public 0.10.0 tag/release as a historical checkpoint; use 0.10.1
+  for package installation.
+
 ## [0.10.0] - 2026-10-10
 
 ### Added

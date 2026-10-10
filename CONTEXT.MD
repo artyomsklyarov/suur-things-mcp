@@ -1,6 +1,6 @@
 # SUUR Things MCP — product context
 
-Updated: 2026-10-10. Product reference for the 0.10.0 release. Read [STATUS.MD](STATUS.MD) for what has actually been verified or published; this document describes functionality and intended behavior. [SPEC.MD](SPEC.MD) owns technical contracts, [TODO.MD](TODO.MD) user actions, and [PLAN.MD](PLAN.MD) unimplemented work.
+Updated: 2026-10-10. Product reference for the 0.10.1 release (the 0.10.0 feature set plus a packaging correction). Read [STATUS.MD](STATUS.MD) for what has actually been verified or published; this document describes functionality and intended behavior. [SPEC.MD](SPEC.MD) owns technical contracts, [TODO.MD](TODO.MD) user actions, and [PLAN.MD](PLAN.MD) unimplemented work.
 
 ## Product and purpose
 

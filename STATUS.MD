@@ -9,13 +9,13 @@ Updated: 2026-10-10. This is the current-state handoff. Read [CONTEXT.MD](CONTEX
 | Public repository | `artyomsklyarov/suur-things-mcp`, PUBLIC, default branch `main` |
 | Public GitHub release at preparation start | `v0.9.0`; 0.10.0 not yet released |
 | Fresh PyPI metadata at preparation start | 0.9.0; no 0.10.0 release/files existed |
-| Local source/version | 0.10.0, single-sourced in `__init__.py`; manifest/lock include the existing staleness update |
-| Working branch | `autoloop/2026-10-10`; autonomous checkpoints through `96748c6` |
+| Local source/version | 0.10.1, single-sourced in `__init__.py`; metadata 2.4 packaging correction, all 0.10.0 functionality retained |
+| Working branch | `release/0.10.1`; full update merged through PR #53 at `bfbb51c` |
 | Local verification checkpoint | 238 passing tests, zero skips; Ruff, compile and offline wheel/sdist green |
 | New publication authorization | User explicitly requested committing the full update to GitHub and releasing a new version on 2026-10-10 |
-| New release execution | Documentation/changelog and local release gate complete; full-checkout commit/PR and public 0.10.0 receipts pending |
+| New release execution | Full update on main and GitHub v0.10.0 public; PyPI upload failed before transfer. Patch 0.10.1 prepared for metadata compatibility |
 
-The release version is 0.10.0, not 0.10.1: 0.10.0 already existed in uncommitted source but had never been published. Its changelog date is corrected to the actual release-preparation date. GitHub publication triggers the existing PyPI workflow; no publishing credentials or workflow permissions are being added.
+0.10.0 already existed in uncommitted source and was initially unpublished. Its GitHub release is now public, but its PyPI job rejected metadata 2.5 before uploading. The patch release is 0.10.1, explicitly using metadata 2.4 and preserving the public 0.10.0 checkpoint. Changelog dates reflect 2026-10-10. GitHub publication triggers the existing PyPI workflow; no publishing credentials or workflow permissions are being added.
 
 The earlier autoloop explicitly avoided remote publication and left ten pre-existing dirty files byte-identical. That was correct for that task. The current user instruction authorizes reviewing/committing that existing update and public release. `.autoloop/SUMMARY.md` and its protected-file hashes are historical receipts, not assertions that those files must remain uncommitted forever.
 
@@ -117,7 +117,7 @@ One existing Starlette TestClient/httpx deprecation remains. Tests pass; it was 
 - Release-specific complete gate: [.autoloop/artifacts/release-0.10.0.txt](.autoloop/artifacts/release-0.10.0.txt), 238 passed/zero skips, unchanged one deprecation; package inspection in [release verification](docs/releases/0.10.0/VERIFICATION.md).
 
 ```sh
-.venv/bin/python .autoloop/scripts/verify.py release-0.10.0
+.venv/bin/python .autoloop/scripts/verify.py release-0.10.1
 .venv/bin/python .autoloop/scripts/capture.py release-screens
 uv build --offline
 ```
@@ -126,4 +126,9 @@ Build output alone is not a release. GitHub merge, GitHub release workflow, PyPI
 
 ## Publication receipts
 
-Pending: release-preparation commit, PR and remote CI, merged commit, `v0.10.0` tag/release, PyPI workflow and public package verification. This section will be replaced by observed URLs/hashes/outcomes; no placeholder is presented as completed publication.
+- Full-update commit: `3a42e1c1557bca0738dbf6a284ef24ef16b428f8`.
+- [PR #53](https://github.com/artyomsklyarov/suur-things-mcp/pull/53) merged normally at `bfbb51cec06e898ccb9b64747d442a9f8733e002` on 2026-10-10.
+- [Required CI](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094162353) passed: 229 passed, nine environment-dependent skips, one test-client warning. The complete local fixture gate separately passed all 238 without skips. Existing setup-uv also emits a Node 20 migration warning on GitHub; no action/config upgrade is included here.
+- [GitHub v0.10.0](https://github.com/artyomsklyarov/suur-things-mcp/releases/tag/v0.10.0) published at that merge commit, 2026-10-10 23:13:59 UTC.
+- [0.10.0 PyPI job](https://github.com/artyomsklyarov/suur-things-mcp/actions/runs/38094300758) failed at metadata validation: `'2.5' is not a valid metadata version`. Fresh 0.10.0 registry metadata returned 404; it is not an installable PyPI release.
+- [0.10.1 full local gate](.autoloop/artifacts/release-0.10.1.txt): 238 passed, zero skips, unchanged test-client warning, Ruff/compile/build and lock consistency green. Both builds explicitly emit metadata 2.4. Patch CI, merge, release and public PyPI verification remain pending; publication is not inferred from local builds.

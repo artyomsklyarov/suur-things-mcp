@@ -1,0 +1,30 @@
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/ruff check .
+All checks passed!
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m compileall -q src
+Exit: 0
+
+$ /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/.venv/bin/python -m pytest -q --junitxml=/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-0e8v828d/pytest.xml
+........................................................................ [ 30%]
+........................................................................ [ 60%]
+........................................................................ [ 90%]
+......................                                                   [100%]
+=============================== warnings summary ===============================
+tests/test_dashboard.py:10
+  /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/tests/test_dashboard.py:10: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+238 passed, 1 warning in 68.92s (0:01:08)
+Exit: 0
+
+Pytest report verified: executed tests, zero skips/errors/failures.
+
+$ uv build --offline --out-dir /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-0e8v828d/dist
+Building source distribution...
+Building wheel from source distribution...
+Successfully built /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-0e8v828d/dist/suur_things_mcp-0.10.1.tar.gz
+Successfully built /var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/suur-verify-0e8v828d/dist/suur_things_mcp-0.10.1-py3-none-any.whl
+Exit: 0
+

@@ -6,17 +6,15 @@ Updated: 2026-10-10. This document records work not implemented or not accepted.
 
 0.10.0 combines the existing staleness feature with 23 committed autoloop improvement slices. The user has authorized both the full checkout commit and public release. No version/account/permission question remains for the existing GitHub → PyPI release workflow.
 
-Remaining execution at document creation:
+Release progress:
 
-1. Finish canonical docs, accurately date/expand the 0.10.0 changelog and correct README drift (tool count, five views, five-second cursor polling, keyboard placement and verification guide).
-2. Run the complete seeded no-skip gate after release edits. Build distributions separately for inspection; verify 0.10.0 metadata and packaged HTML.
-3. Commit the complete intended checkout, including the ten previously preserved files. Scan tracked release content for actual credentials without printing values; retain synthetic evidence and historical logs.
-4. Push the branch and create a PR to protected main. Wait for the required `test` check, inspect any failures, and merge through the normal policy. Do not force-push or bypass branch protection.
-5. Publish `v0.10.0` at the verified commit with factual release notes. This triggers the existing Trusted Publishing workflow; do not change auth/environment configuration speculatively.
-6. Verify the workflow outcome and fresh PyPI 0.10.0 metadata/files. Validate package version/frontend from the public distribution without running against real Things data. Record each public receipt separately.
-7. Update STATUS/TODO with actual outcomes. If an external gate fails, preserve the completed checkpoint and report the concrete gate rather than calling the package published.
+- Done: all five docs, changelog/README consistency, full no-skip gate and package inspection, public source update, protected-main CI and normal merge through PR #53.
+- Done: GitHub v0.10.0 release at the checked merge commit.
+- Failed: its PyPI action rejects Hatchling's metadata 2.5 before upload. The public tag/release is retained; this does not count as PyPI publication.
+- Pending: 0.10.1 patch using the documented metadata 2.4 setting for both targets; repeat the full gate and package inspection, pass required PR CI, merge, release through the existing workflow and verify public registry/files/hashes.
+- Pending: update STATUS/TODO with observed patch-release outcomes and commit those receipts to GitHub.
 
-Completion criterion: five accurate handoff documents on GitHub, full source update on main, GitHub release public, release job successful and 0.10.0 installable files verified on PyPI. This is separate from live task acceptance.
+Completion criterion: five accurate handoff documents on GitHub, full source update on main, GitHub release public, release job successful and 0.10.1 installable files verified on PyPI. This is separate from live task acceptance. No tag rewriting, publishing secrets/config changes or real task mutations are needed.
 
 ## P1 — Live Things acceptance protocol
 
@@ -64,7 +62,7 @@ These follow-ups need not become one large epic. Protect each area first, implem
 
 Inspect compatibility of MCP, Starlette and the supported test client before changing pins/dependencies. Select a supported migration only when the actual stack works across Python >=3.10 and the Linux fixture/macOS live boundaries. Do not silence warnings or weaken tests. Update manifest and lock together, document any new dependency rationale, and keep minimum language/platform floors unless separately decided.
 
-Acceptance: zero new warnings, old deprecation resolved by a supported setup, all 238+ strict tests run without skips locally, Linux CI passes and distribution dependency metadata matches intended floors. MCP major-version proposals require explicit API/transport compatibility investigation rather than a routine bump.
+Acceptance: zero new warnings, old deprecation resolved by a supported setup, all 238+ strict tests run without skips locally, Linux CI passes and distribution dependency metadata matches intended floors. MCP major-version proposals require explicit API/transport compatibility investigation rather than a routine bump. Existing GitHub setup-uv emits a Node 20 migration warning; action-runtime maintenance needs a separate reviewed workflow change, not a publishing credential change.
 
 ## P4 — Broader manual accessibility acceptance
 
