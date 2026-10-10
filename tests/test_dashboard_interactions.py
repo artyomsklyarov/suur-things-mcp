@@ -390,3 +390,43 @@ def test_preferences_editor_save_preserves_organizer_settings(ui):
             {"prefs": {"agent": "codex", "agent_model": "custom-model", "editor": "cursor", "terminal": ""}},
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "source,target",
+    [("list", "inbox"), ("list", "about"), ("board", "inbox"), ("priority", "about"), ("levels", "inbox")],
+)
+def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, target):
+    page = ui["page"]
+    page.evaluate("""() => {
+        const original = window.fetch;
+        window.fetch = (url, options) => {
+            if(!window.releaseView && (url.startsWith('/api/items') || url.startsWith('/api/board'))) {
+                return new Promise(resolve => window.releaseView = () => resolve({ok:true, json:async()=>({ok:true, kind:'builtin', items:[{uuid:'stale',title:'Stale response',tags:[]}], columns:[{title:'Stale column',name:'old',cards:[]}]})}));
+            }
+            return original(url, options);
+        };
+    }""")
+    page.evaluate(
+        """source => {
+        if(source==='list') renderList(resolveList('today'));
+        else if(source==='board') renderBoard('fixture');
+        else if(source==='priority') renderPriority();
+        else renderLevels();
+    }""",
+        source,
+    )
+    page.wait_for_function("() => !!window.releaseView")
+    if target == "about":
+        page.evaluate("() => renderAbout()")
+        expected = page.locator("#content").inner_text()
+    else:
+        page.evaluate("() => renderList(resolveList('inbox'))")
+        page.locator("#content .empty").wait_for()
+        expected = page.locator("#content").inner_text()
+    page.evaluate("() => window.releaseView()")
+    page.wait_for_timeout(100)
+    assert page.locator("#content").inner_text() == expected
+    assert "Stale" not in page.locator("#content").inner_text()
+    if target == "inbox":
+        assert page.evaluate("() => LIST_ITEMS") == []

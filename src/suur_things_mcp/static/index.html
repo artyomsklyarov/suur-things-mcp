@@ -644,6 +644,7 @@ let CONFIG_READY=false;
 let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{},priority_levels:[],area_prefs:{}};
 let MODE="list", CUR_BOARD=null, SEL=null, EDIT_ID=null, CURRENT_ID="today", TODAY_CACHE=[];
 let LAST_ITEMS={}, ORG_SUG=[];
+let VIEW_REQUEST=0; // Latest navigation owns content and list state, even if reads finish out of order.
 function storageGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
 function storageSet(key,value){ try{ localStorage.setItem(key,value); }catch(e){} }
 function collapsedAreas(){
@@ -1023,6 +1024,7 @@ function resolveList(id){
 // --- list view ---
 let LIST_ITEMS=[], LIST_KIND="", LIST_NOTES=null, CUR_FILTER=null, LIST_ROLLUP=true;
 async function renderList(sel, view="list"){
+  const request=++VIEW_REQUEST;
   const matrix=view==="matrix", levels=view==="levels", cards=view==="cards", timeline=view==="timeline";
   MODE=view; CUR_BOARD=null; SEL=sel;
   if(LAST_LIST_ID!==sel.id){ clearSelection(); LAST_LIST_ID=sel.id; }
@@ -1035,6 +1037,7 @@ async function renderList(sel, view="list"){
   $(".main").classList.toggle("fill", matrix||levels||timeline);
   const c=$("#content"); $("#filterbar").classList.remove("show"); c.innerHTML=`<div class="empty loading">loading…</div>`;
   const data=await getJSON("/api/items?id="+encodeURIComponent(sel.id));
+  if(request!==VIEW_REQUEST) return;
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   LIST_ITEMS=data.items; LIST_KIND=data.kind; LIST_NOTES=data.notes||null; CUR_FILTER=null; LIST_ROLLUP=data.rollup!==false;
   $("#rollup-vt").classList.toggle("on", LIST_KIND==="area" && LIST_ROLLUP);
@@ -1210,6 +1213,7 @@ function rowEl(it){
 
 // --- board view ---
 async function renderBoard(id){
+  const request=++VIEW_REQUEST;
   MODE="board"; CUR_BOARD=id; setActive(id);
   $(".main").classList.add("fill"); $("#board-gear").style.display="flex"; $("#organize-btn").style.display="none";
   $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
@@ -1218,6 +1222,7 @@ async function renderBoard(id){
   setHeadEditable(b?"board":null, b?b.id:null);
   const c=$("#content"); c.innerHTML=`<div class="empty loading">loading…</div>`;
   const data=await getJSON("/api/board?id="+encodeURIComponent(id));
+  if(request!==VIEW_REQUEST) return;
   if(!data.ok){ c.innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
   c.innerHTML="";
   const wrap=document.createElement("div"); wrap.className="board-wrap";
@@ -1339,12 +1344,14 @@ function settleCard(sel){
 // Quadrant assignment lives in the global CONFIG.priority map keyed by task uuid,
 // so a task's priority is the same wherever it appears (Today, its project, etc).
 async function renderPriority(){
+  const request=++VIEW_REQUEST;
   MODE="matrix"; CUR_BOARD=null; setActive("priority");
   $(".main").classList.add("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
   $("#filterbar").classList.remove("show"); $("#viewtog").classList.remove("show");
   $("#head-ico").innerHTML=SVG.priority; $("#head-title").textContent="Priority Matrix"; setHeadEditable(null);
   const c=$("#content"); c.innerHTML=`<div class="empty loading">loading…</div>`;
   const data=await getJSON("/api/items?id=today");
+  if(request!==VIEW_REQUEST) return;
   LIST_ITEMS=data.ok?data.items:[]; LIST_KIND="builtin"; renderMatrix(LIST_ITEMS);
   contentIn();
 }
@@ -1414,6 +1421,7 @@ function levelTagSet(){ const s=new Set(); for(const l of plevels()) for(const t
 function levelOf(item){ const tags=item.tags||[]; const L=plevels();
   for(let i=0;i<L.length;i++){ if(L[i].tags.some(t=>tags.includes(t))) return i; } return -1; }
 async function renderLevels(){
+  const request=++VIEW_REQUEST;
   MODE="levels"; CUR_BOARD=null; SEL=null; setActive("levels");
   $(".main").classList.add("fill"); $("#board-gear").style.display="none"; $("#organize-btn").style.display="none";
   $("#levels-gear").style.display="flex";
@@ -1421,6 +1429,7 @@ async function renderLevels(){
   $("#head-ico").innerHTML=SVG.levels; $("#head-title").textContent="Priority Levels"; setHeadEditable(null);
   const c=$("#content"); c.innerHTML=`<div class="empty loading">loading…</div>`;
   const data=await getJSON("/api/items?id=today");
+  if(request!==VIEW_REQUEST) return;
   LIST_ITEMS=data.ok?data.items:[]; LIST_KIND="builtin"; renderLevelBands();
   contentIn();
 }
@@ -2081,6 +2090,7 @@ async function commitHeadRename(){
 })();
 
 function renderAbout(){
+  ++VIEW_REQUEST;
   MODE="about"; CUR_BOARD=null;
   document.querySelectorAll(".nav-item,.area-head,.project").forEach(n=>n.classList.remove("active"));
   const al=$("#about-link"); if(al) al.classList.add("active");

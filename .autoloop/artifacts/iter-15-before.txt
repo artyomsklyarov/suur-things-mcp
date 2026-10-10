@@ -1,0 +1,264 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+___ test_delayed_view_response_cannot_replace_latest_navigation[list-inbox] ____
+
+ui = {'page': <Page url='http://127.0.0.1:50486/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+source = 'list', target = 'inbox'
+
+    @pytest.mark.parametrize(
+        "source,target",
+        [("list", "inbox"), ("list", "about"), ("board", "inbox"), ("priority", "about"), ("levels", "inbox")],
+    )
+    def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, target):
+        page = ui["page"]
+        page.evaluate("""() => {
+            const original = window.fetch;
+            window.fetch = (url, options) => {
+                if(!window.releaseView && (url.startsWith('/api/items') || url.startsWith('/api/board'))) {
+                    return new Promise(resolve => window.releaseView = () => resolve({ok:true, json:async()=>({ok:true, kind:'builtin', items:[{uuid:'stale',title:'Stale response',tags:[]}], columns:[{title:'Stale column',name:'old',cards:[]}]})}));
+                }
+                return original(url, options);
+            };
+        }""")
+        page.evaluate(
+            """source => {
+            if(source==='list') renderList(resolveList('today'));
+            else if(source==='board') renderBoard('fixture');
+            else if(source==='priority') renderPriority();
+            else renderLevels();
+        }""",
+            source,
+        )
+        page.wait_for_function("() => !!window.releaseView")
+        if target == "about":
+            page.evaluate("() => renderAbout()")
+            expected = page.locator("#content").inner_text()
+        else:
+            page.evaluate("() => renderList(resolveList('inbox'))")
+            page.locator("#content .empty").wait_for()
+            expected = page.locator("#content").inner_text()
+        page.evaluate("() => window.releaseView()")
+        page.wait_for_timeout(100)
+>       assert page.locator("#content").inner_text() == expected
+E       AssertionError: assert 'Stale response' == 'Inbox Zero ✨...n＋ Add a task'
+E         
+E         + Stale response
+E         - Inbox Zero ✨
+E         - Nothing to sort.
+E         - 
+E         - ＋ Add a task
+
+tests/test_dashboard_interactions.py:429: AssertionError
+___ test_delayed_view_response_cannot_replace_latest_navigation[list-about] ____
+
+ui = {'page': <Page url='http://127.0.0.1:50486/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+source = 'list', target = 'about'
+
+    @pytest.mark.parametrize(
+        "source,target",
+        [("list", "inbox"), ("list", "about"), ("board", "inbox"), ("priority", "about"), ("levels", "inbox")],
+    )
+    def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, target):
+        page = ui["page"]
+        page.evaluate("""() => {
+            const original = window.fetch;
+            window.fetch = (url, options) => {
+                if(!window.releaseView && (url.startsWith('/api/items') || url.startsWith('/api/board'))) {
+                    return new Promise(resolve => window.releaseView = () => resolve({ok:true, json:async()=>({ok:true, kind:'builtin', items:[{uuid:'stale',title:'Stale response',tags:[]}], columns:[{title:'Stale column',name:'old',cards:[]}]})}));
+                }
+                return original(url, options);
+            };
+        }""")
+        page.evaluate(
+            """source => {
+            if(source==='list') renderList(resolveList('today'));
+            else if(source==='board') renderBoard('fixture');
+            else if(source==='priority') renderPriority();
+            else renderLevels();
+        }""",
+            source,
+        )
+        page.wait_for_function("() => !!window.releaseView")
+        if target == "about":
+            page.evaluate("() => renderAbout()")
+            expected = page.locator("#content").inner_text()
+        else:
+            page.evaluate("() => renderList(resolveList('inbox'))")
+            page.locator("#content .empty").wait_for()
+            expected = page.locator("#content").inner_text()
+        page.evaluate("() => window.releaseView()")
+        page.wait_for_timeout(100)
+>       assert page.locator("#content").inner_text() == expected
+E       AssertionError: assert 'Today is don...tale response' == 'A local, Thi...ultured Code.'
+E         
+E         + Today is done ✨
+E         + Everything checked off — it logs on the next refresh.
+E         + Stale response
+E         - A local, Things-faithful dashboard and MCP server for Things 3 — so any AI agent can read and manage your tasks, and you get views Things doesn't have (project boards, an Eisenhower matrix, a cards view).
+E         - 
+E         - How it works...
+E         
+E         ...Full output truncated (14 lines hidden), use '-vv' to show
+
+tests/test_dashboard_interactions.py:429: AssertionError
+___ test_delayed_view_response_cannot_replace_latest_navigation[board-inbox] ___
+
+ui = {'page': <Page url='http://127.0.0.1:50486/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+source = 'board', target = 'inbox'
+
+    @pytest.mark.parametrize(
+        "source,target",
+        [("list", "inbox"), ("list", "about"), ("board", "inbox"), ("priority", "about"), ("levels", "inbox")],
+    )
+    def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, target):
+        page = ui["page"]
+        page.evaluate("""() => {
+            const original = window.fetch;
+            window.fetch = (url, options) => {
+                if(!window.releaseView && (url.startsWith('/api/items') || url.startsWith('/api/board'))) {
+                    return new Promise(resolve => window.releaseView = () => resolve({ok:true, json:async()=>({ok:true, kind:'builtin', items:[{uuid:'stale',title:'Stale response',tags:[]}], columns:[{title:'Stale column',name:'old',cards:[]}]})}));
+                }
+                return original(url, options);
+            };
+        }""")
+        page.evaluate(
+            """source => {
+            if(source==='list') renderList(resolveList('today'));
+            else if(source==='board') renderBoard('fixture');
+            else if(source==='priority') renderPriority();
+            else renderLevels();
+        }""",
+            source,
+        )
+        page.wait_for_function("() => !!window.releaseView")
+        if target == "about":
+            page.evaluate("() => renderAbout()")
+            expected = page.locator("#content").inner_text()
+        else:
+            page.evaluate("() => renderList(resolveList('inbox'))")
+            page.locator("#content .empty").wait_for()
+            expected = page.locator("#content").inner_text()
+        page.evaluate("() => window.releaseView()")
+        page.wait_for_timeout(100)
+>       assert page.locator("#content").inner_text() == expected
+E       AssertionError: assert 'STALE COLUMN\n0' == 'Inbox Zero ✨...n＋ Add a task'
+E         
+E         + STALE COLUMN
+E         + 0
+E         - Inbox Zero ✨
+E         - Nothing to sort.
+E         - 
+E         - ＋ Add a task
+
+tests/test_dashboard_interactions.py:429: AssertionError
+_ test_delayed_view_response_cannot_replace_latest_navigation[priority-about] __
+
+ui = {'page': <Page url='http://127.0.0.1:50486/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+source = 'priority', target = 'about'
+
+    @pytest.mark.parametrize(
+        "source,target",
+        [("list", "inbox"), ("list", "about"), ("board", "inbox"), ("priority", "about"), ("levels", "inbox")],
+    )
+    def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, target):
+        page = ui["page"]
+        page.evaluate("""() => {
+            const original = window.fetch;
+            window.fetch = (url, options) => {
+                if(!window.releaseView && (url.startsWith('/api/items') || url.startsWith('/api/board'))) {
+                    return new Promise(resolve => window.releaseView = () => resolve({ok:true, json:async()=>({ok:true, kind:'builtin', items:[{uuid:'stale',title:'Stale response',tags:[]}], columns:[{title:'Stale column',name:'old',cards:[]}]})}));
+                }
+                return original(url, options);
+            };
+        }""")
+        page.evaluate(
+            """source => {
+            if(source==='list') renderList(resolveList('today'));
+            else if(source==='board') renderBoard('fixture');
+            else if(source==='priority') renderPriority();
+            else renderLevels();
+        }""",
+            source,
+        )
+        page.wait_for_function("() => !!window.releaseView")
+        if target == "about":
+            page.evaluate("() => renderAbout()")
+            expected = page.locator("#content").inner_text()
+        else:
+            page.evaluate("() => renderList(resolveList('inbox'))")
+            page.locator("#content .empty").wait_for()
+            expected = page.locator("#content").inner_text()
+        page.evaluate("() => window.releaseView()")
+        page.wait_for_timeout(100)
+>       assert page.locator("#content").inner_text() == expected
+E       assert "UNSORTED\n1\...t Do\nNeither" == 'A local, Thi...ultured Code.'
+E         
+E         + UNSORTED
+E         + 1
+E         + Stale response
+E         + Do First
+E         + Urgent · Important
+E         + Schedule...
+E         
+E         ...Full output truncated (22 lines hidden), use '-vv' to show
+
+tests/test_dashboard_interactions.py:429: AssertionError
+__ test_delayed_view_response_cannot_replace_latest_navigation[levels-inbox] ___
+
+ui = {'page': <Page url='http://127.0.0.1:50486/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+source = 'levels', target = 'inbox'
+
+    @pytest.mark.parametrize(
+        "source,target",
+        [("list", "inbox"), ("list", "about"), ("board", "inbox"), ("priority", "about"), ("levels", "inbox")],
+    )
+    def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, target):
+        page = ui["page"]
+        page.evaluate("""() => {
+            const original = window.fetch;
+            window.fetch = (url, options) => {
+                if(!window.releaseView && (url.startsWith('/api/items') || url.startsWith('/api/board'))) {
+                    return new Promise(resolve => window.releaseView = () => resolve({ok:true, json:async()=>({ok:true, kind:'builtin', items:[{uuid:'stale',title:'Stale response',tags:[]}], columns:[{title:'Stale column',name:'old',cards:[]}]})}));
+                }
+                return original(url, options);
+            };
+        }""")
+        page.evaluate(
+            """source => {
+            if(source==='list') renderList(resolveList('today'));
+            else if(source==='board') renderBoard('fixture');
+            else if(source==='priority') renderPriority();
+            else renderLevels();
+        }""",
+            source,
+        )
+        page.wait_for_function("() => !!window.releaseView")
+        if target == "about":
+            page.evaluate("() => renderAbout()")
+            expected = page.locator("#content").inner_text()
+        else:
+            page.evaluate("() => renderList(resolveList('inbox'))")
+            page.locator("#content .empty").wait_for()
+            expected = page.locator("#content").inner_text()
+        page.evaluate("() => window.releaseView()")
+        page.wait_for_timeout(100)
+>       assert page.locator("#content").inner_text() == expected
+E       AssertionError: assert 'UNSORTED\n1\...\nunmapped\n0' == 'Inbox Zero ✨...n＋ Add a task'
+E         
+E         - Inbox Zero ✨
+E         - Nothing to sort.
+E         - 
+E         - ＋ Add a task
+E         + UNSORTED
+E         + 1...
+E         
+E         ...Full output truncated (14 lines hidden), use '-vv' to show
+
+tests/test_dashboard_interactions.py:429: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_delayed_view_response_cannot_replace_latest_navigation[list-inbox]
+FAILED tests/test_dashboard_interactions.py::test_delayed_view_response_cannot_replace_latest_navigation[list-about]
+FAILED tests/test_dashboard_interactions.py::test_delayed_view_response_cannot_replace_latest_navigation[board-inbox]
+FAILED tests/test_dashboard_interactions.py::test_delayed_view_response_cannot_replace_latest_navigation[priority-about]
+FAILED tests/test_dashboard_interactions.py::test_delayed_view_response_cannot_replace_latest_navigation[levels-inbox]
+5 failed, 23 deselected in 5.48s

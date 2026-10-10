@@ -92,3 +92,8 @@ Dream 4 commit: d0a8c50.
 
 ## Iteration 14 — Fix
 B15: sanitizer preserves organizer agent/model, editor preference saves retain them. Before: two config regressions and one browser regression fail (iter-14-before.txt, iter-14-browser-before.txt). After: 194 tests/full gate green (iter-14.txt), invalid types ignored; no live agent call. Scores remain 4. Commit: pending iter 14.
+
+Iteration 14 commit: b59ca4e.
+
+## Iteration 15 — Fix
+B11: one request generation per async view, synchronous About invalidates old reads, guard before data errors/content/global-list mutation. Before: five race regressions fail (iter-15-before.txt). After: 199 tests/full gate green (iter-15.txt). Scores stay 4; dream due. Commit: pending iter 15.

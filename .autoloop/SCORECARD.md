@@ -5,7 +5,7 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 | Dimension | Before | Current | Evidence / limitation |
 |---|---:|---:|---|
 | Correctness | 4 | 4 | 113 tests, local build green; real URL Scheme integration requires human |
-| Reliability | 3 | 4 | Lossless config recovery, atomic caps and resilient startup; list race remains medium |
+| Reliability | 3 | 4 | Lossless config recovery, atomic caps and resilient startup; latest view discards stale reads, iter-15 |
 | Test coverage | 3 | 4 | Real Chromium + fixture SQL; recovery/concurrency/agent safety protected; intercepted browser workflow suite, iter-5.txt |
 | Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
 | Architecture | 4 | 4 | Read/write split, overlay store, thin tools; preserves intent |
@@ -34,3 +34,5 @@ Iteration 12: sampled sidebar counts/headings, matrix/level names/subtitles, pre
 Iteration 13: API config/link malformed roots and section/list shapes reject with 400 without changing bytes. Config/item/board I/O errors and upload storage errors have structured envelopes. 26 new tests, 187 total. Correctness/reliability remain 4.
 
 Iteration 14: supported claude/codex agent and nonempty model strings survive save/merge and editor preferences. Malformed values ignored, seven regressions, 194 tests. Reliability/product completeness stay 4.
+
+Iteration 15: five delayed list/board/matrix/levels responses no longer replace Inbox/About content or list state. 199 tests, correctness/reliability remain 4.
