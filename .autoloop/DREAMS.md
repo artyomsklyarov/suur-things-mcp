@@ -64,3 +64,24 @@ First use should feel familiar and safe; the hundredth should feel effortless; r
 | Theme crossfades everywhere | Low | Low | Easy but adds no value and harms motion intent | Reject |
 
 No code. No lucid experiment. Existing E02 continues next. H11 is reclassified into a feasible Medium backlog candidate B17; preferred interaction is not itself a real human blocker.
+
+## Dream 4 — Steal from elsewhere (after iterations 12-13)
+
+What if this felt as dependable as a database, as navigable as an editor, and as direct as a spreadsheet?
+
+| Idea | Fit | Impact | Buildability | Waking label |
+|---|---|---|---|---|
+| Email-client rule: latest selected mailbox wins | High | Medium | Request generation | Promote existing B11 |
+| Spreadsheet destination picker beside draggable content | High | Medium | Native selects/time inputs | Already promoted B17 |
+| IDE preferences survive unrelated saves | High | Medium | Existing sanitizer | Promote existing B15 |
+| Unix-style reproducible contributor verification guide | High | Medium | New documentation | Promote existing B12 |
+| Database-style atomic upload budget | High | High | Existing lock | Built iter 3 |
+| Document editor recovery copies retain original bytes | High | High | Existing backups | Built iter 2 |
+| OS-style dialog focus and Escape stack | High | High | Existing focus manager | Built iter 7 |
+| Terminal-theme legibility across text colors | High | High | Existing measured tokens | Built iter 12 |
+| Version-control-like rollback of reviewed agent changes (ambitious) | Medium | High | Real writes/history/migration | Park H15 |
+| Multiplayer collaborative whiteboard for all projects (ambitious) | Low | High | New accounts/hosting/privacy | Reject: single-user local architecture and outside guardrails |
+| Animated radar showing every background poll | Low | Low | Easy | Reject: undermines established quiet refresh |
+| Excel ribbon exposing all actions at once | Low | Low | Easy | Reject: wastes scarce task space and duplicates palette |
+
+No implementation. No new backlog item or lucid prototype. Existing self-contained fixes remain higher value than expanding the product.

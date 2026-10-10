@@ -42,3 +42,5 @@ Iteration 11: E02 is complete and default-enabled after all-view width tests and
 Iteration 12: computed foreground/effective background colors, standard sRGB luminance; normal text target 4.5:1 from https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html . Shared theme-specific muted/priority/on-accent tokens preserve semantic hues. No dependencies. Existing resize regression now waits for BOTH sidebar/main inert states because sidebar is already non-inert while its menu is open; assertions unchanged.
 
 Iteration 13: retain existing 200/ok=false read/storage error convention, use established 400 for malformed JSON/section/list types. Empty repository list still intentionally clears links, while wrong types preserve them. No dependencies.
+
+- H15: Undo reviewed agent changes: first specify a local append-only before/after record with outcome verification; use a disposable task to prove a compensating URL Scheme update cannot overwrite intervening edits. Define retention and conflict handling before migrating config or offering Undo; never imply transactional Things writes.

@@ -82,3 +82,8 @@ Iteration 12 commit: d1be10a.
 
 ## Iteration 13 — Fix
 B10: validate config/link object and section/list shapes before mutation, reject non-string MIME, envelope config/item/board reads and attachment disk errors. Before: 18 targeted failures (iter-13-before.txt). After: 26 new regressions, 187 tests/full gate green (iter-13.txt); invalid payload tests assert saved bytes unchanged. Existing warning only. No real Things/model writes. Scores remain 4; dream due before next product iteration. Commit: pending iter 13.
+
+Iteration 13 commit: f478c0b.
+
+## Dream 4 — Dream
+Steal-from-elsewhere lens, twelve ideas and two ambitious. Continue existing B11/B15/B12/B17; five built capabilities, one new parked undo/conflict plan H15 and three rejections. No code or new dependencies. Commit: pending dream 4.
