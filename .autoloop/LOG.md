@@ -47,3 +47,8 @@ Iteration 7 commit: 2873a6e.
 
 ## Iteration 8 — Accessibility
 E01 milestone 2 complete: sidebar links/area toggles, task edit/complete, filter keyboard controls and state; palette combobox/listbox selected options; visible focus. Before: two new tests fail (iter-8-before.txt). First edit script aborted before changing files on an unmatched source fragment; corrected and reran full gate. After: 154 tests/full gate green (iter-8.txt); all eight images read, established UI retained. Accessibility 3 -> 4. Dream due before next product iteration. Commit: pending iter 8.
+
+Iteration 8 commit: fddcf99. Screenshot readback correction: initial tool forwarding requested an unsupported low-detail setting and omitted images; all eight were immediately forwarded again at supported detail and inspected after the commit. No visual regression found.
+
+## Dream 2 — 2026-10-10
+Mode: Dream. Data-dream lens, 12 ideas, two ambitious; four grounded promotions (three existing backlog items), two already built, three parked plans and three rejections. No product code. Commit: pending dream 2.

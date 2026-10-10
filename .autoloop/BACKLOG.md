@@ -19,3 +19,4 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B13 | Existing dependency warning / real Things writes / dirty-file work | Docs | M | H | M | human |
 
 | B14 | Arealess project links fail to resolve in hash navigation | Fix | H | L | S | ready after E01 |
+| B15 | Preserve supported organizer agent/model preferences in config | Fix | M | L | S | ready |

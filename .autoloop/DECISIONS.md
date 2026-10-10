@@ -26,3 +26,8 @@ Iteration 4: model output must remain within submitted task IDs, with first sugg
 Iteration 6: browser storage is cosmetic and failure must not stop startup. Keep last good/default CONFIG and display Retry on load failure; block config/link POSTs until settings are loaded so defaults cannot overwrite unknown state. Render sidebar errors within side-nav to preserve the footer and retry structure.
 
 Iteration 7: E01 beats narrow-layout runner-up 20 vs 18 on user value/fit/feasibility/self-containment. Modal corrections are complete per slice, no incomplete new feature requires a flag. Preserve edit autosave and instant palette motion.
+
+- H08: Time-budget proposal: dev-only timeline summary of configured minutes vs available day span, with no guessed estimates; decide whether users want warnings before introducing them.
+- H09: Attention-map proposal: local synthetic proof of joining staleness and repo timestamps; decide retention/privacy and meaning of scores before surfacing real data.
+- H10: Personal ontology proposal: optional local-only classification prototype; approve model/dependency/storage/migration scope before any training or indexing.
+- H11: Advanced drag-view keyboard placement: specify an accessible per-card destination selector for board stages, quadrants and timeline blocks; decide preferred interaction before a larger view-controls epic. Existing task edit/complete remains keyboard accessible.

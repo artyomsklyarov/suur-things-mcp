@@ -22,3 +22,24 @@ A new user connects an agent, sees familiar tasks, and trusts that local data st
 | Confetti after every completion | Low | Low | Easy | Reject: contradicts calm motion intent |
 
 No code written in this dream. No lucid prototype: all promoted work has direct existing evidence. Next: highest-priority security containment bug, with regression evidence before the fix.
+
+## Dream 2 — Data dreams (after iteration 8)
+
+The app already holds project hierarchy, overlay preferences, modified stamps and live view identity. Surface those reliably before inventing another data store.
+
+| Idea | Fit | Impact | Buildability | Waking label |
+|---|---|---|---|---|
+| Every project, even outside an area, is navigable | High | High | Small resolve-list fix | Promote B14 |
+| Latest selected view always wins over delayed data | High | Medium | Request-generation guard | Promote B11 |
+| Existing organizer agent/model preferences actually survive saves | High | Medium | Existing sanitizer | Promote B15 |
+| Local overlay recovery guide with exact backup examples | High | Medium | New docs file | Promote B12 |
+| Show a retryable local-data error without destroying navigation | High | High | Existing startup work | Already built iter 6 |
+| Show accessible selection state, not only CSS color | High | High | Existing keyboard epic | Already built iter 8 |
+| Time-budget simulation from stored blocks | Medium | Medium | Needs assumptions/UX design | Park H08 |
+| Whole-history attention map across task age and git activity (ambitious) | Medium | High | Privacy/retention and product scope | Park H09 |
+| Learn a personal task ontology completely on-device (ambitious) | Medium | High | New model/data architecture | Park H10 |
+| Automatic unreviewed agent triage | Low | High | Easy to wire, violates review boundary | Reject |
+| Send task analytics to a hosted dashboard | Low | Medium | External tracking/infra | Reject |
+| Pretty counters for their own sake | Low | Low | Easy | Reject: no core user value |
+
+No code in dream session. No lucid experiment. Next: resolve standalone projects (highest outstanding safe Fix), then the narrow-window epic.
