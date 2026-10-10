@@ -1,0 +1,96 @@
+light contrast ratios: [('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.483400695876184), ('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.9524772908660144), ('.group-head', 2.9524772908660144), ('.quad-head .qt', 4.25299172157712), ('.quad-head .qt', 3.4102099849040837), ('.quad-head .qt', 2.761152391918442), ('.quad-head .qt', 16.8155377168847), ('.quad-head .qs', 3.249245601529665), ('.quad-head .qs', 3.249245601529665), ('.quad-head .qs', 3.249245601529665), ('.quad-head .qs', 3.249245601529665), ('.pri-pool .col-head', 2.87502297685329), ('.lvl-head .lt', 4.25299172157712), ('.lvl-head .lt', 2.761152391918442), ('.lvl-head .lt', 3.4102099849040837), ('.lvl-head .lt', 3.200609405686876), ('.lvl-head .ls', 3.249245601529665), ('.lvl-head .ls', 3.249245601529665), ('.lvl-head .ls', 3.249245601529665), ('.lvl-head .ls', 3.249245601529665), ('.lvl-mapnote', 2.87502297685329), ('#prefs-overlay .hint', 3.249245601529665), ('#prefs-overlay .field label', 3.249245601529665), ('#prefs-overlay .field label', 3.249245601529665), ('#pf-save', 4.067114842758183), ('#pf-cancel', 3.249245601529665)]
+Fdark contrast ratios: [('.nav-item .count', 4.551308029267975), ('.nav-item .count', 3.185096922071643), ('.nav-item .count', 4.551308029267975), ('.nav-item .count', 4.551308029267975), ('.nav-item .count', 4.551308029267975), ('.nav-item .count', 4.551308029267975), ('.nav-item .count', 4.551308029267975), ('.group-head', 4.551308029267975), ('.quad-head .qt', 5.7296525924491934), ('.quad-head .qt', 4.900580455829776), ('.quad-head .qt', 6.052548367562228), ('.quad-head .qt', 13.739320900294917), ('.quad-head .qs', 5.06367612921925), ('.quad-head .qs', 5.06367612921925), ('.quad-head .qs', 5.06367612921925), ('.quad-head .qs', 5.06367612921925), ('.pri-pool .col-head', 4.61032780514666), ('.lvl-head .lt', 3.9294711808419094), ('.lvl-head .lt', 6.052548367562228), ('.lvl-head .lt', 4.900580455829776), ('.lvl-head .lt', 5.2215082454617665), ('.lvl-head .ls', 5.06367612921925), ('.lvl-head .ls', 5.06367612921925), ('.lvl-head .ls', 5.06367612921925), ('.lvl-head .ls', 5.06367612921925), ('.lvl-mapnote', 4.61032780514666), ('#prefs-overlay .hint', 5.06367612921925), ('#prefs-overlay .field label', 5.06367612921925), ('#prefs-overlay .field label', 5.06367612921925), ('#pf-save', 3.200609405686876), ('#pf-cancel', 5.06367612921925)]
+F
+=================================== FAILURES ===================================
+_____ test_small_text_and_primary_controls_have_sufficient_contrast[light] _____
+
+ui = {'page': <Page url='http://127.0.0.1:54075/#l/today/p'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priori...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+theme = 'light'
+
+    @pytest.mark.parametrize("theme", ["light", "dark"])
+    def test_small_text_and_primary_controls_have_sufficient_contrast(ui, theme):
+        page = ui["page"]
+        page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
+        page.wait_for_timeout(250)
+        samples = []
+    
+        def measure(selectors):
+            for selector in selectors:
+                pairs = page.locator(selector).evaluate_all("""els => els.map(el => {
+                    const rgb = value => value.match(/[\\d.]+/g).map(Number).slice(0, 3);
+                    let parent = el, bg;
+                    while(parent) {
+                        bg = getComputedStyle(parent).backgroundColor;
+                        if(bg !== 'rgba(0, 0, 0, 0)') break;
+                        parent = parent.parentElement;
+                    }
+                    return [rgb(getComputedStyle(el).color), rgb(bg)];
+                })""")
+                assert pairs, selector
+                samples.extend((selector, _contrast(fg, bg)) for fg, bg in pairs)
+    
+        measure([".nav-item .count", ".group-head"])
+        page.locator("#vt-matrix").click()
+        page.locator(".quad-head").first.wait_for()
+        measure([".quad-head .qt", ".quad-head .qs", ".pri-pool .col-head"])
+        page.locator("#vt-levels").click()
+        page.locator(".lvl-head").first.wait_for()
+        measure([".lvl-head .lt", ".lvl-head .ls", ".lvl-mapnote"])
+        page.locator("#prefs-btn").click()
+        page.wait_for_timeout(250)
+        measure(["#prefs-overlay .hint", "#prefs-overlay .field label", "#pf-save", "#pf-cancel"])
+        print(f"{theme} contrast ratios: {samples}")
+>       assert all(ratio >= 4.5 for _, ratio in samples), samples
+E       AssertionError: [('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.483400695876184), ('.nav-item .count', 2.95247729086... .count', 2.9524772908660144), ('.nav-item .count', 2.9524772908660144), ('.nav-item .count', 2.9524772908660144), ...]
+E       assert False
+E        +  where False = all(<generator object test_small_text_and_primary_controls_have_sufficient_contrast.<locals>.<genexpr> at 0x10a832c00>)
+
+tests/test_dashboard_interactions.py:376: AssertionError
+_____ test_small_text_and_primary_controls_have_sufficient_contrast[dark] ______
+
+ui = {'page': <Page url='http://127.0.0.1:54075/#l/today/p'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priori...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+theme = 'dark'
+
+    @pytest.mark.parametrize("theme", ["light", "dark"])
+    def test_small_text_and_primary_controls_have_sufficient_contrast(ui, theme):
+        page = ui["page"]
+        page.evaluate("(theme) => document.documentElement.dataset.theme = theme", theme)
+        page.wait_for_timeout(250)
+        samples = []
+    
+        def measure(selectors):
+            for selector in selectors:
+                pairs = page.locator(selector).evaluate_all("""els => els.map(el => {
+                    const rgb = value => value.match(/[\\d.]+/g).map(Number).slice(0, 3);
+                    let parent = el, bg;
+                    while(parent) {
+                        bg = getComputedStyle(parent).backgroundColor;
+                        if(bg !== 'rgba(0, 0, 0, 0)') break;
+                        parent = parent.parentElement;
+                    }
+                    return [rgb(getComputedStyle(el).color), rgb(bg)];
+                })""")
+                assert pairs, selector
+                samples.extend((selector, _contrast(fg, bg)) for fg, bg in pairs)
+    
+        measure([".nav-item .count", ".group-head"])
+        page.locator("#vt-matrix").click()
+        page.locator(".quad-head").first.wait_for()
+        measure([".quad-head .qt", ".quad-head .qs", ".pri-pool .col-head"])
+        page.locator("#vt-levels").click()
+        page.locator(".lvl-head").first.wait_for()
+        measure([".lvl-head .lt", ".lvl-head .ls", ".lvl-mapnote"])
+        page.locator("#prefs-btn").click()
+        page.wait_for_timeout(250)
+        measure(["#prefs-overlay .hint", "#prefs-overlay .field label", "#pf-save", "#pf-cancel"])
+        print(f"{theme} contrast ratios: {samples}")
+>       assert all(ratio >= 4.5 for _, ratio in samples), samples
+E       AssertionError: [('.nav-item .count', 4.551308029267975), ('.nav-item .count', 3.185096922071643), ('.nav-item .count', 4.551308029267...tem .count', 4.551308029267975), ('.nav-item .count', 4.551308029267975), ('.nav-item .count', 4.551308029267975), ...]
+E       assert False
+E        +  where False = all(<generator object test_small_text_and_primary_controls_have_sufficient_contrast.<locals>.<genexpr> at 0x10a986a40>)
+
+tests/test_dashboard_interactions.py:376: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_small_text_and_primary_controls_have_sufficient_contrast[light]
+FAILED tests/test_dashboard_interactions.py::test_small_text_and_primary_controls_have_sufficient_contrast[dark]
+2 failed, 20 deselected in 4.53s

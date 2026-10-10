@@ -1,0 +1,12 @@
+{
+  "CHANGELOG.md": true,
+  "CLAUDE.md": true,
+  "pyproject.toml": true,
+  "src/suur_things_mcp/__init__.py": true,
+  "src/suur_things_mcp/reads.py": true,
+  "src/suur_things_mcp/server.py": true,
+  "tests/conftest.py": true,
+  "tests/test_reads.py": true,
+  "tests/test_server_tools.py": true,
+  "uv.lock": true
+}

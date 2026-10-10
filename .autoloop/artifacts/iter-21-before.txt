@@ -1,0 +1,425 @@
+..                                                                       [100%]
+=============================== warnings summary ===============================
+tests/test_dashboard.py:10
+  /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/tests/test_dashboard.py:10: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 30 deselected, 1 warning in 0.88s
+FFF.                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_attachment_remains_successful_when_note_sync_fails[read-error0] _____
+
+operation = 'read', error = OSError('fixture DB unavailable')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c2e8e90>
+
+    @pytest.mark.parametrize(
+        "operation,error",
+        [
+            ("read", OSError("fixture DB unavailable")),
+            ("read", __import__("sqlite3").OperationalError("fixture DB locked")),
+            ("write", OSError("fixture opener unavailable")),
+            ("write", dashboard.ThingsURLError("fixture update rejected")),
+        ],
+    )
+    def test_attachment_remains_successful_when_note_sync_fails(operation, error, monkeypatch):
+        monkeypatch.setattr(dashboard, "_auth_token", lambda: "fixture-token")
+        dispatched = []
+    
+        def read(*args):
+            if operation == "read":
+                raise error
+            return {"notes": "Keep these notes"}
+    
+        def write(*args, **kwargs):
+            dispatched.append((args, kwargs))
+            raise error
+    
+        monkeypatch.setattr(dashboard.reads, "get", read)
+        monkeypatch.setattr(dashboard, "execute", write)
+        data = b"synthetic image bytes"
+>       response = client.post(
+            "/api/attach",
+            json={"uuid": "task", "data": base64.b64encode(data).decode(), "mime": "image/png", "name": "Fixture"},
+        )
+
+tests/test_dashboard_failures.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/starlette/testclient.py:555: in post
+    return super().post(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.14/site-packages/starlette/testclient.py:454: in request
+    return super().request(
+.venv/lib/python3.14/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/testclient.py:356: in handle_request
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/testclient.py:353: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.14/site-packages/anyio/from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:450: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:395: in __get_result
+    raise self._exception
+.venv/lib/python3.14/site-packages/anyio/from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.14/site-packages/starlette/middleware/trustedhost.py:51: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:88: in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.14/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:64: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.14/site-packages/starlette/routing.py:61: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:571: in _attach
+    existing = (await run_in_threadpool(reads.get, item_uuid) or {}).get("notes") or ""
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/concurrency.py:34: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/anyio/to_thread.py:63: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:2592: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:1029: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ('task',)
+
+    def read(*args):
+        if operation == "read":
+>           raise error
+E           OSError: fixture DB unavailable
+
+tests/test_dashboard_failures.py:111: OSError
+_____ test_attachment_remains_successful_when_note_sync_fails[read-error1] _____
+
+operation = 'read', error = OperationalError('fixture DB locked')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c2e9ba0>
+
+    @pytest.mark.parametrize(
+        "operation,error",
+        [
+            ("read", OSError("fixture DB unavailable")),
+            ("read", __import__("sqlite3").OperationalError("fixture DB locked")),
+            ("write", OSError("fixture opener unavailable")),
+            ("write", dashboard.ThingsURLError("fixture update rejected")),
+        ],
+    )
+    def test_attachment_remains_successful_when_note_sync_fails(operation, error, monkeypatch):
+        monkeypatch.setattr(dashboard, "_auth_token", lambda: "fixture-token")
+        dispatched = []
+    
+        def read(*args):
+            if operation == "read":
+                raise error
+            return {"notes": "Keep these notes"}
+    
+        def write(*args, **kwargs):
+            dispatched.append((args, kwargs))
+            raise error
+    
+        monkeypatch.setattr(dashboard.reads, "get", read)
+        monkeypatch.setattr(dashboard, "execute", write)
+        data = b"synthetic image bytes"
+>       response = client.post(
+            "/api/attach",
+            json={"uuid": "task", "data": base64.b64encode(data).decode(), "mime": "image/png", "name": "Fixture"},
+        )
+
+tests/test_dashboard_failures.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/starlette/testclient.py:555: in post
+    return super().post(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.14/site-packages/starlette/testclient.py:454: in request
+    return super().request(
+.venv/lib/python3.14/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/testclient.py:356: in handle_request
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/testclient.py:353: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.14/site-packages/anyio/from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:450: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:395: in __get_result
+    raise self._exception
+.venv/lib/python3.14/site-packages/anyio/from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.14/site-packages/starlette/middleware/trustedhost.py:51: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:88: in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.14/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:64: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.14/site-packages/starlette/routing.py:61: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:571: in _attach
+    existing = (await run_in_threadpool(reads.get, item_uuid) or {}).get("notes") or ""
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/concurrency.py:34: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/anyio/to_thread.py:63: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:2592: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:1029: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ('task',)
+
+    def read(*args):
+        if operation == "read":
+>           raise error
+E           sqlite3.OperationalError: fixture DB locked
+
+tests/test_dashboard_failures.py:111: OperationalError
+____ test_attachment_remains_successful_when_note_sync_fails[write-error2] _____
+
+operation = 'write', error = OSError('fixture opener unavailable')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c235eb0>
+
+    @pytest.mark.parametrize(
+        "operation,error",
+        [
+            ("read", OSError("fixture DB unavailable")),
+            ("read", __import__("sqlite3").OperationalError("fixture DB locked")),
+            ("write", OSError("fixture opener unavailable")),
+            ("write", dashboard.ThingsURLError("fixture update rejected")),
+        ],
+    )
+    def test_attachment_remains_successful_when_note_sync_fails(operation, error, monkeypatch):
+        monkeypatch.setattr(dashboard, "_auth_token", lambda: "fixture-token")
+        dispatched = []
+    
+        def read(*args):
+            if operation == "read":
+                raise error
+            return {"notes": "Keep these notes"}
+    
+        def write(*args, **kwargs):
+            dispatched.append((args, kwargs))
+            raise error
+    
+        monkeypatch.setattr(dashboard.reads, "get", read)
+        monkeypatch.setattr(dashboard, "execute", write)
+        data = b"synthetic image bytes"
+>       response = client.post(
+            "/api/attach",
+            json={"uuid": "task", "data": base64.b64encode(data).decode(), "mime": "image/png", "name": "Fixture"},
+        )
+
+tests/test_dashboard_failures.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/starlette/testclient.py:555: in post
+    return super().post(
+.venv/lib/python3.14/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.14/site-packages/starlette/testclient.py:454: in request
+    return super().request(
+.venv/lib/python3.14/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.14/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.14/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/testclient.py:356: in handle_request
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/testclient.py:353: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.14/site-packages/anyio/from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:450: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:395: in __get_result
+    raise self._exception
+.venv/lib/python3.14/site-packages/anyio/from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.14/site-packages/starlette/middleware/trustedhost.py:51: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:88: in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+.venv/lib/python3.14/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.14/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/routing.py:64: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.14/site-packages/starlette/routing.py:61: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:573: in _attach
+    await run_in_threadpool(lambda: execute(
+.venv/lib/python3.14/site-packages/starlette/concurrency.py:34: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/anyio/to_thread.py:63: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:2592: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py:1029: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+src/suur_things_mcp/dashboard.py:573: in <lambda>
+    await run_in_threadpool(lambda: execute(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ('update', {'id': 'task', 'append-notes': '🖼 Image attached: Fixture — file:///private/var/folders/vs/33_lmwh911z8h4ny...st-of-artyomsklyarov/pytest-35/test_attachment_remains_succes2/attachments/task/741669956930485bb960392bdd658657.png'})
+kwargs = {'auth_token': 'fixture-token'}
+
+    def write(*args, **kwargs):
+        dispatched.append((args, kwargs))
+>       raise error
+E       OSError: fixture opener unavailable
+
+tests/test_dashboard_failures.py:116: OSError
+=============================== warnings summary ===============================
+tests/test_dashboard.py:10
+  /Users/artyomsklyarov/Dropbox/AI Projects/SUUR Things MCP/tests/test_dashboard.py:10: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_failures.py::test_attachment_remains_successful_when_note_sync_fails[read-error0]
+FAILED tests/test_dashboard_failures.py::test_attachment_remains_successful_when_note_sync_fails[read-error1]
+FAILED tests/test_dashboard_failures.py::test_attachment_remains_successful_when_note_sync_fails[write-error2]
+3 failed, 1 passed, 28 deselected, 1 warning in 1.72s

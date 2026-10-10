@@ -14,9 +14,11 @@ concept). Stored as JSON at ``$XDG_CONFIG_HOME/suur-things-mcp/board.json``
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import re
+import tempfile
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -90,8 +92,10 @@ def _clean_links(data: dict) -> dict[str, Any]:
         raw_repos = entry.get("repos")
         if not isinstance(raw_repos, list) and entry.get("repo"):  # legacy single repo
             raw_repos = [{"repo": entry.get("repo"), "github": entry.get("github"), "label": entry.get("label")}]
+        if not isinstance(raw_repos, list):
+            raw_repos = []
         by_path: dict[str, dict] = {}
-        for r in raw_repos or []:
+        for r in raw_repos:
             cleaned = _clean_link_entry(r)
             if cleaned:
                 by_path[cleaned["repo"]] = cleaned  # dedup by path
@@ -146,7 +150,14 @@ def _clean_prefs(data: dict) -> dict[str, Any]:
     p = data.get("prefs")
     if not isinstance(p, dict):
         return {}
-    return {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
+    out = {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
+    agent = p.get("agent")
+    if isinstance(agent, str) and agent in {"claude", "codex"}:
+        out["agent"] = agent
+    model = p.get("agent_model")
+    if isinstance(model, str) and model.strip():
+        out["agent_model"] = model.strip()
+    return out
 
 
 def _clean_area_prefs(data: dict) -> dict[str, Any]:
@@ -310,24 +321,29 @@ def prefs() -> dict[str, Any]:
 
 def load() -> dict[str, Any]:
     path = _path()
-    if not path.exists():
-        return _fresh()
     try:
-        return _clean(json.loads(path.read_text()))
-    except json.JSONDecodeError:
-        # A corrupt board.json (e.g. an interrupted write) used to be silently
-        # replaced with empty defaults — and the next save() overwrote it, so the
-        # user's boards/links/overlays were lost for good. Preserve the bad file
-        # so it's recoverable instead of vanishing.
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return _fresh()
+    # Other I/O errors must propagate: returning defaults would let a subsequent
+    # merge overwrite a file we never read (and therefore cannot preserve).
+    try:
+        data = json.loads(raw.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("config must be a JSON object")
+    except (ValueError, UnicodeDecodeError):
+        # Content-addressed, exclusive copies preserve each distinct bad payload
+        # without renaming a live file or overwriting another recovery. Repeated
+        # read requests reuse the same backup instead of creating endless copies.
+        backup = path.with_name(f"{path.name}.corrupt-{hashlib.sha256(raw).hexdigest()}")
         try:
-            import datetime
-            backup = path.with_name(f"{path.name}.corrupt-{datetime.datetime.now():%Y%m%d-%H%M%S}")
-            path.replace(backup)
-        except OSError:
-            pass
+            with backup.open("xb") as f:
+                f.write(raw)
+        except FileExistsError:
+            if backup.read_bytes() != raw:
+                raise ValueError("config recovery backup does not match") from None
         return _fresh()
-    except OSError:
-        return _fresh()
+    return _clean(data)
 
 
 def save(data: dict) -> dict[str, Any]:
@@ -337,13 +353,17 @@ def save(data: dict) -> dict[str, Any]:
     # Atomic write: a crash or concurrent writer can't leave a truncated/torn
     # board.json (which load() would then treat as corrupt). Write a sibling temp
     # file and os.replace() it into place (atomic on the same filesystem).
-    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    tmp = None
     try:
-        tmp.write_text(json.dumps(cfg, indent=2))
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f"{path.name}.tmp-", delete=False) as f:
+            tmp = Path(f.name)
+            f.write(json.dumps(cfg, indent=2))
         os.replace(tmp, path)
     finally:
         try:
-            tmp.unlink(missing_ok=True)
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
         except OSError:
             pass
     return cfg
@@ -500,8 +520,17 @@ def attachment_meta(item_uuid: str, att_id: str) -> dict[str, Any] | None:
 def attachment_path(item_uuid: str, meta: dict) -> Path:
     """On-disk path for an attachment. Built only from a stored metadata record and
     validated ids/mimes — never from request input — so it cannot escape the dir."""
-    ext = IMAGE_MIMES.get(meta.get("mime", ""), "bin")
-    return _attach_dir() / str(item_uuid) / f"{meta['id']}.{ext}"
+    if not _SAFE_ID.fullmatch(str(item_uuid)) or not _SAFE_ID.fullmatch(str(meta.get("id", ""))):
+        raise ValueError("invalid attachment path")
+    ext = IMAGE_MIMES.get(meta.get("mime", ""))
+    if ext is None:
+        raise ValueError("invalid attachment path")
+    path = _attach_dir() / str(item_uuid) / f"{meta['id']}.{ext}"
+    try:
+        path.resolve().relative_to(_attach_dir().resolve())
+    except (ValueError, OSError, RuntimeError) as exc:
+        raise ValueError("invalid attachment path") from exc
+    return path
 
 
 def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
@@ -514,10 +543,8 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     item_uuid = str(item_uuid)
     # item_uuid becomes a directory name below. Without this, a uuid like
     # "../../foo" would walk mkdir/write_bytes outside the attachments dir.
-    if not _SAFE_ID.match(item_uuid):
+    if not _SAFE_ID.fullmatch(item_uuid):
         raise ValueError("invalid item id")
-    if len(attachments().get(item_uuid, [])) >= MAX_ATTACH_PER_ITEM:
-        raise ValueError(f"too many images on this item (max {MAX_ATTACH_PER_ITEM})")
     mime = (mime or "").strip().lower()
     if mime not in IMAGE_MIMES:
         raise ValueError(f"unsupported image type: {mime!r}")
@@ -532,15 +559,14 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     path = attachment_path(item_uuid, meta)
     # Defence in depth: never write outside the attachments dir even if the
     # checks above are ever loosened.
-    base = _attach_dir().resolve()
-    if not str(path.resolve().parent).startswith(str(base)):
-        raise ValueError("invalid attachment path")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
     with _locked():
         cfg = load()
         table = cfg.setdefault("attachments", {})
-        table.setdefault(str(item_uuid), []).append(meta)
+        if len(table.get(item_uuid, [])) >= MAX_ATTACH_PER_ITEM:
+            raise ValueError(f"too many images on this item (max {MAX_ATTACH_PER_ITEM})")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        table.setdefault(item_uuid, []).append(meta)
         save(cfg)
     return meta
 
@@ -564,7 +590,11 @@ def remove_attachment(item_uuid: str, att_id: str) -> bool:
     if not meta:
         return False
     try:
-        attachment_path(item_uuid, meta).unlink(missing_ok=True)
+        path = attachment_path(item_uuid, meta)
+    except ValueError:
+        return False  # preserve both metadata and any file outside our storage
+    try:
+        path.unlink(missing_ok=True)
     except OSError:
         pass
     with _locked():

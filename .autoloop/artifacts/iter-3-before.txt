@@ -1,0 +1,91 @@
+.................FF                                                      [100%]
+=================================== FAILURES ===================================
+____________ test_concurrent_uploads_obey_cap_without_losing_images ____________
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-7/test_concurrent_uploads_obey_c0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10815e2b0>
+
+    def test_concurrent_uploads_obey_cap_without_losing_images(store, monkeypatch):
+        import threading
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+    
+        monkeypatch.setattr(config, "MAX_ATTACH_PER_ITEM", 2)
+        original_load = config.load
+        def slow_load():
+            result = original_load()
+            time.sleep(.02)  # simulate overlapping disk reads from multiple clients
+            return result
+        monkeypatch.setattr(config, "load", slow_load)
+        start = threading.Barrier(8)
+        def upload(i):
+            start.wait(timeout=5)
+            try:
+                return config.save_attachment("task", bytes([i]), "image/png", f"{i}.png")
+            except ValueError:
+                return None
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(upload, range(8)))
+        accepted = [meta for meta in results if meta]
+>       assert len(accepted) == 2
+E       AssertionError: assert 8 == 2
+E        +  where 8 = len([{'id': 'dfa9152fc52048f59d8ad00a73e5a551', 'mime': 'image/png', 'name': '0.png', 'caption': None, ...}, {'id': 'aae7d...one, ...}, {'id': '6d2c7ab6425f4f5f89ed93e70beed36c', 'mime': 'image/png', 'name': '5.png', 'caption': None, ...}, ...])
+
+tests/test_config_safety.py:111: AssertionError
+_________ test_concurrent_direct_saves_have_distinct_atomic_temp_files _________
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-7/test_concurrent_direct_saves_h0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107bb95b0>
+
+    def test_concurrent_direct_saves_have_distinct_atomic_temp_files(store, monkeypatch):
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+    
+        ready = threading.Barrier(2)
+        replace = config.os.replace
+        def together(source, destination):
+            ready.wait(timeout=5)
+            replace(source, destination)
+        monkeypatch.setattr(config.os, "replace", together)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+>           list(pool.map(lambda n: config.save({"prefs": {"editor": str(n)}}), range(2)))
+
+tests/test_config_safety.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:639: in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:311: in _result_or_cancel
+    return fut.result(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:450: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/_base.py:395: in __get_result
+    raise self._exception
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py:86: in run
+    result = ctx.run(self.task)
+             ^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.14.2-macos-aarch64-none/lib/python3.14/concurrent/futures/thread.py:73: in run
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+tests/test_config_safety.py:127: in <lambda>
+    list(pool.map(lambda n: config.save({"prefs": {"editor": str(n)}}), range(2)))
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/suur_things_mcp/config.py:351: in save
+    os.replace(tmp, path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+source = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-7/test_concurrent_direct_saves_h0/board.json.tmp-21599')
+destination = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-7/test_concurrent_direct_saves_h0/board.json')
+
+    def together(source, destination):
+        ready.wait(timeout=5)
+>       replace(source, destination)
+E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-7/test_concurrent_direct_saves_h0/board.json.tmp-21599' -> '/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-7/test_concurrent_direct_saves_h0/board.json'
+
+tests/test_config_safety.py:124: FileNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_config_safety.py::test_concurrent_uploads_obey_cap_without_losing_images
+FAILED tests/test_config_safety.py::test_concurrent_direct_saves_have_distinct_atomic_temp_files
+2 failed, 17 passed in 0.38s

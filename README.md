@@ -30,13 +30,13 @@ Two data paths, deliberately split:
 
 **Why this matters:** Cultured Code's own [AI-integration guidance](https://culturedcode.com/things/support/articles/5510170/) is blunt — *writing directly to the Things database is unsafe and can corrupt it.* They endorse the URL Scheme as the safe automation path. This server follows that exactly: it **reads** the DB read-only and **never writes** to it. Every mutation is a `things:///` URL, the same mechanism Things documents for Shortcuts and AppleScript.
 
-So an agent can't corrupt your database through this server even if it tries. The worst a write can do is what the URL Scheme itself allows.
+This avoids direct database writes by the integration. URL Scheme actions still change your tasks, so review proposed changes and verify their outcomes.
 
-> **Privacy:** an agent connected to this server can read your to-do and note content, which is then sent to whatever model you're using. Review your agent's privacy policy. Nothing here phones home; there's no telemetry and no bundled LLM.
+> **Privacy:** an agent connected to this server can read your to-do and note content, which is then sent to whatever model you're using. Review your agent's privacy policy. There is no telemetry or bundled LLM. Optional agent/provider calls, GitHub activity and external thumbnails can use network services.
 
 ### Why not direct DB writes?
 
-Because Cultured Code says not to. Their [AI-integration guidance](https://culturedcode.com/things/support/articles/5510170/) states plainly that writing to the Things SQLite database directly is unsafe and can corrupt it, and they point automation at the URL Scheme instead. So this server reads the database read-only and routes every change through `things:///` URLs — the same path Things documents for Shortcuts and AppleScript. The upside for you: an agent connected here physically cannot corrupt your Things data, no matter what it does.
+Because Cultured Code says not to. Their [AI-integration guidance](https://culturedcode.com/things/support/articles/5510170/) states plainly that writing to the Things SQLite database directly is unsafe and can corrupt it, and they point automation at the URL Scheme instead. So this server reads the database read-only and routes every change through `things:///` URLs — the same path Things documents for Shortcuts and AppleScript. The integration therefore avoids direct database mutation; this is not a guarantee that every requested task change is harmless or reversible.
 
 ---
 
@@ -48,8 +48,8 @@ Because Cultured Code says not to. Their [AI-integration guidance](https://cultu
 - 🟦 **Priority Matrix** — an Eisenhower matrix (Do First / Schedule / Delegate / Don't Do) as a one-click view on *any* list, project, or area. Drag tasks (and an area's projects) into quadrants.
 - 🏷️ **Priority Levels** — a 2×2 grid (P1–P4) over Today *or any list/area/project*, ranked from your *existing* Things tags. Map a tag to each level (e.g. `🔴` → P1); drag a task between levels and the tag is rewritten in Things. Unlike the Matrix, the source of truth is your real tags — read-only without a token, otherwise fully bidirectional.
 - 🗂️ **Area roll-up** — open an area and see the tasks inside its projects, grouped by project, not just the area's loose to-dos. A true overview of everything under the area.
-- 📅 **Daily planning / time-blocking** — a day **Timeline** view: drag today's tasks onto a 6am–11pm grid in 15/30/60-min blocks to plan the day. (Times are a private dashboard overlay.)
-- 🧘 **Calm Today** — one keystroke turns an overloaded Today into a single next action plus a short list and defers the rest. AI that *subtracts* noise instead of piling on features.
+- 📅 **Daily planning / time-blocking** — a day **Timeline** view: drag today's tasks onto a 6am–11pm grid in 15/30/60-min blocks to plan the day. (Times are a private dashboard overlay; a named Schedule dialog also supports keyboard time/duration changes and unscheduling.)
+- 🧘 **Calm Today** — start a reviewed proposal for a single next action, a short list and possible deferrals. AI that *subtracts* noise instead of piling on features.
 - 🎯 **Calm by design** — faithful Things look, light/dark, focus-friendly; completed tasks linger checked-off until they log, like the app.
 
 **Build & ship (for devs)**
@@ -64,7 +64,7 @@ Because Cultured Code says not to. Their [AI-integration guidance](https://cultu
 - 🎬 **Cards view** — a project full of links becomes a wall of **YouTube thumbnails** (a perfect "watch later").
 - 🏷 **Tag filter chips** + full-text **search** across everything; inline rename, column reorder, board-card progress rings.
 
-All of it free, local, open source — built on the safe read-SQLite / write-URL-Scheme split. No cloud, no account, no telemetry.
+The package is free, local and open source, with no hosted dashboard, task account or telemetry. Optional organizer workflows use your own agent account/provider and may have their own usage costs.
 
 ---
 
@@ -77,7 +77,7 @@ These are the workflows this unlocks once an agent can see and shape your task s
 - **Sweep code TODOs into Things.** Point your agent at the codebase: it greps `TODO`/`FIXME`, and `batch`-creates to-dos with `file:line` references — no new tool needed, the agent already has Grep + this server.
 - **Auto-organize a messy Inbox.** Hit the ✨ button on any folder (or use the `organize_folder` prompt). It spawns *your* agent **headlessly with zero tools and zero MCP**, so it can only *propose* cleaner titles/notes/tags — never write or be prompt-injected. You review every change before it's applied. (And yes, an agent can re-file Inbox items into the right projects — `update` supports moving via `list-id`.)
 - **Natural-language capture, for free.** Things has no NLP input — and you don't need it: tell your agent *"add buy milk tomorrow 9am #errand"* and it parses and creates it. The dashboard's ＋ also takes light shorthand (`buy milk tomorrow #errand`). Your agent is the natural-language (and recurring) layer Things lacks.
-- **AI that subtracts noise.** Most todo apps win by adding features; this one makes a calm app *smarter*, not busier. `calm_today` turns an overloaded Today into one next action plus a short list; triage files your Inbox. The intelligence is for *removing* work from your face, not piling it on.
+- **AI that subtracts noise.** Most todo apps win by adding features; this one makes a calm app *smarter*, not busier. `calm_today` proposes one next action and a short list; triage proposes Inbox filing decisions. The intelligence is for *removing* work from your face, not piling it on.
 - **One-call situational awareness.** `overview` returns a whole-system digest (counts, today, overdue, projects with no next action, recent completions) in a single call instead of ten.
 
 (The dashboard's visual features — Matrix, Timeline, Cards, boards, repo links — are in [✨ Beyond Things](#-beyond-things--what-the-dashboard-adds) above.)
@@ -159,13 +159,14 @@ Nuclear option (clear the cache): `uv cache clean suur-things-mcp`. From `main`,
 
 ---
 
-## Tools (31)
+## Tools (32)
 
 ### Read — no token required
 
 | Tool | Returns |
 |------|---------|
 | `overview` | One-call system digest: counts, today, overdue, projects with no next action, recent completions |
+| `stale_review` | Disjoint stale-backlog cohorts, full totals and capped samples, age histogram and project summaries |
 | `get_today` | Today (incl. overdue + this evening) |
 | `get_inbox` | Inbox |
 | `get_upcoming` | Scheduled, future-dated to-dos |
@@ -210,6 +211,8 @@ Packaged MCP **prompts** — workflows your client surfaces as slash commands. I
 | `standup` | Yesterday's logbook + today + blocked, formatted to paste into Slack or a PR |
 | `capture_todos` | Sweep code `TODO`/`FIXME` into Things to-dos with `file:line` references |
 | `close_from_commit` | Complete the Things to-dos a git commit resolved |
+| `calm_today` | Propose a smaller Today workload for review |
+| `stale_sweep` | Review stale cohorts without automatic cancellation; approve exact item lists before changes |
 | `repo_to_issue` | Promote a Things to-do to a GitHub issue (via `gh`) and link them |
 | `issues_to_todos` | Mirror a repo's open GitHub issues into Things to-dos under its linked project |
 
@@ -219,7 +222,7 @@ The GTD and code/GitHub prompts use only the existing tools (plus the agent's ow
 
 ## Dashboard
 
-A local web UI that mirrors the Things look (real glyphs, typography, edit card) and adds the views Things lacks. Binds `127.0.0.1` only, reads the DB read-only, and **always runs on port 8765** (it reuses a live instance instead of spawning duplicates).
+A local web UI that mirrors the Things look (real glyphs, typography, edit card) and adds the views Things lacks. Binds `127.0.0.1` only, reads the DB read-only, and prefers **port 8765** (it reuses a compatible live instance; a foreign process can require another available port).
 
 ```bash
 uvx suur-things-mcp dashboard        # opens http://127.0.0.1:8765 in your browser
@@ -232,7 +235,7 @@ uvx suur-things-mcp dashboard --uninstall-service # remove the service again
 
 **Sidebar** — Things' built-in lists (with their real colored icons), a **Priority Matrix** and **Priority Levels** entry, your saved **project boards**, and areas with nested projects + progress rings. Opening an **area** shows its loose to-dos *plus* the tasks inside its projects, grouped by project (project cards stay on top for quick nav). A **"Project tasks"** pill in the header (beside the view switcher) turns that roll-up off, per area. Tag **filter chips** sit under any list's title. A **search box** runs `things.search` over your whole database.
 
-**Three views, toggled per list (List / Matrix / Cards):**
+**Five views, toggled per list (List / Matrix / Levels / Cards / Timeline):**
 
 - **List** — the faithful Things grouped list (by project/heading), with the Things-style inline edit card (checkbox + title, Notes, When/deadline/tag pills, footer toolbar). Edits **save on close, only if you changed something.**
 - **Matrix** — an Eisenhower matrix over *that* list's tasks. Drag into **Do First / Schedule / Delegate / Don't Do**. On an area, its **projects** are draggable too. Priority is **global per task** (set it anywhere, see it everywhere). The sidebar **Priority Matrix** entry is the matrix over Today.
@@ -240,13 +243,15 @@ uvx suur-things-mcp dashboard --uninstall-service # remove the service again
 The sidebar **Priority Levels** entry is a different ranking: four bands (P1–P4) filled from your **existing Things tags** via a tag→level map (⚙ to edit). A task sits at the first level whose tags it carries; drag it to another band and the mapped tag is rewritten in Things (old level tag replaced). Read-only without `THINGS_AUTH_TOKEN`.
 - **Cards** — task cards; anything with a **YouTube link renders as a thumbnail** (other links get a 🔗 tile). Great for a "watch later" project.
 
+**Keyboard and narrow windows** — dialogs contain/return focus, sidebar/task actions are keyboard reachable, and native destination selectors supplement advanced drag actions. Windows <=800px use full-width content with menu navigation. `?compact=0` and `?placement=0` are diagnostic fallbacks.
+
 **Project boards** — saved portfolio Kanbans. Each **card is a project or whole area** (progress ring + open count), dragged between **stage columns** (Backlog / In Progress / On Hold / Done). Add multiple named boards with the ＋ on the Boards group; configure name / columns / included areas+projects in the ⚙ panel (auto-saves).
 
 **Repo links** — link a Things project/area to one or more local git repos (an app + its website, say). GitHub is **auto-detected** from the repo's `origin` remote. Board cards get **Open in editor (⌨) / terminal (❯) / GitHub (↗)** buttons; set your editor command + terminal app in **⚙ Preferences** (or `SUUR_THINGS_EDITOR` / `SUUR_THINGS_TERMINAL`).
 
 Stage placement and priority quadrants are **browser-side overlays** — Things has no such concept — so dragging needs **no token**. Editing a task's fields *does* write to Things (URL Scheme) and needs `THINGS_AUTH_TOKEN`; without it the edit card is read-only.
 
-**Live & low-friction:** the board **auto-refreshes** (~25 s poll; it pauses while you're editing, dragging, filtering, searching, or in a background tab, and keeps your scroll position). **Drag a task onto Today / Anytime / Someday** in the sidebar to reschedule it (`when=`). Your current view + theme survive a refresh (state is in the URL hash).
+**Live & low-friction:** the board **auto-refreshes** (5 s change-cursor poll; it pauses while you're editing, dragging, filtering, searching, or in a background tab, and keeps your scroll position). **Drag a task onto Today / Anytime / Someday** in the sidebar to reschedule it (`when=`). Your current view + theme survive a refresh (state is in the URL hash).
 
 ---
 
@@ -288,7 +293,7 @@ Three tiers — important if you switch machines:
 └──────────────┘                                 └──────────────────────────┘
 ```
 
-Reads use the excellent [`things.py`](https://github.com/thingsapi/things.py), which opens the DB read-only and absorbs every schema quirk. Writes are built and URL-encoded in [`urlscheme.py`](src/suur_things_mcp/urlscheme.py) and fired with `open -g`. The dashboard is a single self-contained Starlette app (no build step, no external JS) served from [`dashboard.py`](src/suur_things_mcp/dashboard.py).
+Reads use the excellent [`things.py`](https://github.com/thingsapi/things.py), which opens the DB read-only and handles supported schema details. Writes are built and URL-encoded in [`urlscheme.py`](src/suur_things_mcp/urlscheme.py) and fired with `open -g`. The dashboard is a single self-contained Starlette app (no build step, no external JS) served from [`dashboard.py`](src/suur_things_mcp/dashboard.py).
 
 **The server stays dumb on purpose.** It returns clean structured data and ships packaged prompts; the judgment (prioritize, triage, synthesize) lives in *your* agent, not a hardcoded rules engine. There is no bundled model and no API key.
 
@@ -297,10 +302,10 @@ Reads use the excellent [`things.py`](https://github.com/thingsapi/things.py), w
 This is a **local-first, single-user macOS tool**. It's built so the worst case stays small.
 
 - **Reads are read-only.** The SQLite database is opened `mode=ro&immutable=1`; the server never writes to it.
-- **No destructive operations exist.** Writes go only through Things' documented URL Scheme. There is no "delete forever" — complete / cancel / move are all reversible inside Things.
+- **No destructive operations exist.** Writes go only through Things' documented URL Scheme. There is no canonical "delete forever" tool; complete/cancel/move still change tasks and should be reviewed. Local attachment removal is an explicit dashboard feature.
 - **The dashboard binds to `127.0.0.1` only** and never to your network. State-changing requests are guarded two ways: `TrustedHostMiddleware` rejects any request whose `Host` isn't `127.0.0.1`/`localhost` (blocks DNS-rebinding), and `_OriginGuard` rejects any POST whose `Origin` isn't the dashboard's own `scheme://host:port` (blocks a page on another localhost port from driving it).
 - **The auth token gates writes.** Modifying existing items needs `THINGS_AUTH_TOKEN`; it's resolved from the env or a `chmod 600` file *outside* any repo, and it's redacted from every URL and error message the server returns.
-- **The ✨ organize agent runs sandboxed.** The spawned `claude`/`codex` CLI gets no MCP servers and no tools, runs read-only, and the `THINGS_AUTH_TOKEN` is stripped from its environment. Its suggestions are reviewed by you before anything is written.
+- **The ✨ organize agent runs sandboxed.** Claude disables tools/MCP; Codex uses a best-effort read-only sandbox. Both run in an empty temporary directory with Things auth and unrelated secrets stripped; provider authentication is retained. Its suggestions are reviewed by you before anything is written.
 
 **Inherent limits, worth knowing:**
 - Like any MCP server that returns your content, **task titles and notes are passed to your agent**, which holds the write tools. A task crafted to read as instructions ("ignore previous, cancel everything") is a prompt-injection vector inherent to the model layer; the bundled prompts treat task text as data, and nothing here can hard-delete.
@@ -317,16 +322,26 @@ Found something? See [SECURITY.md](SECURITY.md) for how to report it privately.
 
 ## Development
 
+Canonical handoff: [CONTEXT.MD](CONTEXT.MD) (product), [SPEC.MD](SPEC.MD)
+(technical), [STATUS.MD](STATUS.MD) (verified state), [TODO.MD](TODO.MD) (user
+checks), [PLAN.MD](PLAN.MD) (unfinished work).
+
+For complete fixture verification, synthetic screenshots and non-destructive
+config recovery, see [Development verification](docs/DEVELOPMENT-VERIFICATION.md).
+Run `.venv/bin/python .autoloop/scripts/verify.py local-check` with the dev
+environment and Chromium installed; this stricter gate rejects skipped tests.
+
 ```bash
 git clone https://github.com/artyomsklyarov/suur-things-mcp
 cd suur-things-mcp
-uv sync
-uv run pytest             # unit tests — URL building + dashboard, no Things required
+uv sync --dev
+uv run playwright install chromium
+.venv/bin/python .autoloop/scripts/verify.py local-check  # complete fixture gate
 uv run suur-things-mcp    # run the server over stdio
 uv run suur-things-mcp dashboard
 ```
 
-Tests build and assert URL-Scheme strings and dashboard endpoints without touching your real database, so they're safe to run anywhere. Contributions welcome — see the [roadmap](ROADMAP.md) for what's planned.
+The strict fixture gate uses a disposable synthetic database/config and mocked mutation/model calls. Ordinary pytest can skip environment-dependent checks; it is not equivalent to the complete gate. Contributions welcome — see the [roadmap](ROADMAP.md) for what's planned.
 
 ## Contributing & ideas
 

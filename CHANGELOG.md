@@ -4,6 +4,67 @@ All notable changes to `suur-things-mcp` are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); this project uses
 [semantic versioning](https://semver.org/).
 
+## [0.10.0] - 2026-10-10
+
+### Added
+
+- **Stale backlog review:** `stale_review` returns disjoint Inbox/never-touched/
+  past-scheduled/loose-item cohorts, full counts alongside capped samples, an age
+  histogram, project clusters and empty-project candidates. Thresholds are
+  configurable. `stale_sweep` guides review of exact item lists before approved
+  changes; age is a signal, not a reason to automatically cancel tasks.
+- **Age and idle signals** on compact task cards; full item reads retain the raw
+  creation/modification timestamps.
+- **Keyboard planning controls:** named native destinations for board stages,
+  Matrix quadrants and mapped Priority Levels, plus a Timeline dialog to schedule,
+  change or unschedule explicit local blocks. Drag actions remain available.
+- **Safe development handoff:** five detailed product/technical/status/user-action/
+  plan documents, fixture capture/recovery guide and complete no-skip verification
+  harness.
+
+### Changed
+
+- **Compact windows:** full-width content and menu navigation at <=800px;
+  Matrix/Levels/Timeline adapt to narrow layouts. Diagnostic `?compact=0` and
+  `?placement=0` fallbacks remain available.
+- **Accessibility:** named/labeled dialogs, stacked focus containment/return,
+  inert background, keyboard sidebar/task/filter/palette actions, terminal-state
+  completion semantics and measured light/dark text/control colors.
+- **`things.py` minimum is now >=1.0**, matching use of created/modified fields;
+  the existing lock pins 1.0.1. Python >=3.10 remains unchanged.
+- **Review-first stale sweep:** keeping items unchanged and skipping a cohort
+  are valid; capped samples and project summaries never approve unseen bulk
+  changes. Read back changes before reporting reduction counts.
+
+### Fixed
+
+- Attachment ID/path/MIME containment, including resolved symlink escapes.
+- Concurrent attachment caps and atomic config temporary-file collisions.
+- Byte-preserving recovery for corrupt JSON/UTF-8/non-object overlay roots;
+  unreadable settings fail closed instead of being overwritten by defaults.
+- Startup with blocked cosmetic storage, settings/sidebar retry behavior and
+  premature overlay writes; standalone project navigation.
+- Stale asynchronous view responses replacing newer navigation.
+- API malformed-object/section/repository-list validation and structured read/
+  storage errors; supported organizer preferences surviving saves.
+- Organizer malformed tags, duplicate or out-of-submission suggestions, and JSON
+  fence parsing that damaged legitimate notes.
+- Successful attachment storage remains successful when optional Things note
+  synchronization fails (`note_updated=false`).
+- Fixture database version stamp updated to 27; optional backdated staleness
+  records do not alter the base fixture's exact-set assertions.
+- Browser fixture cursor now models unchanged data; existing completion
+  assertions remain intact and no-skip gates reject incomplete execution.
+
+### Verification
+
+- 238 tests pass in the complete seeded local gate, with zero skips; Ruff,
+  compilation and offline wheel/sdist builds pass. One existing Starlette/httpx
+  test-client deprecation remains.
+- Real Chromium checks and synthetic light/dark desktop/narrow screenshots cover
+  the changed flows. Real Things writes, live organizer models and manual
+  assistive-technology acceptance are separate checks, not implied by publication.
+
 ## [0.9.0] - 2026-07-12
 
 ### Added

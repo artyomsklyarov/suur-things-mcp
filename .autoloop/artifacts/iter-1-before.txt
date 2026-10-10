@@ -1,0 +1,79 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+________________ test_upload_rejects_symlink_to_prefix_sibling _________________
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-3/test_upload_rejects_symlink_to0')
+
+    def test_upload_rejects_symlink_to_prefix_sibling(store):
+        outside = store / "attachments-other"
+        outside.mkdir()
+        config._attach_dir().mkdir()
+        (config._attach_dir() / "task").symlink_to(outside, target_is_directory=True)
+>       with pytest.raises(ValueError, match="attachment path"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_config_safety.py:19: Failed
+_______ test_detach_preserves_file_and_metadata_outside_attachment_root ________
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-3/test_detach_preserves_file_and0')
+
+    def test_detach_preserves_file_and_metadata_outside_attachment_root(store):
+        meta = config.save_attachment("task", b"image", "image/png", "photo.png")
+        original = config.attachment_path("task", meta)
+        outside = store / "attachments-other"
+        outside.mkdir()
+        sentinel = outside / original.name
+        sentinel.write_bytes(b"user data")
+        original.unlink()
+        original.parent.rmdir()
+        original.parent.symlink_to(outside, target_is_directory=True)
+>       assert config.remove_attachment("task", meta["id"]) is False
+E       AssertionError: assert True is False
+E        +  where True = <function remove_attachment at 0x107c85c70>('task', '3caf82128cd14d979b973d668817e958')
+E        +    where <function remove_attachment at 0x107c85c70> = config.remove_attachment
+
+tests/test_config_safety.py:35: AssertionError
+________ test_attachment_path_rejects_unsafe_stored_item_id[../outside] ________
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-3/test_attachment_path_rejects_u0')
+item_id = '../outside'
+
+    @pytest.mark.parametrize("item_id", ["../outside", "/tmp/outside", "task\n"])
+    def test_attachment_path_rejects_unsafe_stored_item_id(store, item_id):
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_config_safety.py:42: Failed
+_______ test_attachment_path_rejects_unsafe_stored_item_id[/tmp/outside] _______
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-3/test_attachment_path_rejects_u1')
+item_id = '/tmp/outside'
+
+    @pytest.mark.parametrize("item_id", ["../outside", "/tmp/outside", "task\n"])
+    def test_attachment_path_rejects_unsafe_stored_item_id(store, item_id):
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_config_safety.py:42: Failed
+__________ test_attachment_path_rejects_unsafe_stored_item_id[task\n] __________
+
+store = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-3/test_attachment_path_rejects_u2')
+item_id = 'task\n'
+
+    @pytest.mark.parametrize("item_id", ["../outside", "/tmp/outside", "task\n"])
+    def test_attachment_path_rejects_unsafe_stored_item_id(store, item_id):
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_config_safety.py:42: Failed
+=========================== short test summary info ============================
+FAILED tests/test_config_safety.py::test_upload_rejects_symlink_to_prefix_sibling
+FAILED tests/test_config_safety.py::test_detach_preserves_file_and_metadata_outside_attachment_root
+FAILED tests/test_config_safety.py::test_attachment_path_rejects_unsafe_stored_item_id[../outside]
+FAILED tests/test_config_safety.py::test_attachment_path_rejects_unsafe_stored_item_id[/tmp/outside]
+FAILED tests/test_config_safety.py::test_attachment_path_rejects_unsafe_stored_item_id[task\n]
+5 failed in 1.95s

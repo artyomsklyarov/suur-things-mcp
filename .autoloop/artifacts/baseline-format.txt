@@ -1,0 +1,12 @@
+Would reformat: src/suur_things_mcp/config.py
+Would reformat: src/suur_things_mcp/dashboard.py
+Would reformat: src/suur_things_mcp/organize.py
+Would reformat: src/suur_things_mcp/reads.py
+Would reformat: src/suur_things_mcp/server.py
+Would reformat: src/suur_things_mcp/urlscheme.py
+Would reformat: tests/conftest.py
+Would reformat: tests/test_dashboard.py
+Would reformat: tests/test_dashboard_browser.py
+Would reformat: tests/test_reads.py
+Would reformat: tests/test_server_tools.py
+11 files would be reformatted, 3 files already formatted

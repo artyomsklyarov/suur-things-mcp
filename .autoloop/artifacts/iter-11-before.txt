@@ -1,0 +1,52 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+____________ test_narrow_views_fit_and_resize_restores_desktop[320] ____________
+
+ui = {'page': <Page url='http://127.0.0.1:60797/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+width = 320
+
+    @pytest.mark.parametrize("width", [320, 390, 768])
+    def test_narrow_views_fit_and_resize_restores_desktop(ui, width):
+        page = ui["page"]
+        page.set_default_timeout(3000)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.reload(wait_until="networkidle")
+>       assert page.locator(".main").bounding_box()["width"] == width
+E       assert 48 == 320
+
+tests/test_dashboard_interactions.py:317: AssertionError
+____________ test_narrow_views_fit_and_resize_restores_desktop[390] ____________
+
+ui = {'page': <Page url='http://127.0.0.1:60797/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+width = 390
+
+    @pytest.mark.parametrize("width", [320, 390, 768])
+    def test_narrow_views_fit_and_resize_restores_desktop(ui, width):
+        page = ui["page"]
+        page.set_default_timeout(3000)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.reload(wait_until="networkidle")
+>       assert page.locator(".main").bounding_box()["width"] == width
+E       assert 118 == 390
+
+tests/test_dashboard_interactions.py:317: AssertionError
+____________ test_narrow_views_fit_and_resize_restores_desktop[768] ____________
+
+ui = {'page': <Page url='http://127.0.0.1:60797/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+width = 768
+
+    @pytest.mark.parametrize("width", [320, 390, 768])
+    def test_narrow_views_fit_and_resize_restores_desktop(ui, width):
+        page = ui["page"]
+        page.set_default_timeout(3000)
+        page.set_viewport_size({"width": width, "height": 844})
+        page.reload(wait_until="networkidle")
+>       assert page.locator(".main").bounding_box()["width"] == width
+E       assert 496 == 768
+
+tests/test_dashboard_interactions.py:317: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_narrow_views_fit_and_resize_restores_desktop[320]
+FAILED tests/test_dashboard_interactions.py::test_narrow_views_fit_and_resize_restores_desktop[390]
+FAILED tests/test_dashboard_interactions.py::test_narrow_views_fit_and_resize_restores_desktop[768]
+3 failed, 17 deselected in 5.00s

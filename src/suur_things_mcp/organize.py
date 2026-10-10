@@ -182,8 +182,7 @@ def parse_suggestions(stdout: str, agent: str) -> list[dict]:
                 text = env["result"].strip()
         except json.JSONDecodeError:
             pass
-    # strip ``` / ```json fences
-    text = re.sub(r"```(?:json)?", "", text).strip()
+    # Slice surrounding prose/fences without altering code fences inside notes.
     # take the outermost array
     start, end = text.find("["), text.rfind("]")
     if start != -1 and end > start:
@@ -199,12 +198,19 @@ def parse_suggestions(stdout: str, agent: str) -> list[dict]:
         notes = d.get("append_notes")
         when = d.get("when")
         dest = d.get("dest")
+        raw_tags = d.get("tags")
+        if isinstance(raw_tags, str):
+            raw_tags = [raw_tags]
+        tags = []
+        for tag in raw_tags if isinstance(raw_tags, list) else []:
+            if isinstance(tag, str) and tag.strip() and tag.strip() not in tags:
+                tags.append(tag.strip())
         out.append(
             {
                 "uuid": str(d["uuid"]),
                 "suggested_title": str(title).strip()[:120] if title and str(title).strip() else None,
                 "append_notes": str(notes).strip() if notes and str(notes).strip() else None,
-                "tags": [str(t).strip() for t in (d.get("tags") or []) if str(t).strip()][:5],
+                "tags": tags[:5],
                 "when": str(when).strip() if when and str(when).strip() else None,
                 "dest": str(dest).strip() if dest and str(dest).strip() else None,
                 "reason": str(d.get("reason") or "").strip(),
@@ -246,6 +252,14 @@ def organize(folder_title: str, tasks: list[dict], existing_tags: list[str],
             raise RuntimeError(f"{agent} is not authenticated — run `{agent} login`")
         raise RuntimeError(f"{agent} failed: {(result.stderr or '').strip()[:200]}")
     try:
-        return parse_suggestions(result.stdout, agent)
+        allowed = {str(t.get("uuid")) for t in tasks[:MAX_TASKS] if t.get("uuid")}
+        seen = set()
+        suggestions = []
+        for suggestion in parse_suggestions(result.stdout, agent):
+            item_id = suggestion["uuid"]
+            if item_id in allowed and item_id not in seen:
+                suggestions.append(suggestion)
+                seen.add(item_id)
+        return suggestions
     except (json.JSONDecodeError, ValueError) as exc:
         raise RuntimeError(f"could not parse {agent} output as suggestions: {exc}") from exc

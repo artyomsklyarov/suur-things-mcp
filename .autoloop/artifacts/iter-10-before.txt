@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_compact_preview_uses_window_width_and_navigation_can_close ________
+
+ui = {'page': <Page url='http://127.0.0.1:55167/?compact=1#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {},...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+
+    def test_compact_preview_uses_window_width_and_navigation_can_close(ui):
+        page = ui["page"]
+        page.set_default_timeout(3000)
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.goto(page.url.split("#")[0] + "?compact=1", wait_until="networkidle")
+>       assert page.locator(".main").bounding_box()["width"] == 390
+E       assert 118 == 390
+
+tests/test_dashboard_interactions.py:295: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_compact_preview_uses_window_width_and_navigation_can_close
+1 failed, 16 deselected in 2.64s
