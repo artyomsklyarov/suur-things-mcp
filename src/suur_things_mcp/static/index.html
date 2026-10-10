@@ -1933,7 +1933,7 @@ async function applyOrganize(){
 // preferences (editor + terminal app)
 function openPrefs(){ const p=CONFIG.prefs||{}; $("#pf-editor").value=p.editor||""; $("#pf-terminal").value=p.terminal||""; openOverlay("prefs-overlay"); }
 async function savePrefs(){
-  const prefs={editor:$("#pf-editor").value.trim(), terminal:$("#pf-terminal").value.trim()};
+  const prefs={...(CONFIG.prefs||{}), editor:$("#pf-editor").value.trim(), terminal:$("#pf-terminal").value.trim()};
   const r=await postJSON("/api/config", {prefs});
   if(!r.ok){ alert("Settings could not be saved: "+(r.error||"error")); return; }
   CONFIG=r.config;

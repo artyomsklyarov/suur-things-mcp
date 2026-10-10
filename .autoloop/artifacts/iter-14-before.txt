@@ -1,0 +1,36 @@
+FF....                                                                   [100%]
+=================================== FAILURES ===================================
+__________ test_organizer_preferences_survive_unrelated_saves[claude] __________
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-23/test_organizer_preferences_sur0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1080c3100>
+agent = 'claude'
+
+    @pytest.mark.parametrize("agent", ["claude", "codex"])
+    def test_organizer_preferences_survive_unrelated_saves(tmp_path, monkeypatch, agent):
+        monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+        saved = config.save({"prefs": {"agent": agent, "agent_model": "  custom-model  ", "editor": "cursor"}})
+>       assert saved["prefs"]["agent"] == agent
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'agent'
+
+tests/test_config_safety.py:142: KeyError
+__________ test_organizer_preferences_survive_unrelated_saves[codex] ___________
+
+tmp_path = PosixPath('/private/var/folders/vs/33_lmwh911z8h4ny9xzhdy5w0000gn/T/pytest-of-artyomsklyarov/pytest-23/test_organizer_preferences_sur1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1080c3360>
+agent = 'codex'
+
+    @pytest.mark.parametrize("agent", ["claude", "codex"])
+    def test_organizer_preferences_survive_unrelated_saves(tmp_path, monkeypatch, agent):
+        monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+        saved = config.save({"prefs": {"agent": agent, "agent_model": "  custom-model  ", "editor": "cursor"}})
+>       assert saved["prefs"]["agent"] == agent
+               ^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'agent'
+
+tests/test_config_safety.py:142: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_config_safety.py::test_organizer_preferences_survive_unrelated_saves[claude]
+FAILED tests/test_config_safety.py::test_organizer_preferences_survive_unrelated_saves[codex]
+2 failed, 4 passed, 19 deselected in 0.08s

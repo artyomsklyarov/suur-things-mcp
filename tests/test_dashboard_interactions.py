@@ -374,3 +374,19 @@ def test_small_text_and_primary_controls_have_sufficient_contrast(ui, theme):
     measure(["#prefs-overlay .hint", "#prefs-overlay .field label", "#pf-save", "#pf-cancel"])
     print(f"{theme} contrast ratios: {samples}")
     assert all(ratio >= 4.5 for _, ratio in samples), samples
+
+
+def test_preferences_editor_save_preserves_organizer_settings(ui):
+    page = ui["page"]
+    ui["config"]["prefs"] = {"agent": "codex", "agent_model": "custom-model"}
+    page.evaluate("() => loadConfig()")
+    page.locator("#prefs-btn").click()
+    page.locator("#pf-editor").fill("cursor")
+    page.locator("#pf-save").click()
+    page.wait_for_function("() => !document.querySelector('#prefs-overlay').classList.contains('show')")
+    assert ui["posts"] == [
+        (
+            "/api/config",
+            {"prefs": {"agent": "codex", "agent_model": "custom-model", "editor": "cursor", "terminal": ""}},
+        )
+    ]

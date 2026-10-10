@@ -133,3 +133,27 @@ def test_concurrent_direct_saves_have_distinct_atomic_temp_files(store, monkeypa
         list(pool.map(lambda n: config.save({"prefs": {"editor": str(n)}}), range(2)))
     assert config.prefs()["editor"] in {"0", "1"}
     assert not list(store.glob("board.json.tmp-*"))
+
+
+@pytest.mark.parametrize("agent", ["claude", "codex"])
+def test_organizer_preferences_survive_unrelated_saves(tmp_path, monkeypatch, agent):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    saved = config.save({"prefs": {"agent": agent, "agent_model": "  custom-model  ", "editor": "cursor"}})
+    assert saved["prefs"]["agent"] == agent
+    assert saved["prefs"]["agent_model"] == "custom-model"
+    config.merge({"priority": {"task": "do"}})
+    assert config.prefs() == {"agent": agent, "agent_model": "custom-model", "editor": "cursor"}
+
+
+@pytest.mark.parametrize(
+    "prefs",
+    [
+        {"agent": "unsupported", "agent_model": []},
+        {"agent": ["codex"], "agent_model": {}},
+        {"agent": 42, "agent_model": 42},
+        {"agent": None, "agent_model": "  "},
+    ],
+)
+def test_invalid_organizer_preferences_are_ignored(tmp_path, monkeypatch, prefs):
+    monkeypatch.setenv("SUUR_THINGS_CONFIG", str(tmp_path / "board.json"))
+    assert config.save({"prefs": prefs})["prefs"] == {}

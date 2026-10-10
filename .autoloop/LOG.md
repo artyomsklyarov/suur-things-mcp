@@ -87,3 +87,8 @@ Iteration 13 commit: f478c0b.
 
 ## Dream 4 — Dream
 Steal-from-elsewhere lens, twelve ideas and two ambitious. Continue existing B11/B15/B12/B17; five built capabilities, one new parked undo/conflict plan H15 and three rejections. No code or new dependencies. Commit: pending dream 4.
+
+Dream 4 commit: d0a8c50.
+
+## Iteration 14 — Fix
+B15: sanitizer preserves organizer agent/model, editor preference saves retain them. Before: two config regressions and one browser regression fail (iter-14-before.txt, iter-14-browser-before.txt). After: 194 tests/full gate green (iter-14.txt), invalid types ignored; no live agent call. Scores remain 4. Commit: pending iter 14.

@@ -44,3 +44,5 @@ Iteration 12: computed foreground/effective background colors, standard sRGB lum
 Iteration 13: retain existing 200/ok=false read/storage error convention, use established 400 for malformed JSON/section/list types. Empty repository list still intentionally clears links, while wrong types preserve them. No dependencies.
 
 - H15: Undo reviewed agent changes: first specify a local append-only before/after record with outcome verification; use a disposable task to prove a compensating URL Scheme update cannot overwrite intervening edits. Define retention and conflict handling before migrating config or offering Undo; never imply transactional Things writes.
+
+Iteration 14: B15 selected before B11 because equal Medium impact has lower risk and effort. Preserve only the two existing organizer integrations, and arbitrary nonempty model string without inventing a model catalog. Preferences UI carries forward other existing preference keys; no model execution or account configuration.

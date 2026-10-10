@@ -1,0 +1,29 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_preferences_editor_save_preserves_organizer_settings ___________
+
+ui = {'page': <Page url='http://127.0.0.1:64181/#l/today'>, 'posts': [('/api/config', {'prefs': {'editor': 'cursor', 'termi...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+
+    def test_preferences_editor_save_preserves_organizer_settings(ui):
+        page = ui["page"]
+        ui["config"]["prefs"] = {"agent": "codex", "agent_model": "custom-model"}
+        page.evaluate("() => loadConfig()")
+        page.locator("#prefs-btn").click()
+        page.locator("#pf-editor").fill("cursor")
+        page.locator("#pf-save").click()
+        page.wait_for_function("() => !document.querySelector('#prefs-overlay').classList.contains('show')")
+>       assert ui["posts"] == [
+            (
+                "/api/config",
+                {"prefs": {"agent": "codex", "agent_model": "custom-model", "editor": "cursor", "terminal": ""}},
+            )
+        ]
+E       AssertionError: assert [('/api/confi...minal': ''}})] == [('/api/confi...minal': ''}})]
+E         
+E         At index 0 diff: ('/api/config', {'prefs': {'editor': 'cursor', 'terminal': ''}}) != ('/api/config', {'prefs': {'agent': 'codex', 'agent_model': 'custom-model', 'editor': 'cursor', 'terminal': ''}})
+E         Use -v to get more diff
+
+tests/test_dashboard_interactions.py:387: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_preferences_editor_save_preserves_organizer_settings
+1 failed, 22 deselected in 2.54s

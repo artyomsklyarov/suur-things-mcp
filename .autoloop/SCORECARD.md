@@ -32,3 +32,5 @@ Holistic iteration 10: all dimensions rescored in artifacts/holistic-10.txt. Sco
 Iteration 12: sampled sidebar counts/headings, matrix/level names/subtitles, preferences hints/labels/buttons now all meet 4.5:1. Minimum light 2.48 -> 4.86, dark 3.19 -> 4.93. Accessibility remains 4, not a claim of exhaustive WCAG conformance. 161 tests.
 
 Iteration 13: API config/link malformed roots and section/list shapes reject with 400 without changing bytes. Config/item/board I/O errors and upload storage errors have structured envelopes. 26 new tests, 187 total. Correctness/reliability remain 4.
+
+Iteration 14: supported claude/codex agent and nonempty model strings survive save/merge and editor preferences. Malformed values ignored, seven regressions, 194 tests. Reliability/product completeness stay 4.

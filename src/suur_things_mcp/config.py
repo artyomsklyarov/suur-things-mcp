@@ -150,7 +150,14 @@ def _clean_prefs(data: dict) -> dict[str, Any]:
     p = data.get("prefs")
     if not isinstance(p, dict):
         return {}
-    return {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
+    out = {k: str(p[k]).strip() for k in ("editor", "terminal") if p.get(k) and str(p[k]).strip()}
+    agent = p.get("agent")
+    if isinstance(agent, str) and agent in {"claude", "codex"}:
+        out["agent"] = agent
+    model = p.get("agent_model")
+    if isinstance(model, str) and model.strip():
+        out["agent_model"] = model.strip()
+    return out
 
 
 def _clean_area_prefs(data: dict) -> dict[str, Any]:
