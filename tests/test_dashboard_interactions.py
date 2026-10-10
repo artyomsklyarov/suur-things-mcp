@@ -529,6 +529,7 @@ def test_timeline_drag_places_and_unschedules_without_task_mutation(ui):
     page.locator(".tl-block").wait_for()
     assert ui["posts"][-1][1]["timeblocks"]["task"]["start"] == "10:30"
     _drop(page, ".tl-pool", "task")
+    page.wait_for_function("() => !CONFIG.timeblocks.task")
     page.locator(".pcard").wait_for()
     assert ui["posts"][-1] == ("/api/config", {"timeblocks": {}})
     assert all(path == "/api/config" for path, _ in ui["posts"])
@@ -700,3 +701,61 @@ def test_timeline_preserves_unrelated_blocks_and_rejects_end_after_day(ui):
     page.get_by_role("button", name="Save time block", exact=True).click()
     page.locator(".tl-block").wait_for()
     assert ui["posts"][-1][1]["timeblocks"]["other"] == {"date": "2026-01-01", "start": "12:00", "mins": 30}
+
+
+@pytest.mark.parametrize("status", ["completed", "canceled"])
+def test_advanced_terminal_tasks_have_checked_disabled_completion(ui, status):
+    ui["task"]["status"] = status
+    page = ui["page"]
+    _enable_placement_preview(page)
+    page.locator("#vt-matrix").click()
+    check = page.get_by_role("checkbox", name="Complete Write an outline")
+    assert check.get_attribute("aria-checked") == "true"
+    assert check.get_attribute("aria-disabled") == "true"
+    assert check.get_attribute("tabindex") != "0"
+    check.click(force=True)
+    page.wait_for_timeout(100)
+    assert ui["posts"] == []
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("selected", [False, True])
+def test_checkbox_boundary_is_visible_against_its_background(ui, theme, selected):
+    page = ui["page"]
+    page.evaluate(
+        'arg => {applyTheme(arg.theme); document.querySelector(".row").classList.toggle("selected",arg.selected);}',
+        {"theme": theme, "selected": selected},
+    )
+    page.wait_for_timeout(250)
+    fg, bg = page.locator(".row .box").evaluate("""el => {
+        const rgb=value=>value.match(/[\\d.]+/g).map(Number).slice(0,3);
+        let parent=el, bg;
+        while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}
+        return [rgb(getComputedStyle(el).borderColor),rgb(bg)];
+    }""")
+    ratio = _contrast(fg, bg)
+    print(theme, selected, ratio)
+    assert ratio >= 3
+
+
+def test_placement_controls_default_on_with_diagnostic_opt_out(ui):
+    page = ui["page"]
+    page.set_default_timeout(3000)
+    page.locator("#vt-matrix").click()
+    page.get_by_label("Quadrant for Write an outline").wait_for()
+    page.goto(page.url.split("?")[0].split("#")[0] + "?placement=0#l/today", wait_until="networkidle")
+    page.locator("#vt-matrix").click()
+    page.locator(".pcard").wait_for()
+    assert page.locator(".placement").count() == 0
+
+
+@pytest.mark.parametrize("width", [320, 768])
+def test_scheduled_slot_dialog_fits_narrow_windows(ui, width):
+    page = ui["page"]
+    page.set_viewport_size({"width": width, "height": 844})
+    ui["config"]["timeblocks"] = {"task": {"date": page.evaluate("() => todayStr()"), "start": "10:30", "mins": 60}}
+    page = _open_slot_preview(ui)
+    assert page.get_by_role("button", name="Unscheduled", exact=True).is_visible()
+    geometry = page.locator("#slot-overlay .panel").evaluate("el=>({width:el.clientWidth,scroll:el.scrollWidth})")
+    assert geometry["scroll"] <= geometry["width"]
+    assert page.locator("#slot-overlay .panel").bounding_box()["width"] <= width

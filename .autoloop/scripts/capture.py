@@ -79,6 +79,18 @@ def main():
                         wait_until="networkidle",
                     )
                     if scenario == "slots":
+                        from datetime import date
+
+                        from suur_things_mcp import config
+
+                        config.merge(
+                            {
+                                "timeblocks": {
+                                    "todo-overdue": {"date": date.today().isoformat(), "start": "10:30", "mins": 60}
+                                }
+                            }
+                        )
+                        page.evaluate("() => loadConfig()")
                         page.locator("#vt-timeline").click()
                         page.locator(".tl-wrap").wait_for()
                         for theme in ["light", "dark"]:

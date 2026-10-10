@@ -1,0 +1,103 @@
+FFlight False 1.7152060669514222
+Fdark False 2.632360595110406
+Flight True 3.954054389079719
+.dark True 3.2843747144934907
+.
+=================================== FAILURES ===================================
+___ test_advanced_terminal_tasks_have_checked_disabled_completion[completed] ___
+
+ui = {'page': <Page url='http://127.0.0.1:52703/?placement=1#l/today/m'>, 'posts': [], 'config': {'boards': [], 'priority':... {}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'completed', 'tags': ['writing'], ...}, ...}
+status = 'completed'
+
+    @pytest.mark.parametrize("status", ["completed", "canceled"])
+    def test_advanced_terminal_tasks_have_checked_disabled_completion(ui, status):
+        ui["task"]["status"] = status
+        page = ui["page"]
+        _enable_placement_preview(page)
+        page.locator("#vt-matrix").click()
+        check = page.get_by_role("checkbox", name="Complete Write an outline")
+>       assert check.get_attribute("aria-checked") == "true"
+E       AssertionError: assert 'false' == 'true'
+E         
+E         - true
+E         + false
+
+tests/test_dashboard_interactions.py:712: AssertionError
+___ test_advanced_terminal_tasks_have_checked_disabled_completion[canceled] ____
+
+ui = {'page': <Page url='http://127.0.0.1:52703/?placement=1#l/today/m'>, 'posts': [], 'config': {'boards': [], 'priority':...: {}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'canceled', 'tags': ['writing'], ...}, ...}
+status = 'canceled'
+
+    @pytest.mark.parametrize("status", ["completed", "canceled"])
+    def test_advanced_terminal_tasks_have_checked_disabled_completion(ui, status):
+        ui["task"]["status"] = status
+        page = ui["page"]
+        _enable_placement_preview(page)
+        page.locator("#vt-matrix").click()
+        check = page.get_by_role("checkbox", name="Complete Write an outline")
+        assert check.get_attribute("aria-checked") == "true"
+>       assert check.get_attribute("aria-disabled") == "true"
+E       AssertionError: assert 'false' == 'true'
+E         
+E         - true
+E         + false
+
+tests/test_dashboard_interactions.py:713: AssertionError
+____ test_checkbox_boundary_is_visible_against_its_background[False-light] _____
+
+ui = {'page': <Page url='http://127.0.0.1:52703/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+theme = 'light', selected = False
+
+    @pytest.mark.parametrize("theme", ["light", "dark"])
+    @pytest.mark.parametrize("selected", [False, True])
+    def test_checkbox_boundary_is_visible_against_its_background(ui, theme, selected):
+        page = ui["page"]
+        page.evaluate(
+            'arg => {applyTheme(arg.theme); document.querySelector(".row").classList.toggle("selected",arg.selected);}',
+            {"theme": theme, "selected": selected},
+        )
+        page.wait_for_timeout(250)
+        fg, bg = page.locator(".row .box").evaluate("""el => {
+            const rgb=value=>value.match(/[\\d.]+/g).map(Number).slice(0,3);
+            let parent=el, bg;
+            while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}
+            return [rgb(getComputedStyle(el).borderColor),rgb(bg)];
+        }""")
+        ratio = _contrast(fg, bg)
+        print(theme, selected, ratio)
+>       assert ratio >= 3
+E       assert 1.7152060669514222 >= 3
+
+tests/test_dashboard_interactions.py:737: AssertionError
+_____ test_checkbox_boundary_is_visible_against_its_background[False-dark] _____
+
+ui = {'page': <Page url='http://127.0.0.1:52703/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+theme = 'dark', selected = False
+
+    @pytest.mark.parametrize("theme", ["light", "dark"])
+    @pytest.mark.parametrize("selected", [False, True])
+    def test_checkbox_boundary_is_visible_against_its_background(ui, theme, selected):
+        page = ui["page"]
+        page.evaluate(
+            'arg => {applyTheme(arg.theme); document.querySelector(".row").classList.toggle("selected",arg.selected);}',
+            {"theme": theme, "selected": selected},
+        )
+        page.wait_for_timeout(250)
+        fg, bg = page.locator(".row .box").evaluate("""el => {
+            const rgb=value=>value.match(/[\\d.]+/g).map(Number).slice(0,3);
+            let parent=el, bg;
+            while(parent){bg=getComputedStyle(parent).backgroundColor;if(bg!=='rgba(0, 0, 0, 0)')break;parent=parent.parentElement;}
+            return [rgb(getComputedStyle(el).borderColor),rgb(bg)];
+        }""")
+        ratio = _contrast(fg, bg)
+        print(theme, selected, ratio)
+>       assert ratio >= 3
+E       assert 2.632360595110406 >= 3
+
+tests/test_dashboard_interactions.py:737: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_advanced_terminal_tasks_have_checked_disabled_completion[completed]
+FAILED tests/test_dashboard_interactions.py::test_advanced_terminal_tasks_have_checked_disabled_completion[canceled]
+FAILED tests/test_dashboard_interactions.py::test_checkbox_boundary_is_visible_against_its_background[False-light]
+FAILED tests/test_dashboard_interactions.py::test_checkbox_boundary_is_visible_against_its_background[False-dark]
+4 failed, 2 passed, 43 deselected in 8.36s

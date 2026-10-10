@@ -4,7 +4,7 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 
 | Dimension | Before | Current | Evidence / limitation |
 |---|---:|---:|---|
-| Correctness | 4 | 4 | 113 tests, local build green; real URL Scheme integration requires human |
+| Correctness | 4 | 4 | 223 tests, local build green; real URL Scheme integration requires human |
 | Reliability | 3 | 4 | Lossless config recovery, atomic caps and resilient startup; latest view discards stale reads, iter-15 |
 | Test coverage | 3 | 4 | Real Chromium + fixture SQL; recovery/concurrency/agent safety protected; intercepted browser workflow suite, iter-5.txt |
 | Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
@@ -13,9 +13,9 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 | Performance | 4 | 4 | Threaded reads + cheap cursor; no new benchmark claim |
 | UX | 3 | 4 | Full-width small windows, accessible menu/dialog focus, 320/390/768px all-view tests; iter-11 |
 | UI | 3 | 4 | Desktop styling retained, compact views no longer clip; 20 inspected light/dark populated/empty screenshots, iter-11; sampled small-text contrast >=4.86 light / >=4.93 dark, iter-12-ratios.txt |
-| Accessibility | 2 | 4 | Clickable div/span controls, modal names, labeled fields, inert background and focus containment/return; sidebar/filter/task keyboard access and palette selection semantics; advanced drag views remain a limitation |
+| Accessibility | 2 | 4 | Clickable div/span controls, modal names, labeled fields, inert background and focus containment/return; sidebar/filter/task keyboard access and palette selection semantics; native placement controls and explicit timeline dialog now default-enabled; iter-20 |
 | Product completeness | 4 | 4 | Documented phases done; live integration validation outside loop scope |
-| Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness now available |
+| Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness and recovery guide available |
 | SEO / discoverability | N/A | N/A | Local desktop dashboard, not public website |
 | Content quality | N/A | N/A | Software repo, not knowledge base |
 
@@ -44,3 +44,5 @@ Iteration 17: five advanced drag workflows now protected by intercepted browser 
 Iteration 18: E03 preview adds keyboard stage/quadrant/level destinations and advanced card edit/open/complete, focus restoration and failed-save retention. Accessibility stays 4 until timeline/default enablement; 209 tests. Twelve images read.
 
 Iteration 19: E03 preview now covers explicit timeline scheduling/unscheduling and named modal focus, without task mutations. Five new regressions, 214 tests; Accessibility/UX stay 4 pending final enablement.
+
+Holistic iteration 20: all applicable dimensions remain 4; evidence and limits in artifacts/holistic-20.txt. 223 tests, 32 inspected images, 10/10 protected files byte-identical. Checkbox boundaries previously 1.715 light / 2.632 dark now exceed 3:1 in tested selected/unselected backgrounds. B18/B19 added from boundary review; no High items.

@@ -22,11 +22,13 @@ There is no configured standalone typechecker. `ruff format --check src tests` i
 .venv/bin/python .autoloop/scripts/capture.py local-screens
 .venv/bin/python .autoloop/scripts/capture.py local-empty project
 .venv/bin/python .autoloop/scripts/capture.py local-advanced advanced
+.venv/bin/python .autoloop/scripts/capture.py local-placement placement
+.venv/bin/python .autoloop/scripts/capture.py local-slots slots
 ```
 
-Each command serves a disposable synthetic fixture at an ephemeral loopback port, captures desktop and 390px light/dark images, and stops its server. Normal captures include Preferences and Trash; `project` shows an empty standalone project; `advanced` shows Matrix and Timeline. Read every PNG before judging the UI. `report.json` records page exceptions and relevant layout geometry.
+Each command serves a disposable synthetic fixture at an ephemeral loopback port, captures desktop and 390px light/dark images, and stops its server. Normal captures include Preferences and Trash; `project` shows an empty standalone project; `advanced` shows Matrix and Timeline; `placement` shows Matrix, Levels and Board controls; `slots` seeds a local time block and shows its scheduling dialog. Read every PNG before judging the UI. `report.json` records page exceptions and relevant layout geometry.
 
-The dashboard automatically uses compact navigation at widths up to 800px. `?compact=0` is a diagnostic fallback to the old fixed sidebar. The browser interaction tests intercept every API request, so editing/completion/config actions in those tests never reach Things or user config.
+The dashboard automatically uses compact navigation at widths up to 800px. `?compact=0` is a diagnostic fallback to the old fixed sidebar. Keyboard placement is default-enabled; `?placement=0` retains the prior controls for diagnosis. The browser interaction tests intercept every API request, so editing/completion/config actions in those tests never reach Things or user config.
 
 ## Handle unreadable or corrupt overlay files
 

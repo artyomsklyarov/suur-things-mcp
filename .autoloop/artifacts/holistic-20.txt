@@ -1,0 +1,18 @@
+Holistic review, iteration 20
+Full gate: 223 passed, zero skips; Ruff, compilation, offline wheel/sdist green. Existing Starlette/httpx deprecation unchanged.
+Visual: 32 synthetic screenshots read in iter-20-screens/empty/placement/slots. Both themes, desktop/narrow, empty/populated. All reports no JS exceptions. Cards retain deliberate horizontal stage scrolling; stacked views retain vertical scrolling.
+Protected work: protected-20.json confirms all ten original dirty files unchanged. No manifest, identity, permissions, production config or dependency edits. No real Things/model/external writes.
+Correctness 4: full suite; live Things acceptance excluded.
+Reliability 4: fail-closed settings, atomic storage, stale-view guards; B18 best-effort note boundary needs follow-up.
+Test coverage 4: 110 tests added, actual browser and fixture/API regressions; B19 skipped-check gate needs follow-up.
+Code quality 4: Ruff green, established compact HTML retained.
+Architecture 4: reads/URL Scheme/overlay boundaries preserved.
+Security 4: path containment/concurrency/input boundary coverage; no claim of comprehensive audit.
+Performance 4: cheap cursor/threaded reads retained; no unmeasured speed claim.
+UX 4: compact menu/full-width views, keyboard actions, recovery.
+UI 4: readable tokens and fitting controls, both themes.
+Accessibility 4: modal focus, named native controls, drag alternatives, terminal semantics and measured checkbox boundaries; no exhaustive conformance claim.
+Product completeness 4: three local epics done; canonical live writes remain human acceptance.
+Docs/DX 4: reproducible fixture harness and new recovery/verification guide.
+SEO/content N/A: software/local dashboard.
+Backlog reranked: B18 Fix first (Medium, Low risk, Small), then B19 Safety net (Medium, Low risk, Small), then human-only B13. No active epic or High-impact items.

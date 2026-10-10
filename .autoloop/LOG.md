@@ -132,3 +132,8 @@ Dream 7 commit: c148cfd.
 
 ## Iteration 19 — Accessibility
 E03 timeline dialog, explicit time/duration and unscheduling; local section-only storage, failure retention, no stale navigation replacement, unchanged unrelated blocks. Before: four missing-dialog failures (iter-19-before.txt). After: 214 tests/full gate green (iter-19.txt); eight final images read. First gate found real focus loss: disabling the Save button moved focus to body before the return decision. Use still-visible dialog/trigger state, preserving escape/navigation behavior. Revised compact pool cap and native dark clock after visual inspection. Scores stay 4. Commit: pending iter 19.
+
+Iteration 19 commit: c0db91d.
+
+## Iteration 20 — Accessibility
+E03 completed and default-enabled with placement=0 diagnostic fallback. Before: four terminal-state/control-boundary regressions and default-control test failed (iter-20-before.txt, iter-20-ui-before.txt). After: 223 tests/full gate green (iter-20.txt); 32 screenshots individually read, reports have no page errors, slot dialog fits 320/768px. Existing timeline drag test now waits for the overlay state, since scheduled cards are also visible; assertions retained. Capture import order corrected after first lint gate. Holistic review re-scored all dimensions, verified all ten original dirty files byte-identical, found B18/B19. Scores stay 4; dream due. Commit: pending iter 20.

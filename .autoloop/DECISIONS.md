@@ -58,3 +58,5 @@ Iteration 18: native selects reuse existing actions and require no dependencies.
 - H18: Voice interaction: choose on-device versus paid speech processing and an accessible review UI using text fixtures first. Approve microphone permissions and privacy model before adding sensitive platform configuration or capturing any audio.
 
 Iteration 19: explicit slot dialog uses existing modal management and section-only overlay saves. The 09:00/selected duration is a visible editable form default, never an inferred task estimate. New slots must fit the displayed 06:00–23:00 day; existing drag behavior preserved. Scheduled tasks also have controls in the pool so short calendar blocks need no tiny overflowing buttons. No dependencies.
+
+Iteration 20: enable completed E03 after all-view visual and browser gates. Native placement controls are additive; drag retained. Terminal task completion cannot be repeated. Use theme-specific checkbox border tokens and wrapping slot footer. Holistic review found two bounded issues, B18 successful-store/note-sync boundary and B19 skipped verification; fix before final stopping review. No dependencies.

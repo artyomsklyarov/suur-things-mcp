@@ -10,7 +10,7 @@
     --side-bg:#f3f4f6; --main-bg:#ffffff; --text:#1d1d20; --muted:#58606b;
     --divider:#e8e9eb; --row-hover:#e9ebee; --row-sel:#dfe1e6; --accent:#2467dd; --on-accent:#fff;
     --pill-border:#d3d6da; --ring-bg:#d7dade; --ring-fg:#9aa0a8; --badge:#e7e8eb;
-    --red:#ce3725; --orange:#946017; --green:#237747; --blue:#2467dd; --check-border:#c2c6cc; --header-rule:#ececee; --col-bg:#f0f1f3;
+    --red:#ce3725; --orange:#946017; --green:#237747; --blue:#2467dd; --check-border:#7a8390; --header-rule:#ececee; --col-bg:#f0f1f3;
     --card-bg:#ffffff; --card-shadow:0 1px 2px rgba(0,0,0,.07); --overlay:rgba(0,0,0,.28);
     --chip-bg:#e6e8eb; --chip-fg:#41454c; --chip-active-bg:#4a4f57; --chip-active-fg:#fff; --gold:#f5c026;
     /* motion tokens (theme-independent): strong curves per the audit playbook */
@@ -23,7 +23,7 @@
     --side-bg:#23272c; --main-bg:#1b1e23; --text:#e7e9ec; --muted:#acb2bc;
     --divider:#31363c; --row-hover:#2b3035; --row-sel:#384049; --accent:#4c8dff; --on-accent:#111922;
     --pill-border:#474d55; --ring-bg:#3a3f46; --ring-fg:#888e97; --badge:#363b42;
-    --red:#ff6453; --orange:#e8a445; --green:#68bd85; --blue:#80aaff; --check-border:#5a6068; --header-rule:#2e333a; --col-bg:#22262b;
+    --red:#ff6453; --orange:#e8a445; --green:#68bd85; --blue:#80aaff; --check-border:#8f98a5; --header-rule:#2e333a; --col-bg:#22262b;
     --card-bg:#2b3036; --card-shadow:0 1px 2px rgba(0,0,0,.3); --overlay:rgba(0,0,0,.5);
     --chip-bg:#363b42; --chip-fg:#c5c9cf; --chip-active-bg:#dfe1e6; --chip-active-fg:#1b1e23; --gold:#f5c026;
   }
@@ -325,6 +325,8 @@
   .q-sched .quad-head .qt { color:var(--green); }
   .q-deleg .quad-head .qt { color:var(--orange); }
   html[data-theme="dark"] #slot-start { color-scheme:dark; }
+  #slot-overlay .btnrow { flex-wrap:wrap; }
+  .pcard.is-done .pt { color:var(--muted); text-decoration:line-through; }
   .placement { display:block; width:100%; margin-top:8px; padding:4px 6px; border:1px solid var(--pill-border);
     border-radius:6px; background:var(--main-bg); color:var(--text); font:inherit; font-size:12px; }
   .pcard { background:var(--card-bg); border-radius:8px; padding:8px 11px; margin:6px 0; box-shadow:var(--card-shadow); cursor:pointer; }
@@ -640,7 +642,7 @@
 <script nonce="__CSP_NONCE__">
 const $ = (s, r=document) => r.querySelector(s);
 const COMPACT_LAYOUT=new URLSearchParams(location.search).get("compact")!=="0";
-const PLACEMENT_CONTROLS=new URLSearchParams(location.search).get("placement")==="1";
+const PLACEMENT_CONTROLS=new URLSearchParams(location.search).get("placement")!=="0";
 document.documentElement.dataset.placement=PLACEMENT_CONTROLS?"on":"off";
 document.documentElement.dataset.compact=COMPACT_LAYOUT?"on":"off";
 const NARROW_WINDOW=matchMedia("(max-width:800px)");
@@ -1431,15 +1433,17 @@ function renderMatrix(items){
 }
 function priCardEl(t,items=LIST_ITEMS){
   const el=document.createElement("div"); el.className="pcard"; el.draggable=true; el.dataset.id=t.uuid;
+  const done=t.status==="completed", canceled=t.status==="canceled";
+  el.classList.toggle("is-done",done||canceled);
   el.onclick=t._proj?()=>go("#l/"+encodeURIComponent(t.uuid)):()=>openEdit(t.uuid);
   if(!t._proj) el.addEventListener("contextmenu",e=>{ e.preventDefault(); taskCtxMenu(t, e.clientX, e.clientY); });
   el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",t.uuid); el.classList.add("dragging"); });
   el.addEventListener("dragend",()=>el.classList.remove("dragging"));
   // Projects open on click and have no checkbox; to-dos get a complete box like the list rows.
-  const box=t._proj?"":`<span class="box" title="Complete" style="cursor:pointer"></span>`;
+  const box=t._proj?"":`<span class="box${done?" done":canceled?" cancel":""}" title="${done?"Completed":canceled?"Canceled":"Complete"}" style="cursor:${done||canceled?"default":"pointer"}"></span>`;
   el.innerHTML=`<div style="display:flex;align-items:center;gap:8px">${box}<div class="pt">${esc(t.title||"(untitled)")}</div></div>`+
     (t._proj?`<div class="psub">Project</div>`:(t.project_title?`<div class="psub">${esc(t.project_title)}</div>`:""));
-  if(!t._proj){ const b=el.querySelector(".box");
+  if(!t._proj&&!done&&!canceled){ const b=el.querySelector(".box");
     b.onclick=(e)=>{ e.stopPropagation(); b.classList.add("done"); if(PLACEMENT_CONTROLS) b.setAttribute("aria-checked","true");
       applyStatus(t.uuid,"completed").then(ok=>{ if(ok){
         // calm exit: shrink-fade before the card leaves the quadrant
@@ -1451,8 +1455,8 @@ function priCardEl(t,items=LIST_ITEMS){
     keyboardAction(el.querySelector('.pt'),t._proj?"link":"button",(t._proj?"Open ":"Edit ")+(t.title||"(untitled)"));
     const check=el.querySelector('.box');
     if(check){ check.setAttribute("role","checkbox"); check.setAttribute("aria-label","Complete "+(t.title||"(untitled)"));
-      check.setAttribute("aria-checked","false"); check.setAttribute("aria-disabled",String(!AUTH));
-      if(AUTH){ check.tabIndex=0; check.addEventListener("keydown",e=>{
+      check.setAttribute("aria-checked",String(done||canceled)); check.setAttribute("aria-disabled",String(!AUTH||done||canceled));
+      if(AUTH&&!done&&!canceled){ check.tabIndex=0; check.addEventListener("keydown",e=>{
         if(e.key===" "||e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); check.click(); }
       }); }
     }
