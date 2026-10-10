@@ -54,3 +54,5 @@ Iteration 15: a monotonic generation counter is enough; cancellation would add c
 - H17: Live organizer comparison: choose approved models, a capped monetary budget, privacy-approved task fixtures and a rubric; run identical mocked fixtures first. This loop makes no metered calls or credential changes.
 
 Iteration 18: native selects reuse existing actions and require no dependencies. Save only the owned section, update local CONFIG after success, guard rerenders by view generation, retain previous selection on failure, restore focus only if the user has not moved it elsewhere. Levels requires auth and disables unmapped targets. Preview flag stays until timeline is complete.
+
+- H18: Voice interaction: choose on-device versus paid speech processing and an accessible review UI using text fixtures first. Approve microphone permissions and privacy model before adding sensitive platform configuration or capturing any audio.

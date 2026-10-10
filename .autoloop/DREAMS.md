@@ -127,3 +127,24 @@ With unlimited time and resources, the tool could be an operating environment fo
 | Build custom selects to imitate native widgets | Low | Low | Easy but maintenance-heavy | Reject: native controls already provide keyboard semantics |
 
 No code, new dependency or fresh epic. Continue only the already-supported placement gap; then assess stopping against the scorecard and final dream.
+
+## Dream 7 — The 10x version (after iterations 17-18)
+
+The best local task companion would make familiar actions predictable and approachable rather than accumulating features.
+
+| Idea | Fit | Impact | Buildability | Waking label |
+|---|---|---|---|---|
+| Explicit scheduling reachable from each task | High | Medium | Existing active epic | Promote E03 remaining slice |
+| Successful placement preserves keyboard context | High | Medium | Existing preview | Built iter 18 |
+| Failure leaves the previous placement and task intact | High | High | Existing preview | Built iter 18 |
+| Drag and keyboard reach the same task semantics | High | Medium | Existing protected actions | Built/protected iter 17-18 |
+| First use survives missing optional settings | High | High | Existing startup | Built iter 6 |
+| Advanced controls automatically fit a split window | High | Medium | Existing compact layout | Built iter 11; verify E03 completion |
+| Whole personal history queried by a private model (ambitious) | Medium | High | Models/storage/privacy | Park existing H07/H14 |
+| Cross-organization agent operating system (ambitious) | Low | High | Accounts/hosting/governance | Reject: different product |
+| Transparent compensating undo for reviewed changes | Medium | High | Needs live-write conflict/retention design | Park existing H15 |
+| Voice-first task management | Medium | Medium | Microphone permissions manifest is sensitive | Park H18 |
+| Always-on background task classification | Low | Medium | Metered work/unreviewed updates | Reject: violates explicit review boundary |
+| Animated gamified dashboard home | Low | Low | Easy | Reject: calm Things-style list already fits intent |
+
+No code, fresh promotable backlog item or lucid prototype. Finish E03 and holistic review before the final dream.

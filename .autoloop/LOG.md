@@ -122,3 +122,8 @@ Iteration 17 commit: 88bb5c2.
 
 ## Iteration 18 — Accessibility
 E03 selectors/card keyboard actions protected and implemented behind ?placement=1. Before: four missing-control regressions fail (iter-18-before.txt; default locator timeout made this capture slower than needed, subsequent helper timeout 3s). After: 209 tests/full gate green (iter-18.txt), scoped requests/focus/failure/no-token/keyboard completion verified; twelve images read. First gate exposed an immediate visibility assertion before async edit loaded; it now waits for the same visible dialog. No assertion removed. Scores remain 4; dream due. Commit: pending iter 18.
+
+Iteration 18 commit: 4ab7dad.
+
+## Dream 7 — Dream
+10x lens, twelve ideas with two ambitious; finish existing E03, five protected/built capabilities, three parked plans and three rejections. No code. Commit: pending dream 7.
