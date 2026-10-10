@@ -16,3 +16,5 @@ Log hashes are filled on the next iteration from committed git history; the fina
 - H07: Semantic search proposal: benchmark a local model against fixture title/note search; approve model size, licensing and optional dependency before implementation.
 
 Iteration 1: Path.relative_to on resolved paths replaces unsafe string-prefix checks. Detach rejects escaped paths and preserves metadata. B08 rejected after proper settled evidence; do not mistake transient screenshots for final theme behavior.
+
+Iteration 2: use standard-library SHA-256 content-addressed recovery copies, exclusive creation and byte readback. Preserve original bytes until a successful explicit save. Read errors other than missing file propagate so load-modify-save cannot overwrite unread data. No dependency added.

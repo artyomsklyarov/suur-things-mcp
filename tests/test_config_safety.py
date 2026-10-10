@@ -41,3 +41,46 @@ def test_detach_preserves_file_and_metadata_outside_attachment_root(store):
 def test_attachment_path_rejects_unsafe_stored_item_id(store, item_id):
     with pytest.raises(ValueError):
         config.attachment_path(item_id, {"id": "image", "mime": "image/png"})
+
+
+@pytest.mark.parametrize("payload", [b"[]", b"null", b'"text"', b"23", b"\xff", b"{bad json"])
+def test_unusable_config_is_preserved_and_recovers(store, payload):
+    path = store / "board.json"
+    path.write_bytes(payload)
+    assert config.load()["boards"]
+    backups = list(store.glob("board.json.corrupt-*"))
+    assert len(backups) == 1 and backups[0].read_bytes() == payload
+    assert config.load()["boards"]
+    assert len(list(store.glob("board.json.corrupt-*"))) == 1
+    config.merge({"prefs": {"editor": "code"}})
+    assert backups[0].read_bytes() == payload
+    assert config.prefs() == {"editor": "code"}
+
+
+def test_recovery_does_not_overwrite_distinct_corrupt_configs(store):
+    path = store / "board.json"
+    for payload in [b"{broken-one", b"{broken-two"]:
+        path.write_bytes(payload)
+        config.load()
+    assert {p.read_bytes() for p in store.glob("board.json.corrupt-*")} == {b"{broken-one", b"{broken-two"}
+
+
+def test_unreadable_config_does_not_silently_reset(store, monkeypatch):
+    config.save({"prefs": {"editor": "user-editor"}})
+    original = (store / "board.json").read_bytes()
+
+    def denied(*args, **kwargs):
+        raise PermissionError("not readable")
+
+    monkeypatch.setattr(type(store), "read_bytes", denied)
+    with pytest.raises(PermissionError):
+        config.merge({"priority": {"x": "do"}})
+    monkeypatch.undo()
+    assert (store / "board.json").read_bytes() == original
+
+
+@pytest.mark.parametrize("repos", [42, True, {"repo": "bad"}, "bad"])
+def test_junk_repo_lists_are_ignored_without_crashing(store, repos):
+    cfg = config.save({"links": {"x": {"repos": repos}}, "prefs": {"editor": "code"}})
+    assert cfg["links"] == {}
+    assert cfg["prefs"] == {"editor": "code"}

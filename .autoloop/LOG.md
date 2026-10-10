@@ -12,3 +12,8 @@ Dream 1 commit: b5a5ce6.
 
 ## Iteration 1 — Fix
 B01: component-aware resolved containment and safe identifiers for upload, serve and detach. Before: five targeted regressions fail (iter-1-before.txt), including upload and deletion outside root. After: 118 tests green, no skips, lint/compile/build green (iter-1.txt). No new warning. Reviewed all eight baseline-settled images: dark contrast is correct after existing 120ms background transitions, so rejected B08 instead of changing correct styling. Capture harness now waits 250ms after theme changes. Security 3 -> 4. Commit: pending iter 1.
+
+Iteration 1 commit: 75c714f.
+
+## Iteration 2 — Fix
+B02: non-object/invalid-UTF8 overlay recovery, immutable unique backups, fail-closed unreadable files and junk repo-list sanitization. Before: nine failures, eight passes (iter-2-before.txt). After: full gate 130 passed, lint/compile/offline builds green; unchanged baseline warning (iter-2.txt). Reliability improved within dimension, concurrency remains. Commit: pending iter 2.

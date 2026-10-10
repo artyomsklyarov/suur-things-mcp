@@ -18,3 +18,5 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 | Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness now available |
 | SEO / discoverability | N/A | N/A | Local desktop dashboard, not public website |
 | Content quality | N/A | N/A | Software repo, not knowledge base |
+
+Iteration 2: reliability remains 3 pending concurrency/frontend work; config recovery now handles six invalid payloads, unique recoveries, unreadable-file fail-closed and malformed link lists. Coverage improves with 12 new tests, 130 total. Evidence iter-2-before.txt / iter-2.txt.

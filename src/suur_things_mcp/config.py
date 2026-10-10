@@ -14,6 +14,7 @@ concept). Stored as JSON at ``$XDG_CONFIG_HOME/suur-things-mcp/board.json``
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -90,8 +91,10 @@ def _clean_links(data: dict) -> dict[str, Any]:
         raw_repos = entry.get("repos")
         if not isinstance(raw_repos, list) and entry.get("repo"):  # legacy single repo
             raw_repos = [{"repo": entry.get("repo"), "github": entry.get("github"), "label": entry.get("label")}]
+        if not isinstance(raw_repos, list):
+            raw_repos = []
         by_path: dict[str, dict] = {}
-        for r in raw_repos or []:
+        for r in raw_repos:
             cleaned = _clean_link_entry(r)
             if cleaned:
                 by_path[cleaned["repo"]] = cleaned  # dedup by path
@@ -310,24 +313,29 @@ def prefs() -> dict[str, Any]:
 
 def load() -> dict[str, Any]:
     path = _path()
-    if not path.exists():
-        return _fresh()
     try:
-        return _clean(json.loads(path.read_text()))
-    except json.JSONDecodeError:
-        # A corrupt board.json (e.g. an interrupted write) used to be silently
-        # replaced with empty defaults — and the next save() overwrote it, so the
-        # user's boards/links/overlays were lost for good. Preserve the bad file
-        # so it's recoverable instead of vanishing.
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return _fresh()
+    # Other I/O errors must propagate: returning defaults would let a subsequent
+    # merge overwrite a file we never read (and therefore cannot preserve).
+    try:
+        data = json.loads(raw.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("config must be a JSON object")
+    except (ValueError, UnicodeDecodeError):
+        # Content-addressed, exclusive copies preserve each distinct bad payload
+        # without renaming a live file or overwriting another recovery. Repeated
+        # read requests reuse the same backup instead of creating endless copies.
+        backup = path.with_name(f"{path.name}.corrupt-{hashlib.sha256(raw).hexdigest()}")
         try:
-            import datetime
-            backup = path.with_name(f"{path.name}.corrupt-{datetime.datetime.now():%Y%m%d-%H%M%S}")
-            path.replace(backup)
-        except OSError:
-            pass
+            with backup.open("xb") as f:
+                f.write(raw)
+        except FileExistsError:
+            if backup.read_bytes() != raw:
+                raise ValueError("config recovery backup does not match") from None
         return _fresh()
-    except OSError:
-        return _fresh()
+    return _clean(data)
 
 
 def save(data: dict) -> dict[str, Any]:
