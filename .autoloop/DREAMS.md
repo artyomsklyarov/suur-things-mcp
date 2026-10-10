@@ -43,3 +43,24 @@ The app already holds project hierarchy, overlay preferences, modified stamps an
 | Pretty counters for their own sake | Low | Low | Easy | Reject: no core user value |
 
 No code in dream session. No lucid experiment. Next: resolve standalone projects (highest outstanding safe Fix), then the narrow-window epic.
+
+## Dream 3 — Emotion first (two unchanged score iterations)
+
+First use should feel familiar and safe; the hundredth should feel effortless; returning after absence should not feel like a punishment.
+
+| Idea | Fit | Impact | Buildability | Waking label |
+|---|---|---|---|---|
+| Finish compact views so narrow windows feel calm | High | High | Existing active epic | Promote E02 milestone 2 |
+| Make small muted/colored labels readable rather than faint | High | High | Existing theme tokens, measured contrast | Promote B16 Accessibility |
+| Make failed requests recover in-place | High | High | Already built | Built iteration 6 |
+| Return keyboard focus where the user left it | High | High | Already built | Built iterations 7-8 |
+| Latest navigation wins, never old tasks under new title | High | Medium | Existing request guard candidate | Promote B11 |
+| Keep time-block placement and board stages accessible by destination selector | High | Medium | Future self-contained epic | Promote B17 candidate; no human gate needed |
+| Gentle return-from-absence onboarding | Medium | Medium | Evidence about user habits missing | Park: H12 needs user research before inventing behavior |
+| Personal agent that negotiates every day around energy (ambitious) | Medium | High | Model execution is metered/outside loop | Park H13 with opt-in review-only plan |
+| Shared memory of a decade of work (ambitious) | Medium | High | Privacy/retention/infrastructure decisions | Park H14 |
+| Reward streaks and guilt for missed days | Low | Medium | Easy but manipulative | Reject |
+| Remove advanced views to simplify the product | Low | Medium | Feature removal forbidden | Reject |
+| Theme crossfades everywhere | Low | Low | Easy but adds no value and harms motion intent | Reject |
+
+No code. No lucid experiment. Existing E02 continues next. H11 is reclassified into a feasible Medium backlog candidate B17; preferred interaction is not itself a real human blocker.

@@ -31,3 +31,8 @@ Iteration 7: E01 beats narrow-layout runner-up 20 vs 18 on user value/fit/feasib
 - H09: Attention-map proposal: local synthetic proof of joining staleness and repo timestamps; decide retention/privacy and meaning of scores before surfacing real data.
 - H10: Personal ontology proposal: optional local-only classification prototype; approve model/dependency/storage/migration scope before any training or indexing.
 - H11: Advanced drag-view keyboard placement: specify an accessible per-card destination selector for board stages, quadrants and timeline blocks; decide preferred interaction before a larger view-controls epic. Existing task edit/complete remains keyboard accessible.
+
+Dream 3 correction: H11 interaction design does not require human setup or sensitive permission. Reclassified as B17, a feasible Medium epic candidate, with a per-card destination selector as its concrete plan.
+- H12: Return onboarding research: ask real users what they need after a break; only then prototype a dismissible local hint. No guesses about overdue-task guilt.
+- H13: Energy-aware agent plan: user provides constraints; opt-in existing review workflow proposes a schedule; user reviews before URL Scheme updates. Any live model call needs separate authorization for metered work.
+- H14: Decade-memory plan: synthetic local demo first; define retention/export/deletion and privacy guarantees before indexing personal history or choosing infrastructure.
