@@ -14,6 +14,7 @@ import datetime
 import os
 import re as _re
 import sqlite3
+import time
 from typing import Any
 
 import things
@@ -148,6 +149,21 @@ def get(uuid: str) -> dict | None:
 _URL_RE = _re.compile(r'https?://[^\s<>"\)]+')
 
 
+def _days_since(stamp: Any) -> int | None:
+    """Whole days since a things.py timestamp ("2026-08-28 10:11:58").
+
+    None when the field is absent or unparseable, so callers can distinguish
+    "no data" from "zero days old"."""
+    if not stamp:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(str(stamp))
+    except (TypeError, ValueError):
+        return None
+    return max(0, (datetime.datetime.now() - dt).days)
+
+
+
 def _first_url(item: dict) -> str | None:
     """First http(s) URL found in the title or notes (for the dashboard card view)."""
     m = _URL_RE.search((item.get("title") or "") + "\n" + (item.get("notes") or ""))
@@ -170,6 +186,10 @@ def _card(item: dict) -> dict:
         "tags": item.get("tags"),
         "has_notes": bool(item.get("notes")),
         "link": _first_url(item),
+        # Age signals: cheap ints (not the raw stamps — get_item has those) so
+        # every digest can see that an item is 400 days old without a second call.
+        "age_days": _days_since(item.get("created")),
+        "idle_days": _days_since(item.get("modified")),
     }
 
 
@@ -431,4 +451,147 @@ def item_detail(uuid: str) -> dict | None:
             {"title": c.get("title"), "status": c.get("status")}
             for c in (it.get("checklist") or [])
         ],
+    }
+
+
+# --- Staleness review -----------------------------------------------------
+# A backlog of hundreds of open to-dos can't be reviewed item by item. These
+# helpers slice it into DISJOINT cohorts, each of which takes one kind of
+# decision, so a sweep is a handful of batch calls instead of hundreds of
+# individual judgements. Raw SQL (not things.py) because this needs
+# creationDate/userModificationDate arithmetic over every open row at once.
+
+_AGE_BUCKETS = (
+    (7, "< 1 week"),
+    (30, "1w-1m"),
+    (90, "1-3 months"),
+    (180, "3-6 months"),
+    (365, "6-12 months"),
+    (10**6, "> 1 year"),
+)
+
+
+def _packed_today() -> int:
+    """Today in Things' packed date format (11b year, 4b month, 5b day)."""
+    d = datetime.date.today()
+    return (d.year << 16) | (d.month << 12) | (d.day << 7)
+
+
+def _unpack_date(packed: int | None) -> str | None:
+    """Things' packed start/deadline int -> ISO date string, or None if unusable."""
+    if not packed:
+        return None
+    try:
+        return datetime.date((packed >> 16) & 0xFFF, (packed >> 12) & 0xF,
+                             (packed >> 7) & 0x1F).isoformat()
+    except ValueError:  # a malformed/zero component
+        return None
+
+
+def stale_cohorts(
+    never_touched_days: int = 365,
+    idle_days: int = 180,
+    inbox_idle_days: int = 90,
+    limit: int = 40,
+) -> dict:
+    """Slice the open backlog into disjoint review cohorts.
+
+    Cohorts are assigned first-match-wins in the order below, so no item shows up
+    in two queues and the counts add up to real, non-overlapping work:
+
+      inbox_stale   — sitting in the Inbox past ``inbox_idle_days``. The Inbox is
+                      meant to be transient; these have stopped being triaged.
+      never_touched — created over ``never_touched_days`` ago and never edited
+                      since (creation and modification stamps within a minute).
+                      Timestamp equality is a review heuristic, not user intent.
+      deferred      — scheduled for a date that has passed but still open. Their past date is a review signal; it does not explain why
+                      they remain open.
+      loose_stale   — no parent project and idle past ``idle_days``. Orphans.
+
+    ``clusters`` groups whatever idle work remains by project, because cancelling
+    one dead project retires dozens of to-dos in a single decision — far faster
+    than reviewing them one at a time. ``dead_projects`` are open projects with no
+    open to-do left at all.
+
+    Each cohort is capped at ``limit`` items but reports its true ``total``.
+    """
+    con = sqlite3.connect(_db_uri(immutable=True), uri=True)
+    try:
+        rows = con.execute(
+            "SELECT t.uuid, t.title, t.start, t.startDate, t.project, "
+            "       t.creationDate, t.userModificationDate, p.title "
+            "FROM TMTask t LEFT JOIN TMTask p ON p.uuid = t.project "
+            "WHERE t.trashed=0 AND t.status=0 AND t.type=0"
+        ).fetchall()
+        dead = con.execute(
+            "SELECT p.uuid, p.title FROM TMTask p "
+            "WHERE p.trashed=0 AND p.status=0 AND p.type=1 AND NOT EXISTS ("
+            "  SELECT 1 FROM TMTask t WHERE t.project=p.uuid AND t.trashed=0 AND t.status=0)"
+        ).fetchall()
+    finally:
+        con.close()
+
+    now = time.time()
+    today_packed = _packed_today()
+    today = datetime.date.today()
+
+    cohorts: dict[str, list[dict]] = {
+        "inbox_stale": [], "never_touched": [], "deferred": [], "loose_stale": [],
+    }
+    histogram = {label: 0 for _, label in _AGE_BUCKETS}
+    remaining: list[dict] = []
+
+    for uuid, title, start, start_date, project, created, modified, project_title in rows:
+        age = int((now - created) / 86400) if created else None
+        idle = int((now - modified) / 86400) if modified else None
+        if age is not None:
+            for cutoff, label in _AGE_BUCKETS:
+                if age < cutoff:
+                    histogram[label] += 1
+                    break
+
+        card = {"uuid": uuid, "title": title, "project_title": project_title,
+                "age_days": age, "idle_days": idle}
+
+        # First match wins — keeps the queues disjoint.
+        if start == 0 and (idle or 0) > inbox_idle_days:
+            cohorts["inbox_stale"].append(card)
+        elif (age or 0) > never_touched_days and created and modified and abs(modified - created) < 60:
+            cohorts["never_touched"].append(card)
+        elif start_date and start_date < today_packed:
+            scheduled = _unpack_date(start_date)
+            days_late = (today - datetime.date.fromisoformat(scheduled)).days if scheduled else None
+            cohorts["deferred"].append({**card, "scheduled": scheduled, "days_late": days_late})
+        elif project is None and (idle or 0) > idle_days:
+            cohorts["loose_stale"].append(card)
+        elif (idle or 0) > idle_days:
+            remaining.append(card)
+
+    # Pass 4: what's left, grouped by project — one decision retires many items.
+    by_project: dict[str, dict] = {}
+    for card in remaining:
+        name = card["project_title"] or "(no project)"
+        slot = by_project.setdefault(name, {"project_title": name, "stale_count": 0,
+                                            "oldest_idle_days": 0})
+        slot["stale_count"] += 1
+        slot["oldest_idle_days"] = max(slot["oldest_idle_days"], card["idle_days"] or 0)
+    clusters = sorted(by_project.values(), key=lambda c: c["stale_count"], reverse=True)
+
+    return {
+        "counts": {
+            "open_todos": len(rows),
+            "reviewable": sum(len(v) for v in cohorts.values()) + len(remaining),
+            **{k: len(v) for k, v in cohorts.items()},
+            "clustered": len(remaining),
+            "dead_projects": len(dead),
+        },
+        "age_histogram": histogram,
+        "thresholds": {"never_touched_days": never_touched_days,
+                       "idle_days": idle_days, "inbox_idle_days": inbox_idle_days},
+        "cohorts": {
+            name: {"total": len(items), "items": items[:limit]}
+            for name, items in cohorts.items()
+        },
+        "clusters": clusters,
+        "dead_projects": [{"uuid": u, "title": t} for u, t in dead],
     }

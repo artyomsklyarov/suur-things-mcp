@@ -217,6 +217,33 @@ def overview(
     return reads.overview(recent_completed=recent_completed)
 
 
+@mcp.tool()
+def stale_review(
+    never_touched_days: Annotated[int, Field(ge=1, le=3650)] = 365,
+    idle_days: Annotated[int, Field(ge=1, le=3650)] = 180,
+    inbox_idle_days: Annotated[int, Field(ge=1, le=3650)] = 90,
+    limit: Annotated[int, Field(ge=1, le=200)] = 40,
+) -> dict:
+    """Slice a stale backlog into disjoint review cohorts, biggest leverage first.
+
+    Use this instead of paging through hundreds of to-dos: a backlog of 800 items
+    can't be reviewed one at a time, but it collapses into a handful of cohorts
+    that each take ONE kind of decision. Returns an age histogram, the cohorts
+    (`inbox_stale`, `never_touched`, `deferred`, `loose_stale` — no item appears
+    in two), `clusters` of what's left grouped by project, and `dead_projects`
+    (open projects with no open to-do).
+
+    Pair with the `stale_sweep` prompt for the review protocol, and apply
+    decisions with `batch` (up to 250 updates per call, needs THINGS_AUTH_TOKEN).
+    """
+    return reads.stale_cohorts(
+        never_touched_days=never_touched_days,
+        idle_days=idle_days,
+        inbox_idle_days=inbox_idle_days,
+        limit=limit,
+    )
+
+
 # =========================================================================
 # WRITE TOOLS — via the Things URL Scheme
 # =========================================================================
@@ -998,6 +1025,47 @@ def calm_today() -> str:
         "4. Show the plan and ASK before changing anything. On approval, apply the deferrals/"
         "moves (needs THINGS_AUTH_TOKEN) and report: Today went from N items to a focused M.\n"
         "Tone: calm and kind, never naggy. The goal is a Today the user can actually finish."
+    )
+
+
+@mcp.prompt()
+def stale_sweep() -> str:
+    """Clear a stale backlog by cohort — fast, guilt-free, in a few batch calls."""
+    return (
+        "Help the user review a stale Things backlog in small cohorts. Age is a review "
+        "signal, not evidence that a task is unimportant or that the user avoided it.\n\n"
+        "1. Call `stale_review`. Show the age histogram, thresholds and full cohort "
+        "counts. Item lists may be capped; never treat the displayed sample as the "
+        "entire cohort or approve unseen items.\n"
+        "2. Offer one cohort at a time and let the user choose where to start.\n"
+        "   - `dead_projects`: projects with no open to-do. Ask whether each is "
+        "finished, still active and needs a next action, or no longer wanted.\n"
+        "   - `never_touched`: old items with matching creation/modification stamps. "
+        "Review their current relevance; keep, clarify, reschedule or cancel only "
+        "as the user decides.\n"
+        "   - `inbox_stale`: offer doing, filing to a project "
+        "(`update_todo(list_id=)`), scheduling, canceling, or leaving unchanged.\n"
+        "   - `loose_stale`: ask whether an item belongs to a project or should stay "
+        "as a standalone task; do not equate lacking a project with lacking value.\n"
+        "   - `deferred`: show the past scheduled date and ask whether the date, scope "
+        "or a blocker changed. Offer a revised next action without guessing motives.\n"
+        "   - `clusters`: take one project at a time, largest first if helpful. "
+        "Ask whether the project is still active before reviewing its tasks. Project "
+        "summaries are not an approved list of task UUIDs.\n"
+        "3. The user can skip a cohort or leave any item unchanged. No default bulk "
+        "cancellation, guilt, urgency or requirement to empty a queue.\n"
+        "4. Never delete tasks. If the user chooses cancellation, explain that "
+        "canceled items remain in Things' Logbook.\n"
+        "5. Before any bulk change, show the exact UUID/title list and proposed "
+        "fields, and get explicit approval for that list. Apply only approved "
+        "items through `batch` (max 250 operations; updates need THINGS_AUTH_TOKEN).\n"
+        '   {"type":"to-do","operation":"update","id":"<uuid>",'
+        '"attributes":{"canceled":true}}\n'
+        "   Dispatch success is not per-item acceptance. Read back changed items "
+        "and report any unverified outcomes; do not automatically retry a batch.\n"
+        "6. Re-read counts before reporting a before/after change. Do not invent "
+        "reduction numbers. Offer a review cadence only if the user wants one.\n"
+        "Tone: clear, practical and non-judgmental. A stale backlog is normal."
     )
 
 

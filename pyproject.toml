@@ -18,7 +18,10 @@ classifiers = [
 ]
 dependencies = [
     "mcp>=1.2.0",
-    "things.py>=0.0.15",
+    # >=1.0 is the real floor, not a preference: write verification and the
+    # staleness cohorts read the `created`/`modified` fields off every item, and
+    # the 0.0.x line was never tested against this code (uv.lock pins 1.0.1).
+    "things.py>=1.0",
     # starlette + uvicorn ship transitively with mcp; declared explicitly
     # because the dashboard imports them directly.
     "starlette>=0.37",

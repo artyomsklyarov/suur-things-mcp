@@ -26,7 +26,7 @@ DB_VERSION_PLIST = (
     '<?xml version="1.0" encoding="UTF-8"?>\n'
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
     '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
-    '<plist version="1.0">\n<integer>26</integer>\n</plist>\n'
+    '<plist version="1.0">\n<integer>27</integer>\n</plist>\n'
 )
 
 TODAY = datetime.date.today()
@@ -36,14 +36,20 @@ NEXT_WEEK = TODAY + datetime.timedelta(days=7)
 
 def _task(uuid, title, *, type=0, status=0, start=1, trashed=0, project=None,
           area=None, start_date=None, deadline=None, notes="", stop_date=None,
-          index=0, today_index=0):
-    """Row dict for TMTask with the columns things.py cares about."""
+          index=0, today_index=0, age_days=0, idle_days=None):
+    """Row dict for TMTask with the columns things.py cares about.
+
+    ``age_days``/``idle_days`` backdate creationDate/userModificationDate so the
+    staleness cohorts (reads.stale_cohorts) have something to find. ``idle_days``
+    defaults to ``age_days``, i.e. created and never edited since."""
     now = time.time()
+    created = now - age_days * 86400
+    modified = now - (age_days if idle_days is None else idle_days) * 86400
     return {
         "uuid": uuid, "title": title, "type": type, "status": status,
         "start": start, "trashed": trashed, "project": project, "area": area,
         "startDate": start_date, "deadline": deadline, "notes": notes,
-        "stopDate": stop_date, "creationDate": now, "userModificationDate": now,
+        "stopDate": stop_date, "creationDate": created, "userModificationDate": modified,
         "index": index, "todayIndex": today_index, "leavesTombstone": 0,
         "notesSync": 0, "startBucket": 0,
     }
@@ -83,12 +89,32 @@ FIXTURE_CHECKLIST = [
 ]
 
 
-def build_things_db(path: str) -> None:
+# Backdated rows for the staleness cohorts. Kept OUT of FIXTURE_TASKS on purpose:
+# the base dataset's tests assert exact set equality, and extra rows would quietly
+# weaken every one of them. Staleness tests opt in via the `stale_db` fixture.
+STALE_TASKS = [
+    # Inbox item nobody has triaged in months -> inbox_stale.
+    _task("stale-inbox", "Ancient inbox item", start=0, age_days=400, idle_days=200),
+    # Over a year old and never edited since (idle == age) -> never_touched.
+    _task("stale-untouched", "Never once revisited", age_days=500),
+    # Old and idle, but parked in a project -> falls through to clusters.
+    _task("stale-clustered", "Old but in a project", project="proj-book",
+          age_days=400, idle_days=200),
+    # Old, idle, and parentless -> loose_stale.
+    _task("stale-loose", "Orphaned old task", age_days=400, idle_days=200),
+    # Scheduled for a date that has passed but still open -> deferred.
+    _task("stale-deferred", "Scheduled and skipped", project="proj-book",
+          start_date=thingsdate(TODAY - datetime.timedelta(days=30)),
+          age_days=100, idle_days=30),
+]
+
+
+def build_things_db(path: str, extra_tasks: list | None = None) -> None:
     con = sqlite3.connect(path)
     con.executescript(SCHEMA)
     con.execute("INSERT INTO Meta (key, value) VALUES ('databaseVersion', ?)",
                 (DB_VERSION_PLIST,))
-    for t in FIXTURE_TASKS:
+    for t in FIXTURE_TASKS + list(extra_tasks or []):
         cols = ", ".join(f'"{c}"' for c in t)
         marks = ", ".join("?" for _ in t)
         con.execute(f"INSERT INTO TMTask ({cols}) VALUES ({marks})", list(t.values()))
@@ -114,5 +140,17 @@ def things_db(tmp_path, monkeypatch):
 
     monkeypatch.setenv("THINGS_DB", str(db))
     # reads._DB is captured at import time; re-point it for this test.
+    monkeypatch.setattr(reads, "_DB", str(db))
+    return str(db)
+
+
+@pytest.fixture
+def stale_db(tmp_path, monkeypatch):
+    """The fixture database plus a backdated backlog, for the staleness cohorts."""
+    db = tmp_path / "stale.sqlite"
+    build_things_db(str(db), extra_tasks=STALE_TASKS)
+    from suur_things_mcp import reads
+
+    monkeypatch.setenv("THINGS_DB", str(db))
     monkeypatch.setattr(reads, "_DB", str(db))
     return str(db)

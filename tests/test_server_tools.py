@@ -84,3 +84,27 @@ def test_search_caps_results(things_db):
 def test_list_todos_limit_and_shape(things_db):
     items = server.list_todos(area_uuid="area-work", limit=1)
     assert len(items) == 1 and "has_notes" in items[0]
+
+
+# --- staleness review --------------------------------------------------------
+
+def test_stale_review_shape(stale_db):
+    r = server.stale_review()
+    assert set(r["cohorts"]) == {"inbox_stale", "never_touched", "deferred", "loose_stale"}
+    assert r["counts"]["open_todos"] > 0
+    assert r["counts"]["dead_projects"] >= 1
+    # Cohort counts + clustered remainder never exceed the open backlog.
+    assert r["counts"]["reviewable"] <= r["counts"]["open_todos"]
+
+
+def test_stale_review_passes_thresholds_through(stale_db):
+    r = server.stale_review(never_touched_days=600, idle_days=900, inbox_idle_days=999)
+    assert r["thresholds"] == {"never_touched_days": 600, "idle_days": 900,
+                               "inbox_idle_days": 999}
+    # Nothing is idle for 900 days in the fixture, so the orphan queue empties.
+    assert r["cohorts"]["loose_stale"]["total"] == 0
+
+
+def test_stale_review_is_read_only(stale_db, fired):
+    server.stale_review()
+    assert fired == []   # a review must never dispatch a write

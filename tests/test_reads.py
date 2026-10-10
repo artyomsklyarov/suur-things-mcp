@@ -88,3 +88,78 @@ def test_card_projection_is_compact(things_db):
     assert card["has_notes"] is True
     assert "notes" not in card
     assert card["tags"] == ["urgent"]
+
+
+# --- age signals + staleness cohorts ---------------------------------------
+
+def test_card_carries_age_signals(things_db):
+    card = reads._card(reads.get("todo-today"))
+    assert card["age_days"] == 0 and card["idle_days"] == 0
+    # get_item still has the raw stamps; the card keeps only the cheap ints.
+    assert "created" not in card and "modified" not in card
+
+
+def test_days_since_tolerates_junk():
+    assert reads._days_since(None) is None
+    assert reads._days_since("") is None
+    assert reads._days_since("not a date") is None
+    assert reads._days_since("2026-08-28 10:11:58") >= 0
+
+
+def _where(result, uuid):
+    """Which cohort a uuid landed in, or None."""
+    for name, cohort in result["cohorts"].items():
+        if any(i["uuid"] == uuid for i in cohort["items"]):
+            return name
+    return None
+
+
+def test_stale_cohort_assignment(stale_db):
+    r = reads.stale_cohorts()
+    assert _where(r, "stale-inbox") == "inbox_stale"
+    assert _where(r, "stale-untouched") == "never_touched"
+    assert _where(r, "stale-deferred") == "deferred"
+    assert _where(r, "stale-loose") == "loose_stale"
+    # Old + idle but inside a project: falls through to the per-project clusters.
+    assert _where(r, "stale-clustered") is None
+    assert any(c["project_title"] == "Write a book" and c["stale_count"] >= 1
+               for c in r["clusters"])
+
+
+def test_stale_cohorts_are_disjoint(stale_db):
+    r = reads.stale_cohorts()
+    seen = [i["uuid"] for c in r["cohorts"].values() for i in c["items"]]
+    assert len(seen) == len(set(seen)), "an item appeared in two review queues"
+
+
+def test_stale_deferred_reports_lateness(stale_db):
+    item = next(i for i in reads.stale_cohorts()["cohorts"]["deferred"]["items"]
+                if i["uuid"] == "stale-deferred")
+    assert item["days_late"] == 30
+    assert item["scheduled"] < __import__("datetime").date.today().isoformat()
+
+
+def test_stale_dead_projects(stale_db):
+    dead = {p["title"] for p in reads.stale_cohorts()["dead_projects"]}
+    assert "Stalled project" in dead      # open project, no open to-dos
+    assert "Write a book" not in dead     # still has open work
+
+
+def test_stale_thresholds_are_honoured(stale_db):
+    # stale-untouched is 500 days old; raise the bar past it and it drops out.
+    r = reads.stale_cohorts(never_touched_days=600)
+    assert _where(r, "stale-untouched") != "never_touched"
+    assert r["thresholds"]["never_touched_days"] == 600
+
+
+def test_stale_histogram_covers_every_open_todo(stale_db):
+    r = reads.stale_cohorts()
+    assert sum(r["age_histogram"].values()) == r["counts"]["open_todos"]
+    assert r["age_histogram"]["> 1 year"] >= 1   # stale-untouched at 500d
+
+
+def test_stale_limit_caps_items_but_not_total(stale_db):
+    r = reads.stale_cohorts(limit=1)
+    for cohort in r["cohorts"].values():
+        assert len(cohort["items"]) <= 1
+        assert cohort["total"] >= len(cohort["items"])
