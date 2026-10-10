@@ -53,6 +53,7 @@ def main():
                     page.goto(f"http://127.0.0.1:{port}", wait_until="networkidle")
                     for theme in ["light", "dark"]:
                         page.evaluate("(t) => applyTheme(t)", theme)
+                        page.wait_for_timeout(250)
                         page.screenshot(path=str(out / f"{name}-{theme}.png"))
                     page.evaluate("() => openPrefs()")
                     page.wait_for_timeout(250)

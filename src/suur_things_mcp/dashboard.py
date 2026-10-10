@@ -566,9 +566,9 @@ async def _attachment(request: Request) -> FileResponse | JSONResponse:
     meta = boardcfg.attachment_meta(item_uuid, att_id)  # None unless both are known + valid
     if not meta:
         return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
-    path = boardcfg.attachment_path(item_uuid, meta)
     base = boardcfg._attach_dir().resolve()
     try:
+        path = boardcfg.attachment_path(item_uuid, meta)
         rp = path.resolve()
         rp.relative_to(base)  # defense in depth: must stay under the attachments dir
     except (ValueError, OSError):

@@ -7,3 +7,8 @@ Orientation commit: 9cccebd.
 
 ## Dream 1 — 2026-10-10
 Mode: Dream. First-impression lens, 12 ideas including two ambitious; eight grounded promotions (one already in orientation), three parked plans, two rejections. No product code. Evidence: DREAMS.md. Commit: pending dream 1.
+
+Dream 1 commit: b5a5ce6.
+
+## Iteration 1 — Fix
+B01: component-aware resolved containment and safe identifiers for upload, serve and detach. Before: five targeted regressions fail (iter-1-before.txt), including upload and deletion outside root. After: 118 tests green, no skips, lint/compile/build green (iter-1.txt). No new warning. Reviewed all eight baseline-settled images: dark contrast is correct after existing 120ms background transitions, so rejected B08 instead of changing correct styling. Capture harness now waits 250ms after theme changes. Security 3 -> 4. Commit: pending iter 1.

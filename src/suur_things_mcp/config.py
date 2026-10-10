@@ -500,8 +500,17 @@ def attachment_meta(item_uuid: str, att_id: str) -> dict[str, Any] | None:
 def attachment_path(item_uuid: str, meta: dict) -> Path:
     """On-disk path for an attachment. Built only from a stored metadata record and
     validated ids/mimes — never from request input — so it cannot escape the dir."""
-    ext = IMAGE_MIMES.get(meta.get("mime", ""), "bin")
-    return _attach_dir() / str(item_uuid) / f"{meta['id']}.{ext}"
+    if not _SAFE_ID.fullmatch(str(item_uuid)) or not _SAFE_ID.fullmatch(str(meta.get("id", ""))):
+        raise ValueError("invalid attachment path")
+    ext = IMAGE_MIMES.get(meta.get("mime", ""))
+    if ext is None:
+        raise ValueError("invalid attachment path")
+    path = _attach_dir() / str(item_uuid) / f"{meta['id']}.{ext}"
+    try:
+        path.resolve().relative_to(_attach_dir().resolve())
+    except (ValueError, OSError, RuntimeError) as exc:
+        raise ValueError("invalid attachment path") from exc
+    return path
 
 
 def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
@@ -514,7 +523,7 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     item_uuid = str(item_uuid)
     # item_uuid becomes a directory name below. Without this, a uuid like
     # "../../foo" would walk mkdir/write_bytes outside the attachments dir.
-    if not _SAFE_ID.match(item_uuid):
+    if not _SAFE_ID.fullmatch(item_uuid):
         raise ValueError("invalid item id")
     if len(attachments().get(item_uuid, [])) >= MAX_ATTACH_PER_ITEM:
         raise ValueError(f"too many images on this item (max {MAX_ATTACH_PER_ITEM})")
@@ -532,9 +541,6 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     path = attachment_path(item_uuid, meta)
     # Defence in depth: never write outside the attachments dir even if the
     # checks above are ever loosened.
-    base = _attach_dir().resolve()
-    if not str(path.resolve().parent).startswith(str(base)):
-        raise ValueError("invalid attachment path")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     with _locked():
@@ -564,7 +570,11 @@ def remove_attachment(item_uuid: str, att_id: str) -> bool:
     if not meta:
         return False
     try:
-        attachment_path(item_uuid, meta).unlink(missing_ok=True)
+        path = attachment_path(item_uuid, meta)
+    except ValueError:
+        return False  # preserve both metadata and any file outside our storage
+    try:
+        path.unlink(missing_ok=True)
     except OSError:
         pass
     with _locked():

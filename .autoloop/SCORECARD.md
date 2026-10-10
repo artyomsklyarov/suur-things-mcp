@@ -9,10 +9,10 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 | Test coverage | 3 | 3 | Real Chromium + fixture SQL; focused recovery/concurrency/accessibility gaps |
 | Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
 | Architecture | 4 | 4 | Read/write split, overlay store, thin tools; preserves intent |
-| Security | 3 | 3 | Nonce CSP, origins, token redaction; attachment prefix containment weakness |
+| Security | 3 | 4 | Nonce CSP, origins, token redaction; attachment path containment enforced; five regressions in iter-1.txt |
 | Performance | 4 | 4 | Threaded reads + cheap cursor; no new benchmark claim |
 | UX | 3 | 3 | Local board flows clear; mobile clipping and dialog focus gaps |
-| UI | 3 | 3 | Reviewed baseline desktop light/dark and mobile; dark selected labels low contrast |
+| UI | 3 | 3 | Reviewed baseline desktop light/dark and mobile; mobile clipping; settled dark theme correct (initial snapshot caught transition) |
 | Accessibility | 2 | 2 | Clickable div/span controls, no modal semantics or focus containment |
 | Product completeness | 4 | 4 | Documented phases done; live integration validation outside loop scope |
 | Docs / DX | 4 | 4 | README + CLAUDE architecture + tests; autonomous fixture harness now available |

@@ -14,3 +14,5 @@ Log hashes are filled on the next iteration from committed git history; the fina
 - H05: Audit trail proposal: persist an append-only local review record with task UUID, proposed fields, user selection, URL dispatch and verified outcome; decide retention and privacy before specifying a migration.
 - H06: Project timeline proposal: dev-only prototype joining linked project tasks and local git timestamps, without gh/network; decide whether this is the product's next direction before adding a view.
 - H07: Semantic search proposal: benchmark a local model against fixture title/note search; approve model size, licensing and optional dependency before implementation.
+
+Iteration 1: Path.relative_to on resolved paths replaces unsafe string-prefix checks. Detach rejects escaped paths and preserves metadata. B08 rejected after proper settled evidence; do not mistake transient screenshots for final theme behavior.
