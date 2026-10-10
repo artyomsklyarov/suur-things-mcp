@@ -447,6 +447,7 @@
     </button>
   </aside>
   <main class="main">
+    <div class="err" id="config-error" role="alert" hidden>Couldn’t load dashboard settings. <button class="btn" id="config-retry">Retry</button></div>
     <div class="main-head">
       <span class="ico" id="head-ico">⭐</span><h1 id="head-title">Today</h1>
       <span class="grow"></span>
@@ -582,10 +583,17 @@
 
 <script nonce="__CSP_NONCE__">
 const $ = (s, r=document) => r.querySelector(s);
+let CONFIG_READY=false;
 let AUTH=false, SIDEBAR=null, CONFIG={boards:[],priority:{},priority_levels:[],area_prefs:{}};
 let MODE="list", CUR_BOARD=null, SEL=null, EDIT_ID=null, CURRENT_ID="today", TODAY_CACHE=[];
 let LAST_ITEMS={}, ORG_SUG=[];
-let COLLAPSED=new Set(JSON.parse(localStorage.getItem("collapsed-areas")||"[]"));
+function storageGet(key){ try{ return localStorage.getItem(key); }catch(e){ return null; } }
+function storageSet(key,value){ try{ localStorage.setItem(key,value); }catch(e){} }
+function collapsedAreas(){
+  try{ const ids=JSON.parse(storageGet("collapsed-areas")||"[]"); return Array.isArray(ids)?ids.filter(id=>typeof id==="string"):[]; }
+  catch(e){ return []; }
+}
+let COLLAPSED=new Set(collapsedAreas());
 const DEFAULT_COLUMNS=["Backlog","In Progress","On Hold","Done"];
 const QUADS=[
   {key:"do",title:"Do First",sub:"Urgent · Important",cls:"q-do"},
@@ -654,6 +662,8 @@ async function getJSON(url){
   catch(e){ return {ok:false, error:(e&&e.message)||String(e), _neterr:true}; }
 }
 async function postJSON(url, body){
+  if((url==="/api/config"||url==="/api/link")&&!CONFIG_READY)
+    return {ok:false,error:"Dashboard settings aren't loaded. Retry first."};
   try{
     const res = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
     return await res.json();
@@ -696,20 +706,27 @@ function linkify(s){
 }
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
-function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#theme").textContent=t==="dark"?"☀":"☾"; localStorage.setItem("things-theme",t); }
-applyTheme(localStorage.getItem("things-theme") || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"));
+function applyTheme(t){ document.documentElement.setAttribute("data-theme",t); $("#theme").textContent=t==="dark"?"☀":"☾"; storageSet("things-theme",t); }
+applyTheme(storageGet("things-theme") || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"));
 $("#theme").onclick=()=>applyTheme(document.documentElement.getAttribute("data-theme")==="dark"?"light":"dark");
 
 function ring(p){ const r=6,c=2*Math.PI*r,off=c*(1-p);
   if(p<=0) return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/></svg>`;
   return `<svg class="ring" width="16" height="16" viewBox="0 0 16 16"><circle class="ring-bg" cx="8" cy="8" r="6"/><circle class="ring-fg" cx="8" cy="8" r="6" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 8 8)"/></svg>`; }
 
-async function loadConfig(){ CONFIG=(await getJSON("/api/config")).config; }
+async function loadConfig(){
+  const data=await getJSON("/api/config");
+  CONFIG_READY=!!(data&&data.ok&&data.config&&Array.isArray(data.config.boards));
+  if(CONFIG_READY) CONFIG=data.config;
+  $("#config-error").hidden=CONFIG_READY;
+  return CONFIG_READY;
+}
 // Save only the sections this client owns in this action, so a concurrent edit
 // (CLI / another tab) to a different section is never clobbered.
 async function saveConfig(){
   const r=await postJSON("/api/config", {boards:CONFIG.boards, priority:CONFIG.priority});
   if(r.ok) CONFIG=r.config;
+  else alert("Settings could not be saved: "+(r.error||"error"));
 }
 async function saveItemRepos(itemId, kind, repos){
   const r=await postJSON("/api/link", {item_id:itemId, kind, repos});
@@ -844,7 +861,12 @@ function ckScroll(){ const box=$("#cmdk-list"), sel=box.children[CK_SEL]; if(sel
 // --- sidebar ---
 async function loadSidebar(){
   const data=await getJSON("/api/sidebar");
-  AUTH=!!data.auth; if(!data.ok){ $("#sidebar").innerHTML=`<div class="err">${esc(data.error||"error")}</div>`; return; }
+  AUTH=!!data.auth;
+  if(!data.ok){
+    $("#side-nav").innerHTML=`<div class="err">${esc(data.error||"Couldn't load tasks")}<br><button class="btn" id="sidebar-retry">Retry</button></div>`;
+    $("#sidebar-retry").onclick=async()=>{ await loadSidebar(); route(); };
+    return;
+  }
   SIDEBAR=data.sidebar; renderSidebar();
 }
 function renderSidebar(){
@@ -890,7 +912,7 @@ function renderSidebar(){
   setActive(CURRENT_ID);
 }
 function toggleArea(uuid, chev){ COLLAPSED.has(uuid)?COLLAPSED.delete(uuid):COLLAPSED.add(uuid);
-  localStorage.setItem("collapsed-areas", JSON.stringify([...COLLAPSED]));
+  storageSet("collapsed-areas", JSON.stringify([...COLLAPSED]));
   // let the chevron's rotation play before the tree rebuild replaces the node
   if(chev){ chev.classList.toggle("open"); setTimeout(renderSidebar, 200); }
   else renderSidebar(); }
@@ -1823,7 +1845,8 @@ function openPrefs(){ const p=CONFIG.prefs||{}; $("#pf-editor").value=p.editor||
 async function savePrefs(){
   const prefs={editor:$("#pf-editor").value.trim(), terminal:$("#pf-terminal").value.trim()};
   const r=await postJSON("/api/config", {prefs});
-  if(r.ok) CONFIG=r.config;
+  if(!r.ok){ alert("Settings could not be saved: "+(r.error||"error")); return; }
+  CONFIG=r.config;
   closeOverlay("prefs-overlay");
 }
 
@@ -2061,6 +2084,7 @@ function wireStatic(){
   on("#cmdk-btn",openCmdk);
   on("#add-btn",()=>openCreate("todo"));
   on("#prefs-btn",openPrefs);
+  on("#config-retry",async()=>{ if(await loadConfig()){ if(SIDEBAR) renderSidebar(); route(); } });
   on("#about-link",()=>go("#about"));
   on("#rollup-vt",toggleRollupPill);
   for(const v of ["list","matrix","levels","cards","timeline"]) on("#vt-"+v,()=>setListView(v));

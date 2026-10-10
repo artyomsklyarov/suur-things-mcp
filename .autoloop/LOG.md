@@ -32,3 +32,8 @@ Iteration 4 commit: 731f388.
 
 ## Iteration 5 — Safety net
 B05: fixture-driven Chromium navigation, Inbox empty-state/create, literal hostile titles in list/cards, palette keyboard and scoped preference-save tests. API requests fully intercepted. Before: five existing browser tests, no protected broad workflows. After: nine browser tests, 143 total and full gate green (iter-5.txt). New harness initially had a Playwright keyword-argument typo; fixed without weakening assertions before commit. Test coverage 3 -> 4. Commit: pending iter 5.
+
+Iteration 5 commit: 112356f.
+
+## Iteration 6 — Fix
+B07: tolerate corrupt/blocked localStorage, keep tasks usable after config error, prevent overlay writes until settings load, and retry sidebar without deleting its DOM structure. Before evidence was recaptured against committed HTML after an initial parallel capture saw new code: five failures plus four exception-teardown errors (iter-6-before.txt). After: 149 tests/full gate green (iter-6.txt). All eight iter-6-screens images read; normal desktop unchanged, narrow clipping still tracked. Reliability 3 -> 4. Commit: pending iter 6.

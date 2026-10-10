@@ -135,3 +135,57 @@ def test_preferences_posts_only_owned_section(ui):
     page.locator("#pf-save").click()
     page.wait_for_function("() => !document.querySelector('#prefs-overlay').classList.contains('show')")
     assert ui["posts"] == [("/api/config", {"prefs": {"editor": "cursor", "terminal": "Ghostty"}})]
+
+
+@pytest.mark.parametrize("value", ["[broken", "{}", "null"])
+def test_startup_tolerates_corrupt_collapsed_state(ui, value):
+    page = ui["page"]
+    page.set_default_timeout(2000)
+    page.add_init_script(f"localStorage.setItem('collapsed-areas', {json.dumps(value)});")
+    page.reload(wait_until="networkidle")
+    page.locator(".row").wait_for()
+
+
+def test_startup_tolerates_blocked_browser_storage(ui):
+    page = ui["page"]
+    page.set_default_timeout(2000)
+    page.add_init_script("Object.defineProperty(window, 'localStorage', {get(){throw new Error('storage blocked');}});")
+    page.reload(wait_until="networkidle")
+    page.locator(".row").wait_for()
+    page.locator("#theme").click()
+
+
+def test_config_failure_keeps_tasks_and_prevents_overlay_overwrite(ui):
+    page = ui["page"]
+    page.set_default_timeout(2000)
+
+    def fail(route):
+        route.fulfill(json={"ok": False, "error": "temporary failure"})
+
+    page.route("**/api/config", fail)
+    page.reload(wait_until="networkidle")
+    page.locator(".row").wait_for()
+    assert page.locator("#config-error").is_visible()
+    page.on("dialog", lambda dialog: dialog.dismiss())
+    page.evaluate("() => saveConfig()")
+    assert ui["posts"] == []
+    page.unroute("**/api/config", fail)
+    page.locator("#config-retry").click()
+    page.wait_for_function("() => document.querySelector('#config-error').hidden")
+
+
+def test_sidebar_error_preserves_navigation_structure_and_can_retry(ui):
+    page = ui["page"]
+    page.set_default_timeout(2000)
+
+    def fail(route):
+        route.fulfill(json={"ok": False, "error": "temporary failure", "sidebar": {}})
+
+    page.route("**/api/sidebar", fail)
+    page.reload(wait_until="networkidle")
+    assert page.locator("#side-nav").count() == 1
+    assert page.locator("#about-link").count() == 1
+    page.unroute("**/api/sidebar", fail)
+    page.locator("#sidebar-retry").click()
+    page.locator('#side-nav [data-id="today"]').wait_for()
+    page.locator(".row").wait_for()

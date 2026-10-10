@@ -1,0 +1,443 @@
+FEFE.FEFEF                                                               [100%]
+==================================== ERRORS ====================================
+_ ERROR at teardown of test_startup_tolerates_corrupt_collapsed_state[[broken] _
+
+browser = <Browser type=<BrowserType name=chromium executable_path=/Users/artyomsklyarov/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing> version=148.0.7778.96>
+dashboard_url = 'http://127.0.0.1:50635'
+
+    @pytest.fixture
+    def ui(browser, dashboard_url):
+        page = browser.new_page()
+        errors, posts = [], []
+        cfg = copy.deepcopy(CONFIG)
+        task = copy.deepcopy(TASK)
+    
+        def respond(route):
+            req = route.request
+            url = urlparse(req.url)
+            query = parse_qs(url.query)
+            if req.method == "POST":
+                body = req.post_data_json
+                posts.append((url.path, body))
+                if url.path == "/api/config":
+                    cfg.update(body)
+                    data = {"ok": True, "config": cfg}
+                else:
+                    data = {"ok": True}
+            elif url.path == "/api/config":
+                data = {"ok": True, "config": cfg}
+            elif url.path == "/api/sidebar":
+                data = {"ok": True, "auth": True, "sidebar": SIDEBAR}
+            elif url.path == "/api/items":
+                item_id = query.get("id", ["today"])[0]
+                data = {"ok": True, "kind": "builtin", "items": [] if item_id == "inbox" else [task]}
+            elif url.path == "/api/item":
+                data = {"ok": True, "item": task}
+            elif url.path == "/api/search":
+                data = {"ok": True, "items": []}
+            elif url.path == "/api/version":
+                data = {"ok": True, "version": page.evaluate("() => SERVER_VERSION")}
+            else:
+                data = {"ok": True}
+            route.fulfill(content_type="application/json", body=json.dumps(data))
+    
+        page.route("**/api/**", respond)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(dashboard_url, wait_until="networkidle")
+        page.locator(".row").wait_for()
+        yield {"page": page, "posts": posts, "config": cfg, "task": task, "errors": errors}
+        page.close()
+>       assert not errors, f"uncaught frontend exceptions: {errors}"
+E       AssertionError: uncaught frontend exceptions: ['Unexpected token \'b\', "[broken" is not valid JSON']
+E       assert not ['Unexpected token \'b\', "[broken" is not valid JSON']
+
+tests/test_dashboard_interactions.py:91: AssertionError
+___ ERROR at teardown of test_startup_tolerates_corrupt_collapsed_state[{}] ____
+
+browser = <Browser type=<BrowserType name=chromium executable_path=/Users/artyomsklyarov/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing> version=148.0.7778.96>
+dashboard_url = 'http://127.0.0.1:50635'
+
+    @pytest.fixture
+    def ui(browser, dashboard_url):
+        page = browser.new_page()
+        errors, posts = [], []
+        cfg = copy.deepcopy(CONFIG)
+        task = copy.deepcopy(TASK)
+    
+        def respond(route):
+            req = route.request
+            url = urlparse(req.url)
+            query = parse_qs(url.query)
+            if req.method == "POST":
+                body = req.post_data_json
+                posts.append((url.path, body))
+                if url.path == "/api/config":
+                    cfg.update(body)
+                    data = {"ok": True, "config": cfg}
+                else:
+                    data = {"ok": True}
+            elif url.path == "/api/config":
+                data = {"ok": True, "config": cfg}
+            elif url.path == "/api/sidebar":
+                data = {"ok": True, "auth": True, "sidebar": SIDEBAR}
+            elif url.path == "/api/items":
+                item_id = query.get("id", ["today"])[0]
+                data = {"ok": True, "kind": "builtin", "items": [] if item_id == "inbox" else [task]}
+            elif url.path == "/api/item":
+                data = {"ok": True, "item": task}
+            elif url.path == "/api/search":
+                data = {"ok": True, "items": []}
+            elif url.path == "/api/version":
+                data = {"ok": True, "version": page.evaluate("() => SERVER_VERSION")}
+            else:
+                data = {"ok": True}
+            route.fulfill(content_type="application/json", body=json.dumps(data))
+    
+        page.route("**/api/**", respond)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(dashboard_url, wait_until="networkidle")
+        page.locator(".row").wait_for()
+        yield {"page": page, "posts": posts, "config": cfg, "task": task, "errors": errors}
+        page.close()
+>       assert not errors, f"uncaught frontend exceptions: {errors}"
+E       AssertionError: uncaught frontend exceptions: ['object is not iterable (cannot read property Symbol(Symbol.iterator))']
+E       assert not ['object is not iterable (cannot read property Symbol(Symbol.iterator))']
+
+tests/test_dashboard_interactions.py:91: AssertionError
+_____ ERROR at teardown of test_startup_tolerates_blocked_browser_storage ______
+
+browser = <Browser type=<BrowserType name=chromium executable_path=/Users/artyomsklyarov/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing> version=148.0.7778.96>
+dashboard_url = 'http://127.0.0.1:50635'
+
+    @pytest.fixture
+    def ui(browser, dashboard_url):
+        page = browser.new_page()
+        errors, posts = [], []
+        cfg = copy.deepcopy(CONFIG)
+        task = copy.deepcopy(TASK)
+    
+        def respond(route):
+            req = route.request
+            url = urlparse(req.url)
+            query = parse_qs(url.query)
+            if req.method == "POST":
+                body = req.post_data_json
+                posts.append((url.path, body))
+                if url.path == "/api/config":
+                    cfg.update(body)
+                    data = {"ok": True, "config": cfg}
+                else:
+                    data = {"ok": True}
+            elif url.path == "/api/config":
+                data = {"ok": True, "config": cfg}
+            elif url.path == "/api/sidebar":
+                data = {"ok": True, "auth": True, "sidebar": SIDEBAR}
+            elif url.path == "/api/items":
+                item_id = query.get("id", ["today"])[0]
+                data = {"ok": True, "kind": "builtin", "items": [] if item_id == "inbox" else [task]}
+            elif url.path == "/api/item":
+                data = {"ok": True, "item": task}
+            elif url.path == "/api/search":
+                data = {"ok": True, "items": []}
+            elif url.path == "/api/version":
+                data = {"ok": True, "version": page.evaluate("() => SERVER_VERSION")}
+            else:
+                data = {"ok": True}
+            route.fulfill(content_type="application/json", body=json.dumps(data))
+    
+        page.route("**/api/**", respond)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(dashboard_url, wait_until="networkidle")
+        page.locator(".row").wait_for()
+        yield {"page": page, "posts": posts, "config": cfg, "task": task, "errors": errors}
+        page.close()
+>       assert not errors, f"uncaught frontend exceptions: {errors}"
+E       AssertionError: uncaught frontend exceptions: ['storage blocked']
+E       assert not ['storage blocked']
+
+tests/test_dashboard_interactions.py:91: AssertionError
+_ ERROR at teardown of test_config_failure_keeps_tasks_and_prevents_overlay_overwrite _
+
+browser = <Browser type=<BrowserType name=chromium executable_path=/Users/artyomsklyarov/Library/Caches/ms-playwright/chromium-1223/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing> version=148.0.7778.96>
+dashboard_url = 'http://127.0.0.1:50635'
+
+    @pytest.fixture
+    def ui(browser, dashboard_url):
+        page = browser.new_page()
+        errors, posts = [], []
+        cfg = copy.deepcopy(CONFIG)
+        task = copy.deepcopy(TASK)
+    
+        def respond(route):
+            req = route.request
+            url = urlparse(req.url)
+            query = parse_qs(url.query)
+            if req.method == "POST":
+                body = req.post_data_json
+                posts.append((url.path, body))
+                if url.path == "/api/config":
+                    cfg.update(body)
+                    data = {"ok": True, "config": cfg}
+                else:
+                    data = {"ok": True}
+            elif url.path == "/api/config":
+                data = {"ok": True, "config": cfg}
+            elif url.path == "/api/sidebar":
+                data = {"ok": True, "auth": True, "sidebar": SIDEBAR}
+            elif url.path == "/api/items":
+                item_id = query.get("id", ["today"])[0]
+                data = {"ok": True, "kind": "builtin", "items": [] if item_id == "inbox" else [task]}
+            elif url.path == "/api/item":
+                data = {"ok": True, "item": task}
+            elif url.path == "/api/search":
+                data = {"ok": True, "items": []}
+            elif url.path == "/api/version":
+                data = {"ok": True, "version": page.evaluate("() => SERVER_VERSION")}
+            else:
+                data = {"ok": True}
+            route.fulfill(content_type="application/json", body=json.dumps(data))
+    
+        page.route("**/api/**", respond)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(dashboard_url, wait_until="networkidle")
+        page.locator(".row").wait_for()
+        yield {"page": page, "posts": posts, "config": cfg, "task": task, "errors": errors}
+        page.close()
+>       assert not errors, f"uncaught frontend exceptions: {errors}"
+E       AssertionError: uncaught frontend exceptions: ["Cannot read properties of undefined (reading 'boards')"]
+E       assert not ["Cannot read properties of undefined (reading 'boards')"]
+
+tests/test_dashboard_interactions.py:91: AssertionError
+=================================== FAILURES ===================================
+___________ test_startup_tolerates_corrupt_collapsed_state[[broken] ____________
+
+ui = {'page': <Page url='http://127.0.0.1:50635/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+value = '[broken'
+
+    @pytest.mark.parametrize("value", ["[broken", "{}", "null"])
+    def test_startup_tolerates_corrupt_collapsed_state(ui, value):
+        page = ui["page"]
+        page.set_default_timeout(2000)
+        page.add_init_script(f"localStorage.setItem('collapsed-areas', {json.dumps(value)});")
+        page.reload(wait_until="networkidle")
+>       page.locator(".row").wait_for()
+
+tests/test_dashboard_interactions.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py:20048: in wait_for
+    self._sync(
+.venv/lib/python3.14/site-packages/playwright/_impl/_locator.py:741: in wait_for
+    await self._frame.wait_for_selector(
+.venv/lib/python3.14/site-packages/playwright/_impl/_frame.py:372: in wait_for_selector
+    await self._channel.send(
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright._impl._connection.Connection object at 0x10ba04ec0>
+cb = <function Channel.send.<locals>.<lambda> at 0x10bdb45c0>
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -> Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+>           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 2000ms exceeded.
+E           Call log:
+E             - waiting for locator(".row") to be visible
+
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:559: TimeoutError
+______________ test_startup_tolerates_corrupt_collapsed_state[{}] ______________
+
+ui = {'page': <Page url='http://127.0.0.1:50635/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+value = '{}'
+
+    @pytest.mark.parametrize("value", ["[broken", "{}", "null"])
+    def test_startup_tolerates_corrupt_collapsed_state(ui, value):
+        page = ui["page"]
+        page.set_default_timeout(2000)
+        page.add_init_script(f"localStorage.setItem('collapsed-areas', {json.dumps(value)});")
+        page.reload(wait_until="networkidle")
+>       page.locator(".row").wait_for()
+
+tests/test_dashboard_interactions.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py:20048: in wait_for
+    self._sync(
+.venv/lib/python3.14/site-packages/playwright/_impl/_locator.py:741: in wait_for
+    await self._frame.wait_for_selector(
+.venv/lib/python3.14/site-packages/playwright/_impl/_frame.py:372: in wait_for_selector
+    await self._channel.send(
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright._impl._connection.Connection object at 0x10ba04ec0>
+cb = <function Channel.send.<locals>.<lambda> at 0x10be29dd0>
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -> Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+>           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 2000ms exceeded.
+E           Call log:
+E             - waiting for locator(".row") to be visible
+
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:559: TimeoutError
+________________ test_startup_tolerates_blocked_browser_storage ________________
+
+ui = {'page': <Page url='http://127.0.0.1:50635/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+
+    def test_startup_tolerates_blocked_browser_storage(ui):
+        page = ui["page"]
+        page.set_default_timeout(2000)
+        page.add_init_script("Object.defineProperty(window, 'localStorage', {get(){throw new Error('storage blocked');}});")
+        page.reload(wait_until="networkidle")
+>       page.locator(".row").wait_for()
+
+tests/test_dashboard_interactions.py:154: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py:20048: in wait_for
+    self._sync(
+.venv/lib/python3.14/site-packages/playwright/_impl/_locator.py:741: in wait_for
+    await self._frame.wait_for_selector(
+.venv/lib/python3.14/site-packages/playwright/_impl/_frame.py:372: in wait_for_selector
+    await self._channel.send(
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright._impl._connection.Connection object at 0x10ba04ec0>
+cb = <function Channel.send.<locals>.<lambda> at 0x10d0468d0>
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -> Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+>           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 2000ms exceeded.
+E           Call log:
+E             - waiting for locator(".row") to be visible
+
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:559: TimeoutError
+________ test_config_failure_keeps_tasks_and_prevents_overlay_overwrite ________
+
+ui = {'page': <Page url='http://127.0.0.1:50635/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+
+    def test_config_failure_keeps_tasks_and_prevents_overlay_overwrite(ui):
+        page = ui["page"]
+        page.set_default_timeout(2000)
+    
+        def fail(route):
+            route.fulfill(json={"ok": False, "error": "temporary failure"})
+    
+        page.route("**/api/config", fail)
+        page.reload(wait_until="networkidle")
+>       page.locator(".row").wait_for()
+
+tests/test_dashboard_interactions.py:167: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.14/site-packages/playwright/sync_api/_generated.py:20048: in wait_for
+    self._sync(
+.venv/lib/python3.14/site-packages/playwright/_impl/_locator.py:741: in wait_for
+    await self._frame.wait_for_selector(
+.venv/lib/python3.14/site-packages/playwright/_impl/_frame.py:372: in wait_for_selector
+    await self._channel.send(
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <playwright._impl._connection.Connection object at 0x10ba04ec0>
+cb = <function Channel.send.<locals>.<lambda> at 0x10cfefed0>
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -> Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+>           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.wait_for: Timeout 2000ms exceeded.
+E           Call log:
+E             - waiting for locator(".row") to be visible
+
+.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py:559: TimeoutError
+_______ test_sidebar_error_preserves_navigation_structure_and_can_retry ________
+
+ui = {'page': <Page url='http://127.0.0.1:50635/#l/today'>, 'posts': [], 'config': {'boards': [], 'priority': {}, 'priority...{}, ...}, 'task': {'uuid': 'task', 'title': 'Write an outline', 'status': 'incomplete', 'tags': ['writing'], ...}, ...}
+
+    def test_sidebar_error_preserves_navigation_structure_and_can_retry(ui):
+        page = ui["page"]
+        page.set_default_timeout(2000)
+    
+        def fail(route):
+            route.fulfill(json={"ok": False, "error": "temporary failure", "sidebar": {}})
+    
+        page.route("**/api/sidebar", fail)
+        page.reload(wait_until="networkidle")
+>       assert page.locator("#side-nav").count() == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = count()
+E        +    where count = <Locator frame=<Frame name= url='http://127.0.0.1:50635/#l/today'> selector='#side-nav'>.count
+E        +      where <Locator frame=<Frame name= url='http://127.0.0.1:50635/#l/today'> selector='#side-nav'> = locator('#side-nav')
+E        +        where locator = <Page url='http://127.0.0.1:50635/#l/today'>.locator
+
+tests/test_dashboard_interactions.py:186: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_dashboard_interactions.py::test_startup_tolerates_corrupt_collapsed_state[[broken]
+FAILED tests/test_dashboard_interactions.py::test_startup_tolerates_corrupt_collapsed_state[{}]
+FAILED tests/test_dashboard_interactions.py::test_startup_tolerates_blocked_browser_storage
+FAILED tests/test_dashboard_interactions.py::test_config_failure_keeps_tasks_and_prevents_overlay_overwrite
+FAILED tests/test_dashboard_interactions.py::test_sidebar_error_preserves_navigation_structure_and_can_retry
+ERROR tests/test_dashboard_interactions.py::test_startup_tolerates_corrupt_collapsed_state[[broken]
+ERROR tests/test_dashboard_interactions.py::test_startup_tolerates_corrupt_collapsed_state[{}]
+ERROR tests/test_dashboard_interactions.py::test_startup_tolerates_blocked_browser_storage
+ERROR tests/test_dashboard_interactions.py::test_config_failure_keeps_tasks_and_prevents_overlay_overwrite
+5 failed, 1 passed, 4 deselected, 4 errors in 20.17s

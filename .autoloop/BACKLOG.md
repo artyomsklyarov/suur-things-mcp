@@ -10,7 +10,7 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B04 | Malformed organizer tags and out-of-scope/duplicate suggestions | Fix | H | L | S | done iter 4 |
 | B05 | Fixture browser coverage with all network actions intercepted | Safety net | H | L | S | done iter 5 |
 | B06 | Accessible dialogs and keyboard navigation epic | Accessibility | H | M | M | candidate |
-| B07 | Frontend startup config/storage errors and recoverable sidebar | Fix | H | M | S | ready |
+| B07 | Frontend startup config/storage errors and recoverable sidebar | Fix | H | M | S | done iter 6 |
 | B08 | Dark theme control/selection contrast | UI | M | L | S | rejected: settled screenshots correct |
 | B09 | Narrow-window usable navigation/content epic | UX | H | M | M | candidate |
 | B10 | API input and read failure envelopes | Fix | M | L | S | ready |
