@@ -38,3 +38,5 @@ Iteration 14: supported claude/codex agent and nonempty model strings survive sa
 Iteration 15: five delayed list/board/matrix/levels responses no longer replace Inbox/About content or list state. 199 tests, correctness/reliability remain 4.
 
 Iteration 16: new docs/DEVELOPMENT-VERIFICATION.md documents the reproducible fixture gate, captures, honest acceptance boundaries and byte-preserving config recovery. Existing README preserved; proposed insertion separate. Docs/DX stays 4. Full gate 199 tests.
+
+Iteration 17: five advanced drag workflows now protected by intercepted browser tests before E03 control changes. Test coverage remains 4; total 204.

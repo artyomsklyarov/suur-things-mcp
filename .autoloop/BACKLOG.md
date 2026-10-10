@@ -1,6 +1,6 @@
 # Backlog
 
-Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rotation excludes orientation/dream. E01 and E02 complete; no active epic.
+Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rotation excludes orientation/dream. E01 and E02 complete; E03 active.
 
 | ID | Item | Mode | Impact | Risk | Effort | Status |
 |---|---|---|---|---|---|---|
@@ -21,4 +21,4 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B14 | Arealess project links fail to resolve in hash navigation | Fix | H | L | S | done iter 9 |
 | B15 | Preserve supported organizer agent/model preferences in config | Fix | M | L | S | done iter 14 |
 | B16 | Measure and fix small-text contrast in both themes | Accessibility | H | L | S | done iter 12 |
-| B17 | Keyboard destination selectors for advanced drag views | Accessibility | M | M | M | candidate epic |
+| B17 | Keyboard destination selectors for advanced drag views | Accessibility | M | M | M | active E03, protection complete |

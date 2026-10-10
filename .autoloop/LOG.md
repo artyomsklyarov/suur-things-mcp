@@ -112,3 +112,8 @@ Iteration 16 commit: 05eba0a.
 
 ## Dream 6 — Dream
 Remove-a-constraint lens at iteration 16, twelve ideas including two ambitious. Existing B17 prioritized, two existing/new paid or persistent-model plans parked, six scope/boundary/duplication ideas rejected, settings resilience already built. No code. Commit: pending dream 6.
+
+Dream 6 commit: 41c3729.
+
+## Iteration 17 — Safety net
+E03 protection milestone: five existing drag workflows covered, including mapped-tag-only replacement, no-token refusal and overlay-only timeline changes. Before: 199 tests, no advanced drag workflow protection. After: 204 tests/full gate green (iter-17.txt). No product code, accounts or dependencies changed. Scores stay 4. Commit: pending iter 17.

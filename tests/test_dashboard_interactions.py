@@ -430,3 +430,105 @@ def test_delayed_view_response_cannot_replace_latest_navigation(ui, source, targ
     assert "Stale" not in page.locator("#content").inner_text()
     if target == "inbox":
         assert page.evaluate("() => LIST_ITEMS") == []
+
+
+def _fixture_board(ui):
+    page = ui["page"]
+    ui["config"]["boards"] = [
+        {
+            "id": "fixture",
+            "name": "Fixture board",
+            "columns": ["Backlog", "Done"],
+            "placements": {},
+            "include_areas": [],
+            "include_projects": [],
+        }
+    ]
+    card = {"id": "project", "title": "Book", "kind": "project", "progress": 0, "open": 1, "total": 1, "repos": []}
+
+    def respond(route):
+        placement = ui["config"]["boards"][0]["placements"].get("project")
+        route.fulfill(
+            json={
+                "ok": True,
+                "auth": True,
+                "columns": [
+                    {"name": col, "title": col, "cards": [card] if col == placement else []}
+                    for col in [None, "Backlog", "Done"]
+                ],
+            }
+        )
+
+    page.route("**/api/board?*", respond)
+    page.evaluate("() => loadConfig()")
+    page.evaluate("() => renderBoard('fixture')")
+    page.locator(".card").wait_for()
+
+
+def _drop(page, selector, item_id, y=None):
+    page.evaluate(
+        """arg => {
+        const target=document.querySelector(arg.selector), data=new DataTransfer();
+        data.setData('text/id',arg.id);
+        target.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data,clientY:arg.y||0}));
+    }""",
+        {"selector": selector, "id": item_id, "y": y},
+    )
+
+
+def test_matrix_drag_preserves_other_priority_entries(ui):
+    page = ui["page"]
+    ui["config"]["priority"] = {"other": "delegate"}
+    page.evaluate("() => loadConfig()")
+    page.locator("#vt-matrix").click()
+    page.locator(".q-do").wait_for()
+    _drop(page, ".q-do", "task")
+    page.wait_for_function("() => CONFIG.priority.task==='do'")
+    page.locator(".q-do .pcard").wait_for()
+    assert ui["posts"][-1][1]["priority"] == {"other": "delegate", "task": "do"}
+
+
+def test_level_drag_replaces_only_mapped_tags(ui):
+    page = ui["page"]
+    ui["config"]["priority_levels"] = [{"label": "P1", "tags": ["urgent"]}, {"label": "P2", "tags": ["later"]}]
+    ui["task"]["tags"] = ["writing", "later"]
+    page.evaluate("() => loadConfig()")
+    page.locator("#vt-levels").click()
+    page.locator(".lvl-2 .pcard").wait_for()
+    _drop(page, ".lvl-1", "task")
+    page.wait_for_function("() => LIST_ITEMS[0].tags.includes('urgent')")
+    assert ui["posts"] == [("/api/update", {"id": "task", "tags": ["writing", "urgent"]})]
+
+
+def test_level_drag_without_auth_never_posts(ui):
+    page = ui["page"]
+    page.evaluate("() => AUTH=false")
+    page.locator("#vt-levels").click()
+    page.locator(".lvl-1").wait_for()
+    page.on("dialog", lambda dialog: dialog.dismiss())
+    _drop(page, ".lvl-1", "task")
+    page.wait_for_timeout(100)
+    assert ui["posts"] == []
+
+
+def test_board_drag_uses_existing_stages(ui):
+    _fixture_board(ui)
+    page = ui["page"]
+    _drop(page, ".col:last-child", "project")
+    page.wait_for_function("() => CONFIG.boards[0].placements.project==='Done'")
+    page.locator(".col:last-child .card").wait_for()
+    assert ui["posts"][-1][1]["boards"][0]["placements"] == {"project": "Done"}
+
+
+def test_timeline_drag_places_and_unschedules_without_task_mutation(ui):
+    page = ui["page"]
+    page.locator("#vt-timeline").click()
+    page.locator(".tl-grid").wait_for()
+    y = page.locator(".tl-grid").bounding_box()["y"] + 4.5 * 44
+    _drop(page, ".tl-grid", "task", y)
+    page.locator(".tl-block").wait_for()
+    assert ui["posts"][-1][1]["timeblocks"]["task"]["start"] == "10:30"
+    _drop(page, ".tl-pool", "task")
+    page.locator(".pcard").wait_for()
+    assert ui["posts"][-1] == ("/api/config", {"timeblocks": {}})
+    assert all(path == "/api/config" for path, _ in ui["posts"])
