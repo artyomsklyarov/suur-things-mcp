@@ -37,3 +37,8 @@ Iteration 5 commit: 112356f.
 
 ## Iteration 6 — Fix
 B07: tolerate corrupt/blocked localStorage, keep tasks usable after config error, prevent overlay writes until settings load, and retry sidebar without deleting its DOM structure. Before evidence was recaptured against committed HTML after an initial parallel capture saw new code: five failures plus four exception-teardown errors (iter-6-before.txt). After: 149 tests/full gate green (iter-6.txt). All eight iter-6-screens images read; normal desktop unchanged, narrow clipping still tracked. Reliability 3 -> 4. Commit: pending iter 6.
+
+Iteration 6 commit: a823c44.
+
+## Iteration 7 — Accessibility
+E01 milestone 1: seven named modal overlays, field labels, native close/complete buttons, focus entry/trapping/return and inert background with stacked topmost Escape. Before: three dialog tests fail (iter-7-before.txt). After: 152 tests and full gate green (iter-7.txt); eight screenshots read with no unintended normal-layout change. Accessibility 2 -> 3. Found arealess-project resolution gap while planning empty-state evidence, tracked B14. Commit: pending iter 7.

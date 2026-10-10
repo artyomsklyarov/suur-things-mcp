@@ -9,7 +9,7 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B03 | Atomic upload cap and config temp names under concurrent calls | Fix | H | M | S | done iter 3 |
 | B04 | Malformed organizer tags and out-of-scope/duplicate suggestions | Fix | H | L | S | done iter 4 |
 | B05 | Fixture browser coverage with all network actions intercepted | Safety net | H | L | S | done iter 5 |
-| B06 | Accessible dialogs and keyboard navigation epic | Accessibility | H | M | M | candidate |
+| B06 | Accessible dialogs and keyboard navigation epic | Accessibility | H | M | M | active E01, milestone 1 done |
 | B07 | Frontend startup config/storage errors and recoverable sidebar | Fix | H | M | S | done iter 6 |
 | B08 | Dark theme control/selection contrast | UI | M | L | S | rejected: settled screenshots correct |
 | B09 | Narrow-window usable navigation/content epic | UX | H | M | M | candidate |
@@ -17,3 +17,5 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B11 | Async list navigation discards stale responses | Fix | M | M | S | ready |
 | B12 | Add verification/recovery developer guide without changing existing docs | Docs | M | L | S | ready |
 | B13 | Existing dependency warning / real Things writes / dirty-file work | Docs | M | H | M | human |
+
+| B14 | Arealess project links fail to resolve in hash navigation | Fix | H | L | S | ready after E01 |

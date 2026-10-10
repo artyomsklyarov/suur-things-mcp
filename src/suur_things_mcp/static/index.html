@@ -219,10 +219,10 @@
   /* Things-style edit card */
   .editcard { background:var(--main-bg); border-radius:12px; width:460px; max-width:100%; max-height:84vh;
     overflow-y:auto; box-shadow:0 18px 56px rgba(0,0,0,.4); padding:16px 18px 12px; position:relative; }
-  .ec-x { position:absolute; top:11px; right:13px; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; }
+  .ec-x { border:0; background:transparent; font:inherit; position:absolute; top:11px; right:13px; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; }
   .ec-x:hover { color:var(--text); }
   .ec-top { display:flex; align-items:flex-start; gap:11px; padding-right:18px; }
-  .ec-box { width:19px; height:19px; flex:0 0 19px; margin-top:3px; border:1.5px solid var(--check-border);
+  .ec-box { background:transparent; padding:0; width:19px; height:19px; flex:0 0 19px; margin-top:3px; border:1.5px solid var(--check-border);
     border-radius:5px; cursor:pointer; display:flex; align-items:center; justify-content:center;
     transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
   .ec-box:hover { border-color:var(--accent); }
@@ -470,31 +470,31 @@
   </main>
 </div>
 
-<div class="overlay" id="edit-overlay">
+<div class="overlay" id="edit-overlay" role="dialog" aria-modal="true" aria-label="Edit task" aria-hidden="true" tabindex="-1">
   <div class="editcard">
-    <span class="ec-x" id="ec-close" title="Close (saves changes)">✕</span>
+    <button class="ec-x" id="ec-close" type="button" aria-label="Close (saves changes)" title="Close (saves changes)">✕</button>
     <div class="viewtog ec-kind" id="ec-kind" style="display:none">
       <button class="vt on" data-kind="todo">To-Do</button>
       <button class="vt" data-kind="project">Project</button>
     </div>
     <div class="ec-top">
-      <span class="ec-box" id="ec-box" title="Complete"></span>
-      <textarea class="ec-title" id="f-title" rows="1" placeholder="New To-Do"></textarea>
+      <button class="ec-box" id="ec-box" type="button" aria-label="Complete task" title="Complete"></button>
+      <textarea class="ec-title" id="f-title" aria-label="Task title" rows="1" placeholder="New To-Do"></textarea>
     </div>
-    <textarea class="ec-notes" id="f-notes" placeholder="Notes"></textarea>
+    <textarea class="ec-notes" id="f-notes" aria-label="Notes" placeholder="Notes"></textarea>
     <div class="ec-pills" id="ec-pills"></div>
     <div id="f-checklist"></div>
     <div id="ec-attach" class="ec-attach"></div>
     <input type="file" id="att-input" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,image/heif" multiple style="display:none">
     <div class="ec-editor" id="ed-when"><div class="ed-body">
       <div class="qchips" id="when-chips"></div>
-      <input id="f-when" placeholder="today · evening · tomorrow · anytime · someday · yyyy-mm-dd">
+      <input id="f-when" aria-label="When" placeholder="today · evening · tomorrow · anytime · someday · yyyy-mm-dd">
     </div></div>
     <div class="ec-editor" id="ed-deadline"><div class="ed-body">
-      <input id="f-deadline" type="date">
+      <input id="f-deadline" aria-label="Deadline" type="date">
     </div></div>
     <div class="ec-editor" id="ed-tags"><div class="ed-body">
-      <input id="f-tags" placeholder="comma, separated, tags">
+      <input id="f-tags" aria-label="Tags" placeholder="comma, separated, tags">
     </div></div>
     <div class="hint warn" id="edit-warn" style="display:none">Read-only: set THINGS_AUTH_TOKEN to edit.</div>
     <div class="ec-foot">
@@ -512,7 +512,7 @@
   </div>
 </div>
 
-<div class="overlay" id="organize-overlay">
+<div class="overlay" id="organize-overlay" role="dialog" aria-modal="true" aria-label="Organize folder" aria-hidden="true" tabindex="-1">
   <div class="panel" style="width:640px">
     <h2 id="org-title">✨ Organize folder</h2><div class="sub" id="org-sub">Your agent suggests improvements. Nothing is written until you Apply.</div>
     <div id="org-body"></div>
@@ -524,25 +524,25 @@
   </div>
 </div>
 
-<div class="overlay" id="cmdk" style="align-items:flex-start; padding-top:84px">
+<div class="overlay" id="cmdk" role="dialog" aria-modal="true" aria-label="Search and commands" aria-hidden="true" tabindex="-1" style="align-items:flex-start; padding-top:84px">
   <div class="ck-panel">
-    <input id="cmdk-input" placeholder="Search tasks or type a command…" autocomplete="off">
+    <input id="cmdk-input" aria-label="Search tasks or commands" placeholder="Search tasks or type a command…" autocomplete="off">
     <div class="ck-list" id="cmdk-list"></div>
   </div>
 </div>
 
 
-<div class="overlay" id="prefs-overlay">
+<div class="overlay" id="prefs-overlay" role="dialog" aria-modal="true" aria-label="Preferences" aria-hidden="true" tabindex="-1">
   <div class="panel">
     <h2>Preferences</h2><div class="sub">How "Open in editor / terminal" launches. Saved locally.</div>
-    <div class="field"><label>Editor command (on your PATH — e.g. code, cursor, subl, idea)</label><input id="pf-editor" placeholder="code"></div>
-    <div class="field"><label>Terminal app (e.g. Ghostty, iTerm, Terminal, Warp)</label><input id="pf-terminal" placeholder="Terminal"></div>
+    <div class="field"><label for="pf-editor">Editor command (on your PATH — e.g. code, cursor, subl, idea)</label><input id="pf-editor" placeholder="code"></div>
+    <div class="field"><label for="pf-terminal">Terminal app (e.g. Ghostty, iTerm, Terminal, Warp)</label><input id="pf-terminal" placeholder="Terminal"></div>
     <div class="hint">Blank = defaults (editor falls back to Finder; terminal to Terminal.app).</div>
     <div class="btnrow"><button class="btn primary" id="pf-save">Save</button><span class="spacer"></span><button class="btn ghost" id="pf-cancel">Cancel</button></div>
   </div>
 </div>
 
-<div class="overlay" id="levelmap-overlay">
+<div class="overlay" id="levelmap-overlay" role="dialog" aria-modal="true" aria-label="Priority levels" aria-hidden="true" tabindex="-1">
   <div class="panel">
     <h2>Priority levels</h2><div class="sub">Map your existing Things tags to four levels. A task lands at the first level whose tags it carries. The first tag in each row is written back to Things when you drag a task into that level.</div>
     <div id="levelmap-rows"></div>
@@ -551,7 +551,7 @@
   </div>
 </div>
 
-<div class="overlay" id="repos-overlay">
+<div class="overlay" id="repos-overlay" role="dialog" aria-modal="true" aria-label="Linked repos" aria-hidden="true" tabindex="-1">
   <div class="panel">
     <h2 id="repos-title">Linked repos</h2><div class="sub">A project can have several (e.g. app + website). Changes save automatically.</div>
     <div id="repos-list"></div>
@@ -560,10 +560,10 @@
   </div>
 </div>
 
-<div class="overlay" id="settings-overlay">
+<div class="overlay" id="settings-overlay" role="dialog" aria-modal="true" aria-label="Board settings" aria-hidden="true" tabindex="-1">
   <div class="panel">
     <h2>Board settings</h2><div class="sub">Changes save automatically.</div>
-    <div class="field"><label>Board name</label><input id="b-name"></div>
+    <div class="field"><label for="b-name">Board name</label><input id="b-name"></div>
     <div class="field">
       <label>Columns (project stages)</label>
       <div id="cols-edit"></div>
@@ -1606,6 +1606,8 @@ function openCreate(kind){
   ["tool-when","tool-deadline","tool-tags"].forEach(id=>$("#"+id).classList.remove("on"));
   $("#edit-warn").style.display=AUTH?"none":"block";
   WHEN_SEED=null; EDIT_ORIG=null; buildWhenChips(); renderPendingAttach(); updatePills();
+  $("#edit-overlay").setAttribute("aria-label",EDIT_KIND==="project"?"New project":"New to-do");
+  $("#ec-box").disabled=false;
   openOverlay("edit-overlay");
   // Size the textareas AFTER the card is on screen — autoGrow reads scrollHeight,
   // which is 0 while the overlay is hidden (that collapsed #f-title to height 0,
@@ -1685,7 +1687,8 @@ async function openEdit(uuid){
   buildWhenChips();
   const ro=!AUTH; $("#edit-warn").style.display=ro?"block":"none";
   ["f-title","f-notes","f-when","f-deadline","f-tags"].forEach(id=>$("#"+id).disabled=ro);
-  $("#ec-box").style.pointerEvents=ro?"none":"";
+  $("#ec-box").style.pointerEvents=ro?"none":""; $("#ec-box").disabled=ro;
+  $("#edit-overlay").setAttribute("aria-label","Edit task");
   EDIT_ORIG={title:it.title||"", notes:it.notes||"", deadline:it.deadline||"", tags:(it.tags||[]).join(",")};
   renderAttachments(uuid);
   updatePills(); openOverlay("edit-overlay"); setTimeout(()=>{ autoGrow($("#f-title")); autoGrow($("#f-notes")); },0);
@@ -1897,10 +1900,52 @@ function parseNL(raw){
   }
   return {title:words.join(" ").trim()||raw.trim(), when, tags};
 }
-function openOverlay(id){ $("#"+id).classList.add("show"); }
-function closeOverlay(id){ $("#"+id).classList.remove("show"); }
-document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{ if(e.target===o){ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); } }));
-document.addEventListener("keydown",e=>{ if(e.key==="Escape") document.querySelectorAll(".overlay.show").forEach(o=>{ if(o.id==="edit-overlay") closeEdit(); else o.classList.remove("show"); }); });
+const OPEN_OVERLAYS=[], OVERLAY_FOCUS=new Map();
+function activeOverlay(){ const id=OPEN_OVERLAYS[OPEN_OVERLAYS.length-1]; return id?$("#"+id):null; }
+function overlayControls(o){
+  return [...o.querySelectorAll('button,input,textarea,select,a[href],[tabindex]')].filter(el=>
+    !el.disabled && el.tabIndex>=0 && el.getClientRects().length && getComputedStyle(el).visibility!=="hidden");
+}
+function focusOverlay(o){
+  const preferred=o.querySelector('#f-title,#cmdk-input,#pf-editor,#b-name');
+  const controls=overlayControls(o);
+  (controls.includes(preferred)?preferred:controls[0]||o).focus();
+}
+function syncOverlayState(){
+  const top=activeOverlay();
+  document.querySelectorAll('.topbar,.views').forEach(el=>el.inert=!!top);
+  document.querySelectorAll('.overlay').forEach(el=>el.inert=!!top&&el!==top);
+}
+function openOverlay(id){
+  const o=$("#"+id);
+  if(!OPEN_OVERLAYS.includes(id)){ OVERLAY_FOCUS.set(id,document.activeElement); OPEN_OVERLAYS.push(id); }
+  o.classList.add("show"); o.setAttribute("aria-hidden","false");
+  syncOverlayState(); focusOverlay(o);
+}
+function closeOverlay(id){
+  const o=$("#"+id), wasTop=o===activeOverlay(), trigger=OVERLAY_FOCUS.get(id);
+  o.classList.remove("show"); o.setAttribute("aria-hidden","true");
+  const i=OPEN_OVERLAYS.indexOf(id); if(i>=0) OPEN_OVERLAYS.splice(i,1);
+  OVERLAY_FOCUS.delete(id); syncOverlayState();
+  if(wasTop){
+    const top=activeOverlay();
+    if(trigger&&trigger.isConnected&&(!top||top.contains(trigger))&&!trigger.closest('[inert]')) trigger.focus();
+    else if(top) focusOverlay(top);
+  }
+}
+document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{
+  if(e.target===o&&o===activeOverlay()){ if(o.id==="edit-overlay") closeEdit(); else closeOverlay(o.id); }
+}));
+document.addEventListener("keydown",e=>{
+  const o=activeOverlay(); if(!o) return;
+  if(e.key==="Escape"){ e.preventDefault(); if(o.id==="edit-overlay") closeEdit(); else closeOverlay(o.id); }
+  else if(e.key==="Tab"){
+    const controls=overlayControls(o), first=controls[0], last=controls[controls.length-1];
+    if(!first){ e.preventDefault(); o.focus(); }
+    else if(e.shiftKey&&(document.activeElement===first||!o.contains(document.activeElement))){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey&&(document.activeElement===last||!o.contains(document.activeElement))){ e.preventDefault(); first.focus(); }
+  }
+});
 // Drag-drop + paste an image straight onto the open edit card.
 (function(){ const card=document.querySelector("#edit-overlay .editcard"); if(!card) return;
   const editOpen=()=>$("#edit-overlay").classList.contains("show") && (EDIT_ID||EDIT_NEW);

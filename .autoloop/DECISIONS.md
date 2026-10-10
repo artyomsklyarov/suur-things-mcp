@@ -24,3 +24,5 @@ Iteration 3: hold the existing cross-process lock from attachment-cap check thro
 Iteration 4: model output must remain within submitted task IDs, with first suggestion per ID winning. Malformed scalar tags are ignored; a bare string is one tag, not characters. Code fences inside JSON notes are preserved. Model execution is mocked in regressions; no CLI auth, accounts or metered calls used.
 
 Iteration 6: browser storage is cosmetic and failure must not stop startup. Keep last good/default CONFIG and display Retry on load failure; block config/link POSTs until settings are loaded so defaults cannot overwrite unknown state. Render sidebar errors within side-nav to preserve the footer and retry structure.
+
+Iteration 7: E01 beats narrow-layout runner-up 20 vs 18 on user value/fit/feasibility/self-containment. Modal corrections are complete per slice, no incomplete new feature requires a flag. Preserve edit autosave and instant palette motion.

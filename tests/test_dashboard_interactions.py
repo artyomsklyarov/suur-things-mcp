@@ -189,3 +189,43 @@ def test_sidebar_error_preserves_navigation_structure_and_can_retry(ui):
     page.locator("#sidebar-retry").click()
     page.locator('#side-nav [data-id="today"]').wait_for()
     page.locator(".row").wait_for()
+
+
+def test_dialog_focus_is_contained_and_returns_to_trigger(ui):
+    page = ui["page"]
+    page.locator("#prefs-btn").click()
+    page.wait_for_function("() => document.activeElement.id === 'pf-editor'", timeout=2000)
+    assert page.get_by_role("dialog", name="Preferences").is_visible()
+    assert page.get_by_label("Editor command", exact=False).count() == 1
+    page.keyboard.press("Shift+Tab")
+    assert page.evaluate("() => document.activeElement.id") == "pf-cancel"
+    page.keyboard.press("Tab")
+    assert page.evaluate("() => document.activeElement.id") == "pf-editor"
+    assert page.locator(".views").evaluate("el => el.inert") is True
+    page.keyboard.press("Escape")
+    assert page.evaluate("() => document.activeElement.id") == "prefs-btn"
+    assert page.locator(".views").evaluate("el => el.inert") is False
+
+
+def test_escape_closes_only_top_dialog(ui):
+    page = ui["page"]
+    page.locator("#prefs-btn").click()
+    page.evaluate("() => openCmdk()")
+    page.locator("#cmdk.show").wait_for()
+    page.keyboard.press("Escape")
+    assert page.locator("#prefs-overlay").evaluate("el => el.classList.contains('show')") is True
+    assert page.evaluate("() => document.activeElement.id") == "pf-editor"
+    page.keyboard.press("Escape")
+    assert page.evaluate("() => document.activeElement.id") == "prefs-btn"
+
+
+def test_create_dialog_has_named_fields_and_keyboard_close(ui):
+    page = ui["page"]
+    page.locator("#add-btn").click()
+    assert page.get_by_role("dialog", name="New to-do", exact=False).is_visible()
+    assert page.get_by_label("Task title").count() == 1
+    assert page.get_by_label("Notes", exact=True).count() == 1
+    page.get_by_role("button", name="Close (saves changes)").focus()
+    page.keyboard.press("Enter")
+    assert not page.locator("#edit-overlay").evaluate("el => el.classList.contains('show')")
+    assert ui["posts"] == []
