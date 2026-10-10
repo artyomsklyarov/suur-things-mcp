@@ -142,3 +142,8 @@ Iteration 20 commit: df0670f.
 
 ## Dream 8 — Dream
 Ten-years-from-now lens: twelve ideas, two ambitious. Promoted B18/B19, parked personal-history/sync/compensating-undo plans, rejected duplicate or ill-fitting expansions. No product code. Full fixture gate recorded in dream-8.txt. Commit: pending dream 8.
+
+Dream 8 commit: f8dfef2.
+
+## Iteration 21 — Fix
+B18 fixes optional note-sync failures after durable upload. Before: three failures reproduced, existing URL Scheme failure already behaved correctly (iter-21-before.txt); success and duplicate-reference checks pass. After: six regressions, full gate 229 tests (iter-21.txt). Storage bytes/metadata retained exactly once, success response preserved with note_updated=false; all Things operations mocked. No UI/dependency/sensitive edits. Reliability remains 4. Commit: pending iter 21.

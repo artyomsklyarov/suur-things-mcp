@@ -64,3 +64,5 @@ Iteration 20: enable completed E03 after all-view visual and browser gates. Nati
 - H19: Private cross-device sync: specify conflicts using synthetic overlay/task identities, choose encryption/key recovery and an account/backend model, then implement an opt-in provider behind a flag. New infrastructure/accounts and personal-data retention are excluded from this loop.
 
 Dream 8: B18/B19 are concrete, feasible outcomes of the ten-year trust lens, not a new feature expansion. Keep existing product boundaries.
+
+Iteration 21: once image bytes and metadata are durably saved, optional Things note synchronization must not turn the upload into a failure. Catch ordinary exceptions only within that existing best-effort boundary (not BaseException/cancellation), keep note_updated false and preserve the success payload. No retry, compensating write, deletion, credentials or dependency changes. Six regressions include read/SQLite/opener failures and successful/duplicate note references.

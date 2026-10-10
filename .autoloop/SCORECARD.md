@@ -46,3 +46,5 @@ Iteration 18: E03 preview adds keyboard stage/quadrant/level destinations and ad
 Iteration 19: E03 preview now covers explicit timeline scheduling/unscheduling and named modal focus, without task mutations. Five new regressions, 214 tests; Accessibility/UX stay 4 pending final enablement.
 
 Holistic iteration 20: all applicable dimensions remain 4; evidence and limits in artifacts/holistic-20.txt. 223 tests, 32 inspected images, 10/10 protected files byte-identical. Checkbox boundaries previously 1.715 light / 2.632 dark now exceed 3:1 in tested selected/unselected backgrounds. B18/B19 added from boundary review; no High items.
+
+Iteration 21: six upload note-sync regressions; three reproduced post-storage server errors now keep successful upload metadata/bytes and report note_updated=false. Reliability stays 4, total 229 tests. No live writes.

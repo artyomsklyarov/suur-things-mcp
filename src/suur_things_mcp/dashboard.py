@@ -574,8 +574,8 @@ async def _attach(request: Request) -> JSONResponse:
                     "update", {"id": item_uuid, "append-notes": boardcfg.note_ref_line(meta["name"], path)},
                     auth_token=token))
             note_updated = True
-        except ThingsURLError:
-            pass  # storing succeeded; the note reference is best-effort
+        except Exception:  # noqa: BLE001 — storage succeeded; note sync is best-effort
+            pass
     return JSONResponse({"ok": True, "attachment": meta, "note_updated": note_updated})
 
 
