@@ -84,3 +84,52 @@ def test_junk_repo_lists_are_ignored_without_crashing(store, repos):
     cfg = config.save({"links": {"x": {"repos": repos}}, "prefs": {"editor": "code"}})
     assert cfg["links"] == {}
     assert cfg["prefs"] == {"editor": "code"}
+
+
+def test_concurrent_uploads_obey_cap_without_losing_images(store, monkeypatch):
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    monkeypatch.setattr(config, "MAX_ATTACH_PER_ITEM", 2)
+    original_load = config.load
+
+    def slow_load():
+        result = original_load()
+        time.sleep(0.02)  # simulate overlapping disk reads from multiple clients
+        return result
+
+    monkeypatch.setattr(config, "load", slow_load)
+    start = threading.Barrier(8)
+
+    def upload(i):
+        start.wait(timeout=5)
+        try:
+            return config.save_attachment("task", bytes([i]), "image/png", f"{i}.png")
+        except ValueError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(upload, range(8)))
+    accepted = [meta for meta in results if meta]
+    assert len(accepted) == 2
+    assert {a["id"] for a in config.attachments()["task"]} == {a["id"] for a in accepted}
+    assert len(list((config._attach_dir() / "task").iterdir())) == 2
+
+
+def test_concurrent_direct_saves_have_distinct_atomic_temp_files(store, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    ready = threading.Barrier(2)
+    replace = config.os.replace
+
+    def together(source, destination):
+        ready.wait(timeout=5)
+        replace(source, destination)
+
+    monkeypatch.setattr(config.os, "replace", together)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(lambda n: config.save({"prefs": {"editor": str(n)}}), range(2)))
+    assert config.prefs()["editor"] in {"0", "1"}
+    assert not list(store.glob("board.json.tmp-*"))

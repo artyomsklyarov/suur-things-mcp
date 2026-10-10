@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -345,13 +346,17 @@ def save(data: dict) -> dict[str, Any]:
     # Atomic write: a crash or concurrent writer can't leave a truncated/torn
     # board.json (which load() would then treat as corrupt). Write a sibling temp
     # file and os.replace() it into place (atomic on the same filesystem).
-    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    tmp = None
     try:
-        tmp.write_text(json.dumps(cfg, indent=2))
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f"{path.name}.tmp-", delete=False) as f:
+            tmp = Path(f.name)
+            f.write(json.dumps(cfg, indent=2))
         os.replace(tmp, path)
     finally:
         try:
-            tmp.unlink(missing_ok=True)
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
         except OSError:
             pass
     return cfg
@@ -533,8 +538,6 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     # "../../foo" would walk mkdir/write_bytes outside the attachments dir.
     if not _SAFE_ID.fullmatch(item_uuid):
         raise ValueError("invalid item id")
-    if len(attachments().get(item_uuid, [])) >= MAX_ATTACH_PER_ITEM:
-        raise ValueError(f"too many images on this item (max {MAX_ATTACH_PER_ITEM})")
     mime = (mime or "").strip().lower()
     if mime not in IMAGE_MIMES:
         raise ValueError(f"unsupported image type: {mime!r}")
@@ -549,12 +552,14 @@ def save_attachment(item_uuid: str, data: bytes, mime: str, name: str,
     path = attachment_path(item_uuid, meta)
     # Defence in depth: never write outside the attachments dir even if the
     # checks above are ever loosened.
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
     with _locked():
         cfg = load()
         table = cfg.setdefault("attachments", {})
-        table.setdefault(str(item_uuid), []).append(meta)
+        if len(table.get(item_uuid, [])) >= MAX_ATTACH_PER_ITEM:
+            raise ValueError(f"too many images on this item (max {MAX_ATTACH_PER_ITEM})")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        table.setdefault(item_uuid, []).append(meta)
         save(cfg)
     return meta
 

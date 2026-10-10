@@ -17,3 +17,8 @@ Iteration 1 commit: 75c714f.
 
 ## Iteration 2 — Fix
 B02: non-object/invalid-UTF8 overlay recovery, immutable unique backups, fail-closed unreadable files and junk repo-list sanitization. Before: nine failures, eight passes (iter-2-before.txt). After: full gate 130 passed, lint/compile/offline builds green; unchanged baseline warning (iter-2.txt). Reliability improved within dimension, concurrency remains. Commit: pending iter 2.
+
+Iteration 2 commit: 8098eb3.
+
+## Iteration 3 — Fix
+B03: atomic per-item upload cap and unique atomic config temp files. Before: both concurrency tests fail (iter-3-before.txt). After: 132 tests and full gate green (iter-3.txt), eight concurrent attempts accept exactly two and preserve their metadata/bytes; two direct saves no longer collide. Commit: pending iter 3.
