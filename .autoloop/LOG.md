@@ -102,3 +102,8 @@ Iteration 15 commit: fe03c5e.
 
 ## Dream 5 — Dream
 A-day-in-the-life lens, twelve ideas, two ambitious. Existing B17 decomposed into protect/place/schedule; B12 retained; three built, one parked and three rejected. No code. Commit: pending dream 5.
+
+Dream 5 commit: e164d13.
+
+## Iteration 16 — Docs
+B12: standalone verification/recovery guide and proposed README insertion, preserving existing docs. Before: commands/limitations only in loop state and scattered tests; no consolidated recovery procedure. After: docs/DEVELOPMENT-VERIFICATION.md with commands exercised in prior/current artifacts, 199 tests/full gate green (iter-16.txt). No new tests for prose-only work. Eight-iteration dream cadence due. Commit: pending iter 16.
