@@ -20,3 +20,5 @@ Iteration 1: Path.relative_to on resolved paths replaces unsafe string-prefix ch
 Iteration 2: use standard-library SHA-256 content-addressed recovery copies, exclusive creation and byte readback. Preserve original bytes until a successful explicit save. Read errors other than missing file propagate so load-modify-save cannot overwrite unread data. No dependency added.
 
 Iteration 3: hold the existing cross-process lock from attachment-cap check through metadata save. Use standard-library NamedTemporaryFile for exclusive sibling temp creation; same-process parallel direct saves must not share a PID-only pathname. No extra dependency.
+
+Iteration 4: model output must remain within submitted task IDs, with first suggestion per ID winning. Malformed scalar tags are ignored; a bare string is one tag, not characters. Code fences inside JSON notes are preserved. Model execution is mocked in regressions; no CLI auth, accounts or metered calls used.

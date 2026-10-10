@@ -22,3 +22,8 @@ Iteration 2 commit: 8098eb3.
 
 ## Iteration 3 — Fix
 B03: atomic per-item upload cap and unique atomic config temp files. Before: both concurrency tests fail (iter-3-before.txt). After: 132 tests and full gate green (iter-3.txt), eight concurrent attempts accept exactly two and preserve their metadata/bytes; two direct saves no longer collide. Commit: pending iter 3.
+
+Iteration 3 commit: d371051.
+
+## Iteration 4 — Fix
+B04: tolerate malformed tags, preserve fenced note text, scope and deduplicate suggestions to submitted tasks. Before: seven failures (iter-4-before.txt). After: 139 tests and full gate green (iter-4.txt); existing warning only. Four consecutive Fix iterations complete; next mode Safety net protects frontend before larger UX/accessibility changes. Commit: pending iter 4.

@@ -7,7 +7,7 @@ Read this and all state at every iteration. H/M/L impact/risk, S/M/L effort. Rot
 | B01 | Attachment containment: reject symlink sibling escapes and unsafe stored paths | Fix | H | L | S | done iter 1 |
 | B02 | Config recovery: object roots, UTF-8, unique non-destructive backups | Fix | H | L | S | done iter 2 |
 | B03 | Atomic upload cap and config temp names under concurrent calls | Fix | H | M | S | done iter 3 |
-| B04 | Malformed organizer tags and out-of-scope/duplicate suggestions | Fix | H | L | S | ready |
+| B04 | Malformed organizer tags and out-of-scope/duplicate suggestions | Fix | H | L | S | done iter 4 |
 | B05 | Fixture browser coverage with all network actions intercepted | Safety net | H | L | S | ready |
 | B06 | Accessible dialogs and keyboard navigation epic | Accessibility | H | M | M | candidate |
 | B07 | Frontend startup config/storage errors and recoverable sidebar | Fix | H | M | S | ready |

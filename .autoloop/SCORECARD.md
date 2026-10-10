@@ -22,3 +22,5 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 Iteration 2: reliability remains 3 pending concurrency/frontend work; config recovery now handles six invalid payloads, unique recoveries, unreadable-file fail-closed and malformed link lists. Coverage improves with 12 new tests, 130 total. Evidence iter-2-before.txt / iter-2.txt.
 
 Iteration 3: eight simultaneous uploads now accept exactly the configured two; metadata/file counts match. Concurrent direct saves both complete with valid JSON and no temporary leftovers. Reliability stays 3 pending startup work. Total 132 tests.
+
+Iteration 4: seven organizer safety failures now pass, including IDs outside submitted scope and duplicate IDs; 139 tests. Reliability/test coverage still 3 until frontend failure/accessibility coverage.
