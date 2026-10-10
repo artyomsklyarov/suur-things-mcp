@@ -11,10 +11,10 @@ Release progress:
 - Done: all five docs, changelog/README consistency, full no-skip gate and package inspection, public source update, protected-main CI and normal merge through PR #53.
 - Done: GitHub v0.10.0 release at the checked merge commit.
 - Failed: its PyPI action rejects Hatchling's metadata 2.5 before upload. The public tag/release is retained; this does not count as PyPI publication.
-- Pending: 0.10.1 patch using the documented metadata 2.4 setting for both targets; repeat the full gate and package inspection, pass required PR CI, merge, release through the existing workflow and verify public registry/files/hashes.
-- Pending: update STATUS/TODO with observed patch-release outcomes and commit those receipts to GitHub.
+- Done: 0.10.1 metadata 2.4 patch, repeated full no-skip gate and package inspection, required PR CI, normal merge, GitHub/PyPI publication and downloaded public registry/file/hash checks.
+- Done: STATUS/TODO and the release verification record contain the observed patch outcomes and machine-readable receipts; these updates form the final documentation checkpoint.
 
-Completion criterion: five accurate handoff documents on GitHub, full source update on main, GitHub release public, release job successful and 0.10.1 installable files verified on PyPI. This is separate from live task acceptance. No tag rewriting, publishing secrets/config changes or real task mutations are needed.
+Release acceptance reached: five detailed handoff documents, full source update merged to main, GitHub release public, release job successful and 0.10.1 public files verified on PyPI, with an isolated downloaded-wheel install/import smoke check. This is separate from live task acceptance. No tag rewriting, publishing secrets/config changes or real task mutations are needed.
 
 ## P1 — Live Things acceptance protocol
 
