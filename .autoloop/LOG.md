@@ -27,3 +27,8 @@ Iteration 3 commit: d371051.
 
 ## Iteration 4 — Fix
 B04: tolerate malformed tags, preserve fenced note text, scope and deduplicate suggestions to submitted tasks. Before: seven failures (iter-4-before.txt). After: 139 tests and full gate green (iter-4.txt); existing warning only. Four consecutive Fix iterations complete; next mode Safety net protects frontend before larger UX/accessibility changes. Commit: pending iter 4.
+
+Iteration 4 commit: 731f388.
+
+## Iteration 5 — Safety net
+B05: fixture-driven Chromium navigation, Inbox empty-state/create, literal hostile titles in list/cards, palette keyboard and scoped preference-save tests. API requests fully intercepted. Before: five existing browser tests, no protected broad workflows. After: nine browser tests, 143 total and full gate green (iter-5.txt). New harness initially had a Playwright keyword-argument typo; fixed without weakening assertions before commit. Test coverage 3 -> 4. Commit: pending iter 5.

@@ -6,7 +6,7 @@ Scores 1-5; baseline and current are equal at orientation. Judgments are bounded
 |---|---:|---:|---|
 | Correctness | 4 | 4 | 113 tests, local build green; real URL Scheme integration requires human |
 | Reliability | 3 | 3 | Recovery misses non-object JSON/invalid UTF-8; request races and upload cap race |
-| Test coverage | 3 | 3 | Real Chromium + fixture SQL; focused recovery/concurrency/accessibility gaps |
+| Test coverage | 3 | 4 | Real Chromium + fixture SQL; recovery/concurrency/agent safety protected; intercepted browser workflow suite, iter-5.txt |
 | Code quality | 4 | 4 | Ruff green, idiomatic modules; compact HTML is large, no rewrite justified |
 | Architecture | 4 | 4 | Read/write split, overlay store, thin tools; preserves intent |
 | Security | 3 | 4 | Nonce CSP, origins, token redaction; attachment path containment enforced; five regressions in iter-1.txt |
