@@ -127,3 +127,8 @@ Iteration 18 commit: 4ab7dad.
 
 ## Dream 7 — Dream
 10x lens, twelve ideas with two ambitious; finish existing E03, five protected/built capabilities, three parked plans and three rejections. No code. Commit: pending dream 7.
+
+Dream 7 commit: c148cfd.
+
+## Iteration 19 — Accessibility
+E03 timeline dialog, explicit time/duration and unscheduling; local section-only storage, failure retention, no stale navigation replacement, unchanged unrelated blocks. Before: four missing-dialog failures (iter-19-before.txt). After: 214 tests/full gate green (iter-19.txt); eight final images read. First gate found real focus loss: disabling the Save button moved focus to body before the return decision. Use still-visible dialog/trigger state, preserving escape/navigation behavior. Revised compact pool cap and native dark clock after visual inspection. Scores stay 4. Commit: pending iter 19.

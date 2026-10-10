@@ -615,3 +615,88 @@ def test_priority_card_completion_works_from_keyboard(ui):
     page.keyboard.press("Space")
     page.locator(".pcard").wait_for(state="detached")
     assert ui["posts"] == [("/api/update", {"id": "task", "completed": True})]
+
+
+def _open_slot_preview(ui):
+    page = ui["page"]
+    _enable_placement_preview(page)
+    page.locator("#vt-timeline").click()
+    page.get_by_role("button", name="Schedule Write an outline", exact=True).click()
+    page.get_by_role("dialog", name="Schedule · Write an outline").wait_for()
+    return page
+
+
+def test_keyboard_timeline_schedule_change_and_unschedule(ui):
+    page = _open_slot_preview(ui)
+    assert page.get_by_label("Start time").evaluate("el => document.activeElement === el")
+    page.get_by_label("Start time").fill("10:30")
+    page.get_by_label("Duration (minutes)").fill("60")
+    page.get_by_role("button", name="Save time block", exact=True).click()
+    page.locator(".tl-block").wait_for()
+    assert ui["posts"][-1] == (
+        "/api/config",
+        {"timeblocks": {"task": {"date": page.evaluate("() => todayStr()"), "start": "10:30", "mins": 60}}},
+    )
+    button = page.get_by_role("button", name="Schedule Write an outline", exact=True)
+    assert button.evaluate("el => document.activeElement === el")
+    button.click()
+    assert page.get_by_label("Start time").input_value() == "10:30"
+    page.get_by_role("button", name="Unscheduled", exact=True).click()
+    page.locator(".tl-block").wait_for(state="detached")
+    assert ui["posts"][-1] == ("/api/config", {"timeblocks": {}})
+    assert all(path == "/api/config" for path, _ in ui["posts"])
+
+
+def test_timeline_dialog_cancel_and_invalid_duration_do_not_write(ui):
+    page = _open_slot_preview(ui)
+    page.get_by_label("Duration (minutes)").fill("0")
+    page.get_by_role("button", name="Save time block", exact=True).click()
+    assert page.locator("#slot-overlay.show").is_visible()
+    assert ui["posts"] == []
+    page.keyboard.press("Escape")
+    assert not page.locator("#slot-overlay").evaluate("el => el.classList.contains('show')")
+    assert page.get_by_role("button", name="Schedule Write an outline", exact=True).evaluate(
+        "el => document.activeElement === el"
+    )
+
+
+def test_timeline_failed_save_keeps_dialog_and_previous_blocks(ui):
+    page = _open_slot_preview(ui)
+    page.route("**/api/config", lambda route: route.fulfill(json={"ok": False, "error": "fixture failed save"}))
+    page.on("dialog", lambda dialog: dialog.dismiss())
+    page.get_by_role("button", name="Save time block", exact=True).click()
+    page.wait_for_function("() => !document.querySelector('#slot-save').disabled")
+    assert page.locator("#slot-overlay.show").is_visible()
+    assert page.evaluate("() => CONFIG.timeblocks") == {}
+
+
+def test_timeline_pending_save_does_not_replace_new_navigation(ui):
+    page = _open_slot_preview(ui)
+    page.evaluate("""() => {
+        const original=window.fetch;
+        window.fetch=(url,options)=>url==='/api/config'&&options?.method==='POST'
+            ?new Promise(resolve=>window.finishSlot=()=>resolve({ok:true,json:async()=>({ok:true,config:CONFIG})}))
+            :original(url,options);
+    }""")
+    page.get_by_role("button", name="Save time block", exact=True).click()
+    page.wait_for_function("() => !!window.finishSlot")
+    page.keyboard.press("Escape")
+    page.evaluate("() => renderAbout()")
+    expected = page.locator("#content").inner_text()
+    page.evaluate("() => window.finishSlot()")
+    page.wait_for_timeout(100)
+    assert page.locator("#content").inner_text() == expected
+    assert not page.locator("#slot-overlay").evaluate("el => el.classList.contains('show')")
+
+
+def test_timeline_preserves_unrelated_blocks_and_rejects_end_after_day(ui):
+    ui["config"]["timeblocks"] = {"other": {"date": "2026-01-01", "start": "12:00", "mins": 30}}
+    page = _open_slot_preview(ui)
+    page.get_by_label("Start time").fill("22:45")
+    page.get_by_label("Duration (minutes)").fill("60")
+    page.get_by_role("button", name="Save time block", exact=True).click()
+    assert ui["posts"] == []
+    page.get_by_label("Start time").fill("10:30")
+    page.get_by_role("button", name="Save time block", exact=True).click()
+    page.locator(".tl-block").wait_for()
+    assert ui["posts"][-1][1]["timeblocks"]["other"] == {"date": "2026-01-01", "start": "12:00", "mins": 30}

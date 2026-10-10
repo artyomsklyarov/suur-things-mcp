@@ -324,6 +324,7 @@
   .q-do .quad-head .qt { color:var(--red); }
   .q-sched .quad-head .qt { color:var(--green); }
   .q-deleg .quad-head .qt { color:var(--orange); }
+  html[data-theme="dark"] #slot-start { color-scheme:dark; }
   .placement { display:block; width:100%; margin-top:8px; padding:4px 6px; border:1px solid var(--pill-border);
     border-radius:6px; background:var(--main-bg); color:var(--text); font:inherit; font-size:12px; }
   .pcard { background:var(--card-bg); border-radius:8px; padding:8px 11px; margin:6px 0; box-shadow:var(--card-shadow); cursor:pointer; }
@@ -456,6 +457,7 @@
     html[data-compact="on"] .main.fill #content { padding:0 12px 24px; overflow:auto; }
     html[data-compact="on"] .pri-wrap, html[data-compact="on"] .tl-wrap { flex-direction:column; height:auto; min-height:100%; }
     html[data-compact="on"] .pri-pool, html[data-compact="on"] .tl-pool { width:auto; flex:none; max-height:240px; }
+    html[data-compact="on"][data-placement="on"] .pri-pool, html[data-compact="on"][data-placement="on"] .tl-pool { max-height:360px; }
     html[data-compact="on"] .matrix, html[data-compact="on"] .levels { flex:none; min-height:440px; }
     html[data-compact="on"] .tl-cal { flex:none; height:480px; }
   }
@@ -596,6 +598,15 @@
   </div>
 </div>
 
+<div class="overlay" id="slot-overlay" role="dialog" aria-modal="true" aria-labelledby="slot-title" aria-hidden="true" tabindex="-1">
+  <div class="panel">
+    <h2 id="slot-title">Schedule</h2><div class="sub">Local time block for today (06:00–23:00).</div>
+    <div class="field"><label for="slot-start">Start time</label><input type="time" id="slot-start" min="06:00" max="22:45" step="900" required></div>
+    <div class="field"><label for="slot-mins">Duration (minutes)</label><input type="number" id="slot-mins" min="5" max="1020" step="5" required></div>
+    <div class="btnrow"><button class="btn primary" id="slot-save">Save time block</button><button class="btn" id="slot-clear">Unscheduled</button><span class="spacer"></span><button class="btn ghost" id="slot-cancel">Cancel</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="repos-overlay" role="dialog" aria-modal="true" aria-label="Linked repos" aria-hidden="true" tabindex="-1">
   <div class="panel">
     <h2 id="repos-title">Linked repos</h2><div class="sub">A project can have several (e.g. app + website). Changes save automatically.</div>
@@ -630,6 +641,7 @@
 const $ = (s, r=document) => r.querySelector(s);
 const COMPACT_LAYOUT=new URLSearchParams(location.search).get("compact")!=="0";
 const PLACEMENT_CONTROLS=new URLSearchParams(location.search).get("placement")==="1";
+document.documentElement.dataset.placement=PLACEMENT_CONTROLS?"on":"off";
 document.documentElement.dataset.compact=COMPACT_LAYOUT?"on":"off";
 const NARROW_WINDOW=matchMedia("(max-width:800px)");
 function compactWindow(){ return COMPACT_LAYOUT&&NARROW_WINDOW.matches; }
@@ -1456,6 +1468,12 @@ function priCardEl(t,items=LIST_ITEMS){
         [[-1,"Unranked"],...plevels().map((l,i)=>[i,l.label,!l.tags.length])],levelOf(t),value=>assignLevel(t.uuid,+value));
       select.disabled=!AUTH||!CONFIG_READY;
     }
+    else if(MODE==="timeline"){
+      const button=document.createElement("button"); button.className="btn slot-open"; button.style.marginTop="8px";
+      button.textContent="Schedule…"; button.dataset.id=t.uuid;
+      button.setAttribute("aria-label","Schedule "+(t.title||"(untitled)")); button.disabled=!CONFIG_READY;
+      button.onclick=e=>{ e.stopPropagation(); openSlot(t,items); }; el.appendChild(button);
+    }
   }
   return el;
 }
@@ -1564,7 +1582,41 @@ async function saveLevelMap(){
 // --- timeline (day) view; blocks are a dashboard-only overlay, never written to Things ---
 const TL_START=6, TL_END=23, TL_H=44;   // 6am–11pm, 44px per hour
 let TL_DUR=30;                            // default block length (minutes)
+let SLOT_STATE=null;
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function openSlot(task,items){
+  SLOT_STATE={id:task.uuid,items};
+  const block=(CONFIG.timeblocks||{})[task.uuid], today=block&&block.date===todayStr();
+  $("#slot-title").textContent="Schedule · "+(task.title||"(untitled)");
+  $("#slot-start").value=today?block.start:"09:00"; $("#slot-start").setCustomValidity("");
+  $("#slot-mins").value=today?block.mins:TL_DUR; $("#slot-mins").setCustomValidity("");
+  $("#slot-clear").hidden=!today;
+  openOverlay("slot-overlay");
+}
+async function saveSlot(clear=false){
+  const slot=SLOT_STATE; if(!slot) return;
+  const start=$("#slot-start"), duration=$("#slot-mins");
+  if(!clear){
+    start.setCustomValidity(""); duration.setCustomValidity("");
+    if(!start.reportValidity()||!duration.reportValidity()) return;
+    const [hour,minute]=start.value.split(":").map(Number);
+    if(hour*60+minute+duration.valueAsNumber>TL_END*60){ duration.setCustomValidity("Time block must end by 23:00."); duration.reportValidity(); return; }
+  }
+  const request=VIEW_REQUEST, trigger=OVERLAY_FOCUS.get("slot-overlay"), blocks={...(CONFIG.timeblocks||{})};
+  if(clear) delete blocks[slot.id];
+  else blocks[slot.id]={date:todayStr(),start:start.value,mins:duration.valueAsNumber};
+  $("#slot-save").disabled=true; $("#slot-clear").disabled=true;
+  try{ await savePlacement("timeblocks",blocks); }
+  catch(e){ alert("Time block could not be saved: "+e.message); return; }
+  finally{ $("#slot-save").disabled=false; $("#slot-clear").disabled=false; }
+  if(SLOT_STATE!==slot||request!==VIEW_REQUEST) return;
+  const focusBack=document.activeElement===trigger||$("#slot-overlay").classList.contains("show");
+  closeOverlay("slot-overlay"); renderTimeline(slot.items);
+  if(focusBack&&!activeOverlay()){
+    const button=[...document.querySelectorAll('.slot-open')].find(b=>b.dataset.id===slot.id);
+    if(button) button.focus();
+  }
+}
 async function saveTimeblocks(){
   const r=await postJSON("/api/config", {timeblocks:CONFIG.timeblocks});
   if(r.ok) CONFIG=r.config;
@@ -1580,7 +1632,16 @@ function renderTimeline(items){
     `<div class="tl-durbar">New block <span class="durtog"></span> min</div>`;
   const pc=document.createElement("div"); pc.className="col-cards";
   if(!unscheduled.length) pc.innerHTML=`<div class="empty" style="padding:14px 6px">All slotted 🎉</div>`;
-  unscheduled.forEach(t=>pc.appendChild(priCardEl(t))); pool.appendChild(pc);
+  unscheduled.forEach(t=>pc.appendChild(priCardEl(t,items))); pool.appendChild(pc);
+  if(PLACEMENT_CONTROLS){
+    const scheduled=items.filter(t=>CONFIG.timeblocks[t.uuid]&&CONFIG.timeblocks[t.uuid].date===day);
+    if(scheduled.length){
+      const label=document.createElement("div"); label.className="col-head"; label.textContent="Scheduled today"; pc.appendChild(label);
+      scheduled.forEach(t=>{ const card=priCardEl(t,items), block=CONFIG.timeblocks[t.uuid];
+        const detail=document.createElement("div"); detail.className="psub"; detail.textContent=block.start+" · "+block.mins+"m";
+        card.insertBefore(detail,card.querySelector('.slot-open')); pc.appendChild(card); });
+    }
+  }
   pool.addEventListener("dragover",e=>{ e.preventDefault(); pool.classList.add("drop"); });
   pool.addEventListener("dragleave",()=>pool.classList.remove("drop"));
   pool.addEventListener("drop",e=>{ e.preventDefault(); pool.classList.remove("drop");
@@ -1609,6 +1670,7 @@ function renderTimeline(items){
     el.style.top=(((startMin-TL_START*60)/60)*TL_H)+"px"; el.style.height=Math.max(18,(b.mins/60)*TL_H-2)+"px";
     el.innerHTML=`<div class="bt">${esc(t.title||"(untitled)")}</div><div class="bsub">${b.start} · ${b.mins}m</div>`;
     el.onclick=()=>openEdit(t.uuid);
+    if(PLACEMENT_CONTROLS) keyboardAction(el.querySelector('.bt'),"button","Edit "+(t.title||"(untitled)"));
     el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/id",t.uuid); el.classList.add("dragging"); });
     el.addEventListener("dragend",()=>el.classList.remove("dragging"));
     grid.appendChild(el);
@@ -2327,6 +2389,9 @@ function wireStatic(){
   on("#pf-cancel",()=>closeOverlay("prefs-overlay"));
   on("#lm-save",saveLevelMap);
   on("#lm-cancel",()=>closeOverlay("levelmap-overlay"));
+  on("#slot-save",()=>saveSlot());
+  on("#slot-clear",()=>saveSlot(true));
+  on("#slot-cancel",()=>closeOverlay("slot-overlay"));
   on("#repos-addrow",addRepoRow);
   on("#repos-done",()=>closeOverlay("repos-overlay"));
   $("#b-name").onchange=persistSettings;

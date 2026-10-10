@@ -70,10 +70,28 @@ def main():
                     page.goto(
                         f"http://127.0.0.1:{port}"
                         + (
-                            "?compact=1" if scenario == "compact" else "?placement=1" if scenario == "placement" else ""
+                            "?compact=1"
+                            if scenario == "compact"
+                            else "?placement=1"
+                            if scenario in {"placement", "slots"}
+                            else ""
                         ),
                         wait_until="networkidle",
                     )
+                    if scenario == "slots":
+                        page.locator("#vt-timeline").click()
+                        page.locator(".tl-wrap").wait_for()
+                        for theme in ["light", "dark"]:
+                            page.evaluate("(t) => applyTheme(t)", theme)
+                            page.wait_for_timeout(250)
+                            page.screenshot(path=str(out / f"{name}-timeline-{theme}.png"))
+                        page.evaluate("() => openSlot(LIST_ITEMS[0],LIST_ITEMS)")
+                        for theme in ["light", "dark"]:
+                            page.evaluate("(t) => applyTheme(t)", theme)
+                            page.wait_for_timeout(250)
+                            page.screenshot(path=str(out / f"{name}-slot-{theme}.png"))
+                        page.close()
+                        continue
                     if scenario == "placement":
                         for view, selector in [("matrix", ".matrix"), ("levels", ".levels"), ("board", ".board-wrap")]:
                             if view == "board":
